@@ -1,0 +1,174 @@
+services:
+  # =============================================================================
+  # FastAPI Backend
+  # =============================================================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rfp_sniper_api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SAM_GOV_API_KEY=${SAM_GOV_API_KEY}
+      - SAM_DOWNLOAD_ATTACHMENTS=${SAM_DOWNLOAD_ATTACHMENTS:-true}
+      - SAM_MAX_ATTACHMENTS=${SAM_MAX_ATTACHMENTS:-10}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MOCK_AI=${MOCK_AI:-false}
+      - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
+      - SECRET_KEY=${SECRET_KEY:-supersecretkey_change_in_production}
+      - DEBUG=true
+    volumes:
+      - ./backend/app:/app/app
+      - ./scripts:/app/scripts:ro
+      - ./uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - rfp_network
+
+  # =============================================================================
+  # Celery Worker (Long-running PDF Processing Tasks)
+  # =============================================================================
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rfp_sniper_celery
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SAM_GOV_API_KEY=${SAM_GOV_API_KEY}
+      - SAM_DOWNLOAD_ATTACHMENTS=${SAM_DOWNLOAD_ATTACHMENTS:-true}
+      - SAM_MAX_ATTACHMENTS=${SAM_MAX_ATTACHMENTS:-10}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - MOCK_AI=${MOCK_AI:-false}
+      - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
+    volumes:
+      - ./backend/app:/app/app
+      - ./uploads:/app/uploads
+    depends_on:
+      - api
+      - redis
+      - postgres
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    networks:
+      - rfp_network
+
+  # =============================================================================
+  # Celery Beat (Scheduled Tasks - SAM.gov Polling)
+  # =============================================================================
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rfp_sniper_beat
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SAM_DOWNLOAD_ATTACHMENTS=${SAM_DOWNLOAD_ATTACHMENTS:-true}
+      - SAM_MAX_ATTACHMENTS=${SAM_MAX_ATTACHMENTS:-10}
+      - MOCK_AI=${MOCK_AI:-false}
+      - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      - celery_worker
+    command: celery -A app.tasks.celery_app beat --loglevel=info
+    networks:
+      - rfp_network
+
+  # =============================================================================
+  # PostgreSQL Database
+  # =============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: rfp_sniper_postgres
+    environment:
+      - POSTGRES_USER=rfpsniper
+      - POSTGRES_PASSWORD=rfpsniper_secret
+      - POSTGRES_DB=rfpsniper_db
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rfpsniper -d rfpsniper_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rfp_network
+
+  # =============================================================================
+  # Redis (Message Broker + Cache)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: rfp_sniper_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - rfp_network
+
+  # =============================================================================
+  # Flower (Celery Monitoring Dashboard)
+  # =============================================================================
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rfp_sniper_flower
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - celery_worker
+    command: celery -A app.tasks.celery_app flower --port=5555
+    networks:
+      - rfp_network
+
+  # =============================================================================
+  # Next.js Frontend
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rfp_sniper_frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    depends_on:
+      - api
+    command: npm run dev
+    networks:
+      - rfp_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  rfp_network:
+    driver: bridge
