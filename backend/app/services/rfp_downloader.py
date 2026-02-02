@@ -6,9 +6,11 @@ Automatically download RFP PDFs and attachments from SAM.gov.
 
 import os
 import asyncio
+import mimetypes
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
+from pathlib import Path
 import structlog
 import hashlib
 
@@ -79,6 +81,37 @@ class RFPDownloader:
         Returns:
             List of attachment metadata dicts
         """
+        if settings.mock_sam_gov and settings.sam_mock_attachments_dir:
+            base_dir = Path(settings.sam_mock_attachments_dir)
+            notice_dir = base_dir / str(notice_id)
+            target_dir = notice_dir if notice_dir.exists() else base_dir
+            if not target_dir.exists():
+                logger.info(
+                    "Mock attachments dir not found",
+                    notice_id=notice_id,
+                    dir=str(target_dir),
+                )
+                return []
+
+            attachments = []
+            for path in sorted(target_dir.iterdir()):
+                if path.is_file():
+                    attachments.append(
+                        {
+                            "url": f"file://{path}",
+                            "filename": path.name,
+                            "type": "mock_fixture",
+                        }
+                    )
+
+            logger.info(
+                "Using mock attachments",
+                notice_id=notice_id,
+                count=len(attachments),
+                dir=str(target_dir),
+            )
+            return attachments
+
         if settings.mock_sam_gov:
             logger.info("Skipping attachment fetch in mock mode", notice_id=notice_id)
             return []
@@ -185,80 +218,102 @@ class RFPDownloader:
             DownloadedDocument or None if failed
         """
         try:
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                logger.info("Downloading attachment", url=url[:100])
+            content: bytes
+            mime_type: str
 
-                response = await client.get(url, timeout=120.0)
-                response.raise_for_status()
-
-                # Determine filename
+            if url.startswith("file://"):
+                local_path = url[len("file://"):]
+                logger.info("Loading attachment from file", path=local_path)
+                with open(local_path, "rb") as f:
+                    content = f.read()
                 if not filename:
-                    # Try to get from Content-Disposition header
-                    content_disposition = response.headers.get("Content-Disposition", "")
-                    if "filename=" in content_disposition:
-                        import re
-                        match = re.search(r'filename="?([^";\n]+)"?', content_disposition)
-                        if match:
-                            filename = match.group(1)
+                    filename = os.path.basename(local_path)
+                guessed_type, _ = mimetypes.guess_type(filename or local_path)
+                mime_type = guessed_type or "application/octet-stream"
+            else:
+                async with httpx.AsyncClient(follow_redirects=True) as client:
+                    logger.info("Downloading attachment", url=url[:100])
 
+                    response = await client.get(url, timeout=120.0)
+                    response.raise_for_status()
+
+                    # Determine filename
                     if not filename:
-                        # Use URL path
-                        filename = url.split("/")[-1].split("?")[0]
+                        # Try to get from Content-Disposition header
+                        content_disposition = response.headers.get("Content-Disposition", "")
+                        if "filename=" in content_disposition:
+                            import re
+                            match = re.search(r'filename="?([^";\n]+)"?', content_disposition)
+                            if match:
+                                filename = match.group(1)
 
-                    if not filename:
-                        filename = f"attachment_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+                        if not filename:
+                            # Use URL path
+                            filename = url.split("/")[-1].split("?")[0]
 
-                # Clean filename
-                filename = "".join(c for c in filename if c.isalnum() or c in "._- ")
-                filename = filename[:100]  # Limit length
+                        if not filename:
+                            filename = f"attachment_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
 
-                # Determine mime type
-                content_type = response.headers.get("Content-Type", "application/octet-stream")
-                mime_type = content_type.split(";")[0].strip()
+                    # Determine mime type
+                    content_type = response.headers.get("Content-Type", "application/octet-stream")
+                    mime_type = content_type.split(";")[0].strip()
+                    content = response.content
 
-                # Create directory for RFP
-                rfp_dir = os.path.join(self.upload_dir, "rfps", str(rfp_id))
-                os.makedirs(rfp_dir, exist_ok=True)
+            # Clean filename
+            filename = "".join(c for c in (filename or "") if c.isalnum() or c in "._- ")
+            if not filename:
+                filename = f"attachment_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            filename = filename[:100]  # Limit length
 
-                # Save file
-                file_path = os.path.join(rfp_dir, filename)
-                content = response.content
+            # Create directory for RFP
+            rfp_dir = os.path.join(self.upload_dir, "rfps", str(rfp_id))
+            os.makedirs(rfp_dir, exist_ok=True)
 
-                with open(file_path, "wb") as f:
-                    f.write(content)
+            # Save file
+            file_path = os.path.join(rfp_dir, filename)
 
-                # Calculate hash
-                content_hash = hashlib.sha256(content).hexdigest()
+            with open(file_path, "wb") as f:
+                f.write(content)
 
-                result = DownloadedDocument(
-                    filename=filename,
-                    file_path=file_path,
-                    file_size=len(content),
-                    mime_type=mime_type,
-                    content_hash=content_hash,
-                )
+            # Calculate hash
+            content_hash = hashlib.sha256(content).hexdigest()
 
-                # Extract text if PDF
-                if mime_type == "application/pdf" or filename.lower().endswith(".pdf"):
-                    try:
-                        pdf_doc = self.pdf_processor.extract_text(content, filename)
-                        result.extracted_text = pdf_doc.full_text
-                        result.page_count = pdf_doc.total_pages
-                        logger.info(
-                            "PDF text extracted",
-                            filename=filename,
-                            pages=pdf_doc.total_pages,
-                        )
-                    except Exception as e:
-                        logger.warning(f"PDF extraction failed: {e}")
+            result = DownloadedDocument(
+                filename=filename,
+                file_path=file_path,
+                file_size=len(content),
+                mime_type=mime_type,
+                content_hash=content_hash,
+            )
 
-                logger.info(
-                    "Attachment downloaded",
-                    filename=filename,
-                    size_kb=len(content) // 1024,
-                )
+            # Extract text if PDF
+            if mime_type == "application/pdf" or filename.lower().endswith(".pdf"):
+                try:
+                    pdf_doc = self.pdf_processor.extract_text(content, filename)
+                    result.extracted_text = pdf_doc.full_text
+                    result.page_count = pdf_doc.total_pages
+                    logger.info(
+                        "PDF text extracted",
+                        filename=filename,
+                        pages=pdf_doc.total_pages,
+                    )
+                except Exception as e:
+                    logger.warning(f"PDF extraction failed: {e}")
+            elif mime_type.startswith("text/") or filename.lower().endswith(".txt"):
+                try:
+                    result.extracted_text = content.decode("utf-8", errors="ignore").strip()
+                    result.page_count = 1
+                    logger.info("Text attachment extracted", filename=filename)
+                except Exception as e:
+                    logger.warning(f"Text extraction failed: {e}")
 
-                return result
+            logger.info(
+                "Attachment downloaded",
+                filename=filename,
+                size_kb=len(content) // 1024,
+            )
+
+            return result
 
         except Exception as e:
             logger.error(f"Download failed: {e}", url=url[:100])

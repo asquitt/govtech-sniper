@@ -17,6 +17,7 @@ services:
       - SAM_GOV_API_KEY=${SAM_GOV_API_KEY}
       - SAM_DOWNLOAD_ATTACHMENTS=${SAM_DOWNLOAD_ATTACHMENTS:-true}
       - SAM_MAX_ATTACHMENTS=${SAM_MAX_ATTACHMENTS:-10}
+      - SAM_MOCK_ATTACHMENTS_DIR=${SAM_MOCK_ATTACHMENTS_DIR:-/app/fixtures/sam_attachments}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
@@ -24,6 +25,7 @@ services:
       - DEBUG=true
     volumes:
       - ./backend/app:/app/app
+      - ./fixtures:/app/fixtures:ro
       - ./scripts:/app/scripts:ro
       - ./uploads:/app/uploads
     depends_on:
@@ -51,11 +53,13 @@ services:
       - SAM_GOV_API_KEY=${SAM_GOV_API_KEY}
       - SAM_DOWNLOAD_ATTACHMENTS=${SAM_DOWNLOAD_ATTACHMENTS:-true}
       - SAM_MAX_ATTACHMENTS=${SAM_MAX_ATTACHMENTS:-10}
+      - SAM_MOCK_ATTACHMENTS_DIR=${SAM_MOCK_ATTACHMENTS_DIR:-/app/fixtures/sam_attachments}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
     volumes:
       - ./backend/app:/app/app
+      - ./fixtures:/app/fixtures:ro
       - ./uploads:/app/uploads
     depends_on:
       - api
@@ -80,6 +84,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - SAM_DOWNLOAD_ATTACHMENTS=${SAM_DOWNLOAD_ATTACHMENTS:-true}
       - SAM_MAX_ATTACHMENTS=${SAM_MAX_ATTACHMENTS:-10}
+      - SAM_MOCK_ATTACHMENTS_DIR=${SAM_MOCK_ATTACHMENTS_DIR:-/app/fixtures/sam_attachments}
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
     volumes:

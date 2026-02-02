@@ -1,0 +1,4 @@
+Mock SAM.gov attachment
+
+This is a fixture attachment used to test the attachment ingestion pipeline.
+It should be saved to the RFP's attachment_paths and extracted into full_text.

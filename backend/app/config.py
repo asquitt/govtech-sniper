@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     mock_ai: bool = Field(default=False)
     mock_sam_gov: bool = Field(default=False)
     mock_sam_gov_variant: str = Field(default="v1")
+    sam_mock_attachments_dir: Optional[str] = Field(default=None)
 
     # -------------------------------------------------------------------------
     # File Storage

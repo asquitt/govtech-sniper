@@ -20,10 +20,12 @@ SECRET_KEY=your_random_secret_key_min_32_chars
 MOCK_SAM_GOV=true
 MOCK_SAM_GOV_VARIANT=v1
 SAM_DOWNLOAD_ATTACHMENTS=true
+SAM_MOCK_ATTACHMENTS_DIR=/app/fixtures/sam_attachments
 SAM_MAX_ATTACHMENTS=10
 ```
 Set `MOCK_SAM_GOV=true` to use deterministic mock opportunities and skip external SAM.gov calls (handy for E2E runs).
 Use `MOCK_SAM_GOV_VARIANT` to generate mock payload changes for snapshot diff testing.
+Use `SAM_MOCK_ATTACHMENTS_DIR` to enable attachment ingestion in mock mode using local fixtures.
 
 ### 2. Start the Stack
 
