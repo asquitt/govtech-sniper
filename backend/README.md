@@ -22,10 +22,17 @@ MOCK_SAM_GOV_VARIANT=v1
 SAM_DOWNLOAD_ATTACHMENTS=true
 SAM_MOCK_ATTACHMENTS_DIR=/app/fixtures/sam_attachments
 SAM_MAX_ATTACHMENTS=10
+SAM_CIRCUIT_BREAKER_ENABLED=true
+SAM_CIRCUIT_BREAKER_COOLDOWN_SECONDS=900
+SAM_CIRCUIT_BREAKER_MAX_SECONDS=3600
 ```
 Set `MOCK_SAM_GOV=true` to use deterministic mock opportunities and skip external SAM.gov calls (handy for E2E runs).
 Use `MOCK_SAM_GOV_VARIANT` to generate mock payload changes for snapshot diff testing.
 Use `SAM_MOCK_ATTACHMENTS_DIR` to enable attachment ingestion in mock mode using local fixtures.
+Circuit breaker settings:
+- `SAM_CIRCUIT_BREAKER_ENABLED` toggles rate-limit circuit breaking.
+- `SAM_CIRCUIT_BREAKER_COOLDOWN_SECONDS` controls how long we stop hitting SAM.gov after a 429.
+- `SAM_CIRCUIT_BREAKER_MAX_SECONDS` caps the cooldown window.
 
 ### 2. Start the Stack
 

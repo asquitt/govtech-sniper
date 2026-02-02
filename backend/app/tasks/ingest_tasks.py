@@ -96,7 +96,9 @@ def ingest_sam_opportunities(
             raw_opportunities = await sam_service.search_opportunities_with_raw(params)
         except SAMGovAPIError as e:
             logger.error(f"SAM.gov API error: {e.message}")
-            raise self.retry(exc=e)
+            if e.retryable:
+                raise self.retry(exc=e)
+            raise e
 
         parsed_opportunities = []
         for raw_opp in raw_opportunities:

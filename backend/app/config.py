@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     )
     sam_download_attachments: bool = Field(default=True)
     sam_max_attachments: int = Field(default=10, ge=1, le=50)
+    sam_circuit_breaker_enabled: bool = Field(default=True)
+    sam_circuit_breaker_cooldown_seconds: int = Field(default=900, ge=60, le=86400)
+    sam_circuit_breaker_max_seconds: int = Field(default=3600, ge=60, le=86400)
     
     gemini_api_key: Optional[str] = Field(default=None)
     gemini_model_pro: str = Field(default="gemini-1.5-pro")

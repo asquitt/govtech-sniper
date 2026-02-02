@@ -25,10 +25,21 @@ logger = structlog.get_logger(__name__)
 class SAMGovAPIError(Exception):
     """Custom exception for SAM.gov API errors."""
     
-    def __init__(self, message: str, status_code: Optional[int] = None, response_body: Optional[str] = None):
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response_body: Optional[str] = None,
+        retryable: bool = True,
+        is_rate_limited: bool = False,
+        retry_after_seconds: Optional[int] = None,
+    ):
         self.message = message
         self.status_code = status_code
         self.response_body = response_body
+        self.retryable = retryable
+        self.is_rate_limited = is_rate_limited
+        self.retry_after_seconds = retry_after_seconds
         super().__init__(self.message)
 
 
@@ -45,6 +56,9 @@ class SAMGovService:
     # SAM.gov API rate limits
     RATE_LIMIT_CALLS = 10
     RATE_LIMIT_PERIOD = 60  # seconds
+
+    _circuit_open_until: Optional[datetime] = None
+    _circuit_reason: Optional[str] = None
     
     # Procurement type mapping
     PTYPE_MAP = {
@@ -82,6 +96,29 @@ class SAMGovService:
             raise SAMGovAPIError(
                 "SAM.gov API key not configured. Set SAM_GOV_API_KEY environment variable."
             )
+
+    def _is_circuit_open(self) -> bool:
+        if not settings.sam_circuit_breaker_enabled:
+            return False
+        if not self._circuit_open_until:
+            return False
+        return datetime.utcnow() < self._circuit_open_until
+
+    def _open_circuit(self, retry_after: Optional[int], reason: str) -> None:
+        if not settings.sam_circuit_breaker_enabled:
+            return
+        cooldown = settings.sam_circuit_breaker_cooldown_seconds
+        max_seconds = settings.sam_circuit_breaker_max_seconds
+        if retry_after and retry_after > 0:
+            cooldown = max(cooldown, retry_after)
+        cooldown = min(cooldown, max_seconds)
+        self.__class__._circuit_open_until = datetime.utcnow() + timedelta(seconds=cooldown)
+        self.__class__._circuit_reason = reason
+        logger.warning(
+            "SAM.gov circuit opened",
+            reason=reason,
+            open_seconds=cooldown,
+        )
     
     @retry(
         stop=stop_after_attempt(3),
@@ -104,6 +141,14 @@ class SAMGovService:
             Parsed JSON response
         """
         self._validate_api_key()
+        if self._is_circuit_open():
+            reason = self.__class__._circuit_reason or "rate_limited"
+            raise SAMGovAPIError(
+                f"SAM.gov circuit open ({reason}). Try again later.",
+                status_code=429,
+                retryable=False,
+                is_rate_limited=True,
+            )
         
         # Add API key to params
         params["api_key"] = self.api_key
@@ -147,11 +192,13 @@ class SAMGovService:
                     )
                     retry_after = max_retry_after
                 logger.warning(f"Rate limited by SAM.gov. Retry after {retry_after}s")
-                await asyncio.sleep(retry_after)
-                raise httpx.HTTPStatusError(
-                    "Rate limited",
-                    request=response.request,
-                    response=response,
+                self._open_circuit(retry_after, reason="rate_limited")
+                raise SAMGovAPIError(
+                    "SAM.gov rate limited",
+                    status_code=429,
+                    retryable=False,
+                    is_rate_limited=True,
+                    retry_after_seconds=retry_after,
                 )
             
             # Raise for other HTTP errors
