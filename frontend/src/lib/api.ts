@@ -21,6 +21,8 @@ import type {
   CPARSReview,
   DashSession,
   DashMessage,
+  IntegrationConfig,
+  IntegrationProvider,
   TaskResponse,
   TaskStatus,
   SAMSearchParams,
@@ -656,6 +658,43 @@ export const dashApi = {
   }): Promise<{ answer: string; citations: Record<string, unknown>[] }> => {
     const { data } = await api.post("/dash/ask", payload);
     return data;
+  },
+};
+
+// =============================================================================
+// Integration Endpoints
+// =============================================================================
+
+export const integrationApi = {
+  list: async (params?: { provider?: IntegrationProvider }): Promise<IntegrationConfig[]> => {
+    const { data } = await api.get("/integrations", { params });
+    return data;
+  },
+
+  create: async (payload: {
+    provider: IntegrationProvider;
+    name?: string | null;
+    is_enabled?: boolean;
+    config?: Record<string, unknown>;
+  }): Promise<IntegrationConfig> => {
+    const { data } = await api.post("/integrations", payload);
+    return data;
+  },
+
+  update: async (
+    integrationId: number,
+    payload: Partial<{
+      name: string | null;
+      is_enabled: boolean;
+      config: Record<string, unknown>;
+    }>
+  ): Promise<IntegrationConfig> => {
+    const { data } = await api.patch(`/integrations/${integrationId}`, payload);
+    return data;
+  },
+
+  remove: async (integrationId: number): Promise<void> => {
+    await api.delete(`/integrations/${integrationId}`);
   },
 };
 

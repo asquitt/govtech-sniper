@@ -209,6 +209,29 @@ export interface DashMessage {
 }
 
 // -----------------------------------------------------------------------------
+// Integration Types
+// -----------------------------------------------------------------------------
+
+export type IntegrationProvider =
+  | "okta"
+  | "microsoft"
+  | "sharepoint"
+  | "salesforce"
+  | "word_addin"
+  | "webhook"
+  | "slack";
+
+export interface IntegrationConfig {
+  id: number;
+  provider: IntegrationProvider;
+  name?: string | null;
+  is_enabled: boolean;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------------
 // Capture Types
 // -----------------------------------------------------------------------------
 
