@@ -41,6 +41,17 @@ class CapturePlanRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CapturePlanListItem(CapturePlanRead):
+    rfp_title: str
+    rfp_agency: Optional[str] = None
+    rfp_status: Optional[str] = None
+
+
+class CapturePlanListResponse(BaseModel):
+    plans: List[CapturePlanListItem]
+    total: int
+
+
 class GateReviewCreate(BaseModel):
     rfp_id: int
     stage: CaptureStage = CaptureStage.QUALIFIED

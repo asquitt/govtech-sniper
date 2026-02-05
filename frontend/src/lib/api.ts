@@ -6,6 +6,10 @@ import type {
   Proposal,
   ProposalSection,
   KnowledgeBaseDocument,
+  CapturePlan,
+  CapturePlanListItem,
+  CaptureStage,
+  BidDecision,
   TaskResponse,
   TaskStatus,
   SAMSearchParams,
@@ -437,6 +441,41 @@ export const exportApi = {
       responseType: "blob",
       }
     );
+    return data;
+  },
+};
+
+// =============================================================================
+// Capture Endpoints
+// =============================================================================
+
+export const captureApi = {
+  listPlans: async (): Promise<CapturePlanListItem[]> => {
+    const { data } = await api.get("/capture/plans", { params: { include_rfp: true } });
+    return data.plans ?? data;
+  },
+
+  createPlan: async (payload: {
+    rfp_id: number;
+    stage?: CaptureStage;
+    bid_decision?: BidDecision;
+    win_probability?: number | null;
+    notes?: string | null;
+  }): Promise<CapturePlan> => {
+    const { data } = await api.post("/capture/plans", payload);
+    return data;
+  },
+
+  updatePlan: async (
+    planId: number,
+    payload: Partial<{
+      stage: CaptureStage;
+      bid_decision: BidDecision;
+      win_probability: number | null;
+      notes: string | null;
+    }>
+  ): Promise<CapturePlan> => {
+    const { data } = await api.patch(`/capture/plans/${planId}`, payload);
     return data;
   },
 };

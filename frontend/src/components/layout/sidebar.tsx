@@ -49,6 +49,11 @@ const navItems: NavItem[] = [
     icon: FolderOpen,
   },
   {
+    title: "Capture",
+    href: "/capture",
+    icon: Target,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: Settings,
@@ -236,4 +241,3 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     </TooltipProvider>
   );
 }
-

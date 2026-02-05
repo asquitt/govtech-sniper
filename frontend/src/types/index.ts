@@ -63,6 +63,72 @@ export interface RFPListItem {
 }
 
 // -----------------------------------------------------------------------------
+// Capture Types
+// -----------------------------------------------------------------------------
+
+export type CaptureStage =
+  | "identified"
+  | "qualified"
+  | "pursuit"
+  | "proposal"
+  | "submitted"
+  | "won"
+  | "lost";
+
+export type BidDecision = "pending" | "bid" | "no_bid";
+
+export interface CapturePlan {
+  id: number;
+  rfp_id: number;
+  owner_id: number;
+  stage: CaptureStage;
+  bid_decision: BidDecision;
+  win_probability?: number | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapturePlanListItem extends CapturePlan {
+  rfp_title: string;
+  rfp_agency?: string | null;
+  rfp_status?: RFPStatus | null;
+}
+
+// -----------------------------------------------------------------------------
+// Capture Types
+// -----------------------------------------------------------------------------
+
+export type CaptureStage =
+  | "identified"
+  | "qualified"
+  | "pursuit"
+  | "proposal"
+  | "submitted"
+  | "won"
+  | "lost";
+
+export type BidDecision = "pending" | "bid" | "no_bid";
+
+export interface CapturePlan {
+  id: number;
+  rfp_id: number;
+  owner_id: number;
+  stage: CaptureStage;
+  bid_decision: BidDecision;
+  win_probability?: number | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapturePlanListItem extends CapturePlan {
+  rfp_title: string;
+  rfp_agency?: string | null;
+  rfp_status?: RFPStatus | null;
+}
+
+// -----------------------------------------------------------------------------
 // Compliance Matrix Types
 // -----------------------------------------------------------------------------
 
@@ -265,4 +331,3 @@ export interface TableColumn<T> {
   width?: string;
   render?: (value: T[keyof T], item: T) => React.ReactNode;
 }
-

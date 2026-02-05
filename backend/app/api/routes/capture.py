@@ -20,6 +20,8 @@ from app.schemas.capture import (
     CapturePlanCreate,
     CapturePlanUpdate,
     CapturePlanRead,
+    CapturePlanListItem,
+    CapturePlanListResponse,
     GateReviewCreate,
     GateReviewRead,
     TeamingPartnerCreate,
@@ -88,6 +90,47 @@ async def create_capture_plan(
     await session.refresh(plan)
 
     return CapturePlanRead.model_validate(plan)
+
+
+@router.get("/plans", response_model=CapturePlanListResponse)
+async def list_capture_plans(
+    include_rfp: bool = Query(False),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CapturePlanListResponse:
+    result = await session.execute(
+        select(CapturePlan).where(CapturePlan.owner_id == current_user.id)
+    )
+    plans = result.scalars().all()
+
+    items: List[CapturePlanListItem] = []
+    if include_rfp:
+        rfp_result = await session.execute(
+            select(RFP).where(RFP.user_id == current_user.id)
+        )
+        rfps = {rfp.id: rfp for rfp in rfp_result.scalars().all()}
+        for plan in plans:
+            rfp = rfps.get(plan.rfp_id)
+            items.append(
+                CapturePlanListItem(
+                    **CapturePlanRead.model_validate(plan).model_dump(),
+                    rfp_title=rfp.title if rfp else "Unknown",
+                    rfp_agency=rfp.agency if rfp else None,
+                    rfp_status=rfp.status.value if rfp else None,
+                )
+            )
+    else:
+        items = [
+            CapturePlanListItem(
+                **CapturePlanRead.model_validate(plan).model_dump(),
+                rfp_title="",
+                rfp_agency=None,
+                rfp_status=None,
+            )
+            for plan in plans
+        ]
+
+    return CapturePlanListResponse(plans=items, total=len(items))
 
 
 @router.get("/plans/{rfp_id}", response_model=CapturePlanRead)
