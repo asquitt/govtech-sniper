@@ -21,6 +21,13 @@ class IntegrationProvider(str, Enum):
     SLACK = "slack"
 
 
+class IntegrationSyncStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class IntegrationConfig(SQLModel, table=True):
     """
     Integration configuration record.
@@ -39,3 +46,38 @@ class IntegrationConfig(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class IntegrationSyncRun(SQLModel, table=True):
+    """
+    Integration sync history for external systems.
+    """
+    __tablename__ = "integration_sync_runs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    integration_id: int = Field(foreign_key="integrations.id", index=True)
+    provider: IntegrationProvider = Field(index=True)
+
+    status: IntegrationSyncStatus = Field(default=IntegrationSyncStatus.PENDING)
+    items_synced: int = Field(default=0)
+    error: Optional[str] = Field(default=None, max_length=1000)
+    details: dict = Field(default={}, sa_column=Column(JSON))
+
+    started_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    completed_at: Optional[datetime] = None
+
+
+class IntegrationWebhookEvent(SQLModel, table=True):
+    """
+    Inbound webhook event payloads for integrations.
+    """
+    __tablename__ = "integration_webhook_events"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    integration_id: int = Field(foreign_key="integrations.id", index=True)
+    provider: IntegrationProvider = Field(index=True)
+
+    event_type: str = Field(default="generic", max_length=128, index=True)
+    payload: dict = Field(default={}, sa_column=Column(JSON))
+
+    received_at: datetime = Field(default_factory=datetime.utcnow, index=True)

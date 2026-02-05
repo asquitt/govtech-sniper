@@ -28,6 +28,14 @@ import type {
   DashMessage,
   IntegrationConfig,
   IntegrationProvider,
+  IntegrationProviderDefinition,
+  IntegrationTestResult,
+  IntegrationSyncRun,
+  IntegrationWebhookEvent,
+  IntegrationSsoAuthorizeResponse,
+  AuditEvent,
+  AuditSummary,
+  ObservabilityMetrics,
   TaskResponse,
   TaskStatus,
   SAMSearchParams,
@@ -914,6 +922,11 @@ export const dashApi = {
 // =============================================================================
 
 export const integrationApi = {
+  providers: async (): Promise<IntegrationProviderDefinition[]> => {
+    const { data } = await api.get("/integrations/providers");
+    return data;
+  },
+
   list: async (params?: { provider?: IntegrationProvider }): Promise<IntegrationConfig[]> => {
     const { data } = await api.get("/integrations", { params });
     return data;
@@ -943,6 +956,44 @@ export const integrationApi = {
 
   remove: async (integrationId: number): Promise<void> => {
     await api.delete(`/integrations/${integrationId}`);
+  },
+
+  test: async (integrationId: number): Promise<IntegrationTestResult> => {
+    const { data } = await api.post(`/integrations/${integrationId}/test`, {});
+    return data;
+  },
+
+  authorizeSso: async (integrationId: number): Promise<IntegrationSsoAuthorizeResponse> => {
+    const { data } = await api.post(`/integrations/${integrationId}/sso/authorize`, {});
+    return data;
+  },
+
+  ssoCallback: async (integrationId: number, code: string): Promise<{ status: string }> => {
+    const { data } = await api.post(`/integrations/${integrationId}/sso/callback`, { code });
+    return data;
+  },
+
+  sync: async (integrationId: number): Promise<IntegrationSyncRun> => {
+    const { data } = await api.post(`/integrations/${integrationId}/sync`, {});
+    return data;
+  },
+
+  syncs: async (integrationId: number): Promise<IntegrationSyncRun[]> => {
+    const { data } = await api.get(`/integrations/${integrationId}/syncs`);
+    return data;
+  },
+
+  sendWebhook: async (
+    integrationId: number,
+    payload: Record<string, unknown>
+  ): Promise<IntegrationWebhookEvent> => {
+    const { data } = await api.post(`/integrations/${integrationId}/webhook`, payload);
+    return data;
+  },
+
+  listWebhooks: async (integrationId: number): Promise<IntegrationWebhookEvent[]> => {
+    const { data } = await api.get(`/integrations/${integrationId}/webhooks`);
+    return data;
   },
 };
 
@@ -1087,6 +1138,34 @@ export const analyticsApi = {
     cost_estimate: number;
   }> => {
     const { data } = await api.get("/analytics/ai-usage", { params });
+    return data;
+  },
+
+  getObservability: async (params?: { days?: number }): Promise<ObservabilityMetrics> => {
+    const { data } = await api.get("/analytics/observability", { params });
+    return data;
+  },
+};
+
+// =============================================================================
+// Audit Endpoints
+// =============================================================================
+
+export const auditApi = {
+  list: async (params?: {
+    entity_type?: string;
+    action?: string;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditEvent[]> => {
+    const { data } = await api.get("/audit", { params });
+    return data;
+  },
+
+  summary: async (params?: { days?: number }): Promise<AuditSummary> => {
+    const { data } = await api.get("/audit/summary", { params });
     return data;
   },
 };

@@ -43,6 +43,7 @@ from app.api.routes import (
     dash_router,
     capture_router,
     contracts_router,
+    audit_router,
 )
 
 # Configure structured logging
@@ -238,6 +239,7 @@ app.include_router(webhooks_router, prefix=api_prefix)
 app.include_router(dash_router, prefix=api_prefix)
 app.include_router(capture_router, prefix=api_prefix)
 app.include_router(contracts_router, prefix=api_prefix)
+app.include_router(audit_router, prefix=api_prefix)
 
 
 # =============================================================================

@@ -17,6 +17,8 @@ from app.database import get_session
 from app.models.rfp import RFP, RFPStatus, ComplianceMatrix
 from app.models.proposal import Proposal, ProposalSection, SectionStatus, ProposalStatus
 from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.audit import AuditEvent
+from app.models.integration import IntegrationConfig, IntegrationSyncRun, IntegrationSyncStatus, IntegrationWebhookEvent
 from app.api.deps import get_current_user, UserAuth
 
 logger = structlog.get_logger(__name__)
@@ -454,4 +456,99 @@ async def get_win_rate_analytics(
         "pending": total_submitted,
         "win_rate": 0.0,
         "note": "Win/loss tracking requires marking proposal outcomes",
+    }
+
+
+# =============================================================================
+# Observability & Ops Metrics
+# =============================================================================
+
+@router.get("/observability")
+async def get_observability_metrics(
+    days: int = Query(30, ge=1, le=365),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    Operational metrics for integrations, audits, and webhook activity.
+    """
+    user_id = current_user.id
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    audit_result = await session.execute(
+        select(func.count(AuditEvent.id)).where(
+            AuditEvent.user_id == user_id,
+            AuditEvent.created_at >= start_date,
+        )
+    )
+    audit_total = audit_result.scalar() or 0
+
+    sync_counts = await session.execute(
+        select(
+            IntegrationSyncRun.provider,
+            IntegrationSyncRun.status,
+            func.count(IntegrationSyncRun.id).label("count"),
+        )
+        .join(IntegrationConfig, IntegrationConfig.id == IntegrationSyncRun.integration_id)
+        .where(
+            IntegrationConfig.user_id == user_id,
+            IntegrationSyncRun.started_at >= start_date,
+        )
+        .group_by(IntegrationSyncRun.provider, IntegrationSyncRun.status)
+    )
+    sync_by_provider: dict = {}
+    sync_totals = {"total": 0, "success": 0, "failed": 0}
+    for row in sync_counts.all():
+        provider = row.provider.value
+        sync_by_provider.setdefault(provider, {"total": 0, "success": 0, "failed": 0})
+        sync_by_provider[provider]["total"] += row.count
+        sync_totals["total"] += row.count
+        if row.status == IntegrationSyncStatus.SUCCESS:
+            sync_by_provider[provider]["success"] += row.count
+            sync_totals["success"] += row.count
+        elif row.status == IntegrationSyncStatus.FAILED:
+            sync_by_provider[provider]["failed"] += row.count
+            sync_totals["failed"] += row.count
+
+    last_sync_result = await session.execute(
+        select(func.max(IntegrationSyncRun.started_at))
+        .join(IntegrationConfig, IntegrationConfig.id == IntegrationSyncRun.integration_id)
+        .where(
+            IntegrationConfig.user_id == user_id,
+            IntegrationSyncRun.started_at >= start_date,
+        )
+    )
+    last_sync_at = last_sync_result.scalar()
+
+    webhook_counts = await session.execute(
+        select(
+            IntegrationWebhookEvent.provider,
+            func.count(IntegrationWebhookEvent.id).label("count"),
+        )
+        .join(IntegrationConfig, IntegrationConfig.id == IntegrationWebhookEvent.integration_id)
+        .where(
+            IntegrationConfig.user_id == user_id,
+            IntegrationWebhookEvent.received_at >= start_date,
+        )
+        .group_by(IntegrationWebhookEvent.provider)
+    )
+    webhook_by_provider = {
+        row.provider.value: row.count for row in webhook_counts.all()
+    }
+    webhook_total = sum(webhook_by_provider.values())
+
+    return {
+        "period_days": days,
+        "audit_events": {"total": audit_total},
+        "integration_syncs": {
+            "total": sync_totals["total"],
+            "success": sync_totals["success"],
+            "failed": sync_totals["failed"],
+            "last_sync_at": last_sync_at,
+            "by_provider": sync_by_provider,
+        },
+        "webhook_events": {
+            "total": webhook_total,
+            "by_provider": webhook_by_provider,
+        },
     }

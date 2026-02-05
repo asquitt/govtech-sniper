@@ -1,15 +1,26 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { integrationApi, teamApi } from "@/lib/api";
-import type { IntegrationConfig, IntegrationProvider } from "@/types";
+import { analyticsApi, auditApi, integrationApi, teamApi } from "@/lib/api";
+import type {
+  AuditEvent,
+  AuditSummary,
+  IntegrationConfig,
+  IntegrationProvider,
+  IntegrationProviderDefinition,
+  IntegrationSsoAuthorizeResponse,
+  IntegrationSyncRun,
+  IntegrationTestResult,
+  IntegrationWebhookEvent,
+  ObservabilityMetrics,
+} from "@/types";
 import type { Team, TeamMember, TeamRole } from "@/lib/api";
 
-const providerOptions: { value: IntegrationProvider; label: string }[] = [
+const fallbackProviderOptions: { value: IntegrationProvider; label: string }[] = [
   { value: "okta", label: "Okta" },
   { value: "microsoft", label: "Microsoft" },
   { value: "sharepoint", label: "SharePoint" },
@@ -23,15 +34,55 @@ const roleOptions: TeamRole[] = ["owner", "admin", "member", "viewer"];
 
 export default function SettingsPage() {
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
+  const [providerDefinitions, setProviderDefinitions] =
+    useState<IntegrationProviderDefinition[]>([]);
   const [provider, setProvider] = useState<IntegrationProvider>("okta");
   const [name, setName] = useState("");
-  const [config, setConfig] = useState("{}");
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [roleEdits, setRoleEdits] = useState<Record<number, TeamRole>>({});
   const [isLoadingTeams, setIsLoadingTeams] = useState(false);
+  const [testResults, setTestResults] = useState<
+    Record<number, IntegrationTestResult | null>
+  >({});
+  const [syncRuns, setSyncRuns] = useState<
+    Record<number, IntegrationSyncRun[]>
+  >({});
+  const [webhookEvents, setWebhookEvents] = useState<
+    Record<number, IntegrationWebhookEvent[]>
+  >({});
+  const [ssoLinks, setSsoLinks] = useState<
+    Record<number, IntegrationSsoAuthorizeResponse | null>
+  >({});
+  const [observability, setObservability] = useState<ObservabilityMetrics | null>(
+    null
+  );
+  const [auditSummary, setAuditSummary] = useState<AuditSummary | null>(null);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+
+  const providerOptions = useMemo(() => {
+    if (providerDefinitions.length === 0) {
+      return fallbackProviderOptions;
+    }
+    return providerDefinitions.map((definition) => ({
+      value: definition.provider,
+      label: definition.label,
+    }));
+  }, [providerDefinitions]);
+
+  const selectedDefinition = useMemo(
+    () => providerDefinitions.find((definition) => definition.provider === provider),
+    [providerDefinitions, provider]
+  );
+
+  const getDefinitionForIntegration = useCallback(
+    (providerValue: IntegrationProvider) =>
+      providerDefinitions.find((definition) => definition.provider === providerValue),
+    [providerDefinitions]
+  );
 
   const fetchIntegrations = useCallback(async () => {
     try {
@@ -40,6 +91,18 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Failed to load integrations", err);
       setError("Failed to load integrations.");
+    }
+  }, []);
+
+  const fetchProviders = useCallback(async () => {
+    try {
+      const list = await integrationApi.providers();
+      setProviderDefinitions(list);
+      if (list.length > 0) {
+        setProvider((current) => current || list[0].provider);
+      }
+    } catch (err) {
+      console.error("Failed to load provider definitions", err);
     }
   }, []);
 
@@ -58,10 +121,41 @@ export default function SettingsPage() {
     }
   }, []);
 
+  const fetchObservability = useCallback(async () => {
+    try {
+      const metrics = await analyticsApi.getObservability({ days: 30 });
+      setObservability(metrics);
+    } catch (err) {
+      console.error("Failed to load observability metrics", err);
+    }
+  }, []);
+
+  const fetchAuditData = useCallback(async () => {
+    try {
+      const [summary, events] = await Promise.all([
+        auditApi.summary({ days: 30 }),
+        auditApi.list({ limit: 6 }),
+      ]);
+      setAuditSummary(summary);
+      setAuditEvents(events);
+    } catch (err) {
+      console.error("Failed to load audit data", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchIntegrations();
+    fetchProviders();
     fetchTeams();
-  }, [fetchIntegrations, fetchTeams]);
+    fetchObservability();
+    fetchAuditData();
+  }, [
+    fetchIntegrations,
+    fetchProviders,
+    fetchTeams,
+    fetchObservability,
+    fetchAuditData,
+  ]);
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -84,20 +178,114 @@ export default function SettingsPage() {
     fetchMembers();
   }, [selectedTeamId]);
 
+  useEffect(() => {
+    setFieldValues({});
+  }, [provider]);
+
+  const handleFieldChange = (key: string, value: string) => {
+    setFieldValues((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
   const handleCreate = async () => {
     try {
-      const parsed = config.trim() ? JSON.parse(config) : {};
+      const config = Object.entries(fieldValues).reduce<Record<string, string>>(
+        (acc, [key, value]) => {
+          if (value !== "") {
+            acc[key] = value;
+          }
+          return acc;
+        },
+        {}
+      );
       await integrationApi.create({
         provider,
         name: name.trim() || undefined,
-        config: parsed,
+        config,
       });
       setName("");
-      setConfig("{}");
+      setFieldValues({});
       await fetchIntegrations();
     } catch (err) {
       console.error("Failed to create integration", err);
-      setError("Failed to create integration. Ensure JSON config is valid.");
+      setError("Failed to create integration.");
+    }
+  };
+
+  const handleToggleIntegration = async (integration: IntegrationConfig) => {
+    try {
+      await integrationApi.update(integration.id, {
+        is_enabled: !integration.is_enabled,
+      });
+      await fetchIntegrations();
+    } catch (err) {
+      console.error("Failed to update integration", err);
+      setError("Failed to update integration.");
+    }
+  };
+
+  const handleTest = async (integrationId: number) => {
+    try {
+      const result = await integrationApi.test(integrationId);
+      setTestResults((prev) => ({ ...prev, [integrationId]: result }));
+    } catch (err) {
+      console.error("Failed to test integration", err);
+      setError("Failed to test integration.");
+    }
+  };
+
+  const handleSync = async (integrationId: number) => {
+    try {
+      await integrationApi.sync(integrationId);
+      const runs = await integrationApi.syncs(integrationId);
+      setSyncRuns((prev) => ({ ...prev, [integrationId]: runs }));
+    } catch (err) {
+      console.error("Failed to sync integration", err);
+      setError("Failed to sync integration.");
+    }
+  };
+
+  const handleAuthorizeSso = async (integrationId: number) => {
+    try {
+      const result = await integrationApi.authorizeSso(integrationId);
+      setSsoLinks((prev) => ({ ...prev, [integrationId]: result }));
+    } catch (err) {
+      console.error("Failed to authorize SSO", err);
+      setError("Failed to generate SSO authorization URL.");
+    }
+  };
+
+  const handleLoadSyncs = async (integrationId: number) => {
+    try {
+      const runs = await integrationApi.syncs(integrationId);
+      setSyncRuns((prev) => ({ ...prev, [integrationId]: runs }));
+    } catch (err) {
+      console.error("Failed to load sync history", err);
+    }
+  };
+
+  const handleSendWebhook = async (integrationId: number) => {
+    try {
+      await integrationApi.sendWebhook(integrationId, {
+        event_type: "test.event",
+        sent_at: new Date().toISOString(),
+      });
+      const events = await integrationApi.listWebhooks(integrationId);
+      setWebhookEvents((prev) => ({ ...prev, [integrationId]: events }));
+    } catch (err) {
+      console.error("Failed to send webhook", err);
+      setError("Failed to send webhook event.");
+    }
+  };
+
+  const handleLoadWebhooks = async (integrationId: number) => {
+    try {
+      const events = await integrationApi.listWebhooks(integrationId);
+      setWebhookEvents((prev) => ({ ...prev, [integrationId]: events }));
+    } catch (err) {
+      console.error("Failed to load webhook events", err);
     }
   };
 
@@ -125,7 +313,7 @@ export default function SettingsPage() {
         {error && <p className="text-destructive">{error}</p>}
 
         <Card className="border border-border">
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="p-4 space-y-4">
             <p className="text-sm font-medium">Add Integration</p>
             <div className="grid grid-cols-3 gap-3">
               <select
@@ -145,13 +333,52 @@ export default function SettingsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder='Config JSON (e.g. {"domain":"example"})'
-                value={config}
-                onChange={(e) => setConfig(e.target.value)}
-              />
+              <div className="rounded-md border border-border bg-background px-2 py-1 text-sm flex items-center text-muted-foreground">
+                {selectedDefinition?.category || "Loading provider fields"}
+              </div>
             </div>
+
+            {selectedDefinition ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Required fields</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedDefinition.required_fields.map((field) => (
+                      <input
+                        key={field.key}
+                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                        placeholder={field.label}
+                        type={field.secret ? "password" : "text"}
+                        value={fieldValues[field.key] || ""}
+                        onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {selectedDefinition.optional_fields.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Optional fields</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {selectedDefinition.optional_fields.map((field) => (
+                        <input
+                          key={field.key}
+                          className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                          placeholder={field.label}
+                          type={field.secret ? "password" : "text"}
+                          value={fieldValues[field.key] || ""}
+                          onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Provider definitions are loading.
+              </p>
+            )}
+
             <Button onClick={handleCreate}>Create Integration</Button>
           </CardContent>
         </Card>
@@ -162,27 +389,194 @@ export default function SettingsPage() {
             {integrations.length === 0 ? (
               <p className="text-sm text-muted-foreground">No integrations yet.</p>
             ) : (
-              <div className="space-y-2">
-                {integrations.map((integration) => (
-                  <div
-                    key={integration.id}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {integration.name || integration.provider}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Provider: {integration.provider}
-                      </p>
+              <div className="space-y-3">
+                {integrations.map((integration) => {
+                  const definition = getDefinitionForIntegration(integration.provider);
+                  const testResult = testResults[integration.id];
+                  const syncHistory = syncRuns[integration.id] || [];
+                  const webhookHistory = webhookEvents[integration.id] || [];
+                  const ssoLink = ssoLinks[integration.id];
+                  const latestSync = syncHistory[0];
+                  const latestWebhook = webhookHistory[0];
+
+                  return (
+                    <div
+                      key={integration.id}
+                      className="rounded-md border border-border px-3 py-3 space-y-2 text-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {integration.name || integration.provider}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Provider: {definition?.label || integration.provider}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={integration.is_enabled ? "success" : "outline"}
+                          >
+                            {integration.is_enabled ? "Enabled" : "Disabled"}
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleIntegration(integration)}
+                          >
+                            Toggle
+                          </Button>
+                        </div>
+                      </div>
+
+                      {testResult && (
+                        <div className="text-xs text-muted-foreground">
+                          Test: {testResult.status} - {testResult.message}
+                          {testResult.missing_fields.length > 0 && (
+                            <span>
+                              {" "}Missing: {testResult.missing_fields.join(", ")}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {latestSync && (
+                        <div className="text-xs text-muted-foreground">
+                          Last Sync: {latestSync.status} · {latestSync.items_synced} items
+                        </div>
+                      )}
+
+                      {latestWebhook && (
+                        <div className="text-xs text-muted-foreground">
+                          Last Webhook: {latestWebhook.event_type}
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleTest(integration.id)}>
+                          Test
+                        </Button>
+                        {definition?.category === "sso" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAuthorizeSso(integration.id)}
+                          >
+                            Generate SSO URL
+                          </Button>
+                        )}
+                        {definition?.supports_sync && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSync(integration.id)}
+                            >
+                              Run Sync
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleLoadSyncs(integration.id)}
+                            >
+                              Load Syncs
+                            </Button>
+                          </>
+                        )}
+                        {definition?.supports_webhooks && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSendWebhook(integration.id)}
+                            >
+                              Send Test Webhook
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleLoadWebhooks(integration.id)}
+                            >
+                              Load Webhooks
+                            </Button>
+                          </>
+                        )}
+                      </div>
+
+                      {definition?.supports_webhooks && (
+                        <p className="text-xs text-muted-foreground">
+                          Webhook endpoint: /api/v1/integrations/{integration.id}/webhook
+                        </p>
+                      )}
+
+                      {definition?.category === "sso" && ssoLink && (
+                        <p className="text-xs text-muted-foreground break-all">
+                          SSO URL: {ssoLink.authorization_url}
+                        </p>
+                      )}
                     </div>
-                    <Badge variant={integration.is_enabled ? "success" : "outline"}>
-                      {integration.is_enabled ? "Enabled" : "Disabled"}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border">
+          <CardContent className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Audit & Observability</p>
+                <p className="text-xs text-muted-foreground">
+                  Operational health and compliance reporting
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="rounded-md border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Audit Events (30d)</p>
+                <p className="text-lg font-semibold">
+                  {auditSummary?.total_events ?? "--"}
+                </p>
+              </div>
+              <div className="rounded-md border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Sync Successes (30d)</p>
+                <p className="text-lg font-semibold">
+                  {observability?.integration_syncs.success ?? "--"}
+                </p>
+              </div>
+              <div className="rounded-md border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Webhook Events (30d)</p>
+                <p className="text-lg font-semibold">
+                  {observability?.webhook_events.total ?? "--"}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Recent audit activity</p>
+              {auditEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No audit events yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {auditEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">{event.action}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {event.entity_type} · {new Date(event.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <Badge variant="outline">{event.entity_type}</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
