@@ -315,6 +315,16 @@ export const analysisApi = {
 // =============================================================================
 
 export const draftApi = {
+  listProposals: async (params?: { rfp_id?: number }): Promise<Proposal[]> => {
+    const { data } = await api.get("/draft/proposals", { params });
+    return data;
+  },
+
+  getProposal: async (proposalId: number): Promise<Proposal> => {
+    const { data } = await api.get(`/draft/proposals/${proposalId}`);
+    return data;
+  },
+
   createProposal: async (
     rfpId: number,
     title: string

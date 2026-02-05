@@ -44,6 +44,11 @@ const navItems: NavItem[] = [
     icon: BarChart3,
   },
   {
+    title: "Proposals",
+    href: "/proposals",
+    icon: FileSearch,
+  },
+  {
     title: "Knowledge Base",
     href: "/knowledge-base",
     icon: FolderOpen,

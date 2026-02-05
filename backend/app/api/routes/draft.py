@@ -34,6 +34,44 @@ from app.config import settings
 router = APIRouter(prefix="/draft", tags=["Draft Generation"])
 
 
+@router.get("/proposals", response_model=List[ProposalRead])
+async def list_proposals(
+    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
+    rfp_id: Optional[int] = Query(None, description="Filter by RFP ID"),
+    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> List[ProposalRead]:
+    """
+    List proposals for a user.
+    """
+    resolved_user_id = resolve_user_id(user_id, current_user)
+    query = select(Proposal).where(Proposal.user_id == resolved_user_id)
+    if rfp_id is not None:
+        query = query.where(Proposal.rfp_id == rfp_id)
+
+    result = await session.execute(query.order_by(Proposal.created_at.desc()))
+    proposals = result.scalars().all()
+    return [ProposalRead.from_orm_with_completion(p) for p in proposals]
+
+
+@router.get("/proposals/{proposal_id}", response_model=ProposalRead)
+async def get_proposal(
+    proposal_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> ProposalRead:
+    """
+    Get a proposal by id.
+    """
+    result = await session.execute(
+        select(Proposal).where(Proposal.id == proposal_id)
+    )
+    proposal = result.scalar_one_or_none()
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    return ProposalRead.from_orm_with_completion(proposal)
+
+
 @router.post("/proposals", response_model=ProposalRead)
 async def create_proposal(
     proposal: ProposalCreate,
