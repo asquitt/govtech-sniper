@@ -10,5 +10,5 @@
 4. Tests for tool invocation and mock responses.
 
 ## Status
-- In progress.
+- Phase 4 complete.
 - Added tool dispatch in Dash service, context selection, and citation rendering.
