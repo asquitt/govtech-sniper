@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = Field(default=False)
     secret_key: str = Field(default="CHANGE_ME_IN_PRODUCTION")
+    field_encryption_key: Optional[str] = Field(default=None)
+    audit_export_signing_key: str = Field(default="CHANGE_ME_AUDIT_SIGNING")
+    audit_retention_days: int = Field(default=365, ge=30, le=3650)
 
     # -------------------------------------------------------------------------
     # Database
@@ -78,6 +81,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     jwt_algorithm: str = Field(default="HS256")
     jwt_expiration_hours: int = Field(default=24)
+    mfa_issuer: str = Field(default="RFP Sniper")
 
     # -------------------------------------------------------------------------
     # Observability
@@ -88,6 +92,38 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     enable_metrics: bool = Field(default=True)
     webhook_delivery_enabled: bool = Field(default=False)
+    mock_sso: bool = Field(default=False)
+
+    # -------------------------------------------------------------------------
+    # SCIM Provisioning
+    # -------------------------------------------------------------------------
+    scim_bearer_token: Optional[str] = Field(default=None)
+    scim_default_team_name: str = Field(default="Default Team")
+    scim_default_role: str = Field(default="member")
+    scim_auto_create_team: bool = Field(default=True)
+    scim_group_role_map: Optional[str] = Field(
+        default=None,
+        description="JSON map of SCIM group displayName to team role",
+    )
+
+    # -------------------------------------------------------------------------
+    # Caching
+    # -------------------------------------------------------------------------
+    cache_backend: str = Field(default="memory")
+    cache_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+
+    # -------------------------------------------------------------------------
+    # Alerting Thresholds
+    # -------------------------------------------------------------------------
+    alert_sync_failures_threshold: int = Field(default=1, ge=0)
+    alert_webhook_failures_threshold: int = Field(default=1, ge=0)
+    alert_auth_failures_threshold: int = Field(default=5, ge=1)
+
+    # -------------------------------------------------------------------------
+    # SLO Targets
+    # -------------------------------------------------------------------------
+    slo_latency_p95_ms: int = Field(default=1500, ge=100)
+    slo_error_rate: float = Field(default=0.01, ge=0.0, le=1.0)
 
     @field_validator("sam_gov_api_key", "gemini_api_key", mode="before")
     @classmethod

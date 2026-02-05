@@ -27,6 +27,7 @@ from app.schemas.rfp import (
 from app.services.snapshot_service import build_snapshot_summary, diff_snapshot_summaries
 from app.services.audit_service import log_audit_event
 from app.services.webhook_service import dispatch_webhook_event
+from app.services.cache_service import cache_get, cache_set, cache_clear_prefix
 
 router = APIRouter(prefix="/rfps", tags=["RFPs"])
 
@@ -45,6 +46,10 @@ async def list_rfps(
     List RFPs for a user with optional filtering.
     """
     resolved_user_id = resolve_user_id(user_id, current_user)
+    cache_key = f"rfps:list:{resolved_user_id}:{status}:{qualified_only}:{skip}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     query = select(RFP).where(RFP.user_id == resolved_user_id)
     
     if status:
@@ -57,8 +62,9 @@ async def list_rfps(
     
     result = await session.execute(query)
     rfps = result.scalars().all()
-    
-    return [RFPListItem.model_validate(rfp) for rfp in rfps]
+    payload = [RFPListItem.model_validate(rfp).model_dump() for rfp in rfps]
+    await cache_set(cache_key, payload)
+    return payload
 
 
 @router.get("/{rfp_id}", response_model=RFPRead)
@@ -241,6 +247,7 @@ async def create_rfp(
     )
     await session.commit()
     await session.refresh(rfp)
+    await cache_clear_prefix(f"rfps:list:{resolved_user_id}:")
     
     return RFPRead.model_validate(rfp)
 
@@ -289,6 +296,7 @@ async def update_rfp(
     )
     await session.commit()
     await session.refresh(rfp)
+    await cache_clear_prefix(f"rfps:list:{rfp.user_id}:")
     
     return RFPRead.model_validate(rfp)
 
@@ -329,6 +337,7 @@ async def delete_rfp(
     )
     await session.delete(rfp)
     await session.commit()
+    await cache_clear_prefix(f"rfps:list:{rfp.user_id}:")
     
     return {"message": f"RFP {rfp_id} deleted"}
 
