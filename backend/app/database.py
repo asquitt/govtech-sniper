@@ -49,7 +49,26 @@ async def init_db() -> None:
     """
     async with engine.begin() as conn:
         # Import all models to ensure they're registered with SQLModel
-        from app.models import user, rfp, proposal, knowledge_base, opportunity_snapshot  # noqa: F401
+        from app.models import (  # noqa: F401
+            user,
+            rfp,
+            proposal,
+            knowledge_base,
+            opportunity_snapshot,
+            audit,
+            integration,
+            webhook,
+            dash,
+            capture,
+            contract,
+            saved_search,
+            award,
+            contact,
+            word_addin,
+            graphics,
+            secret,
+            budget_intel,
+        )
         
         # Create all tables (dev only - use Alembic in production)
         await conn.run_sync(SQLModel.metadata.create_all)

@@ -40,6 +40,7 @@ class TestRFPList:
         assert len(data) == 1
         assert data[0]["id"] == test_rfp.id
         assert data[0]["title"] == test_rfp.title
+        assert "recommendation_score" in data[0]
 
     @pytest.mark.asyncio
     async def test_list_rfps_pagination(

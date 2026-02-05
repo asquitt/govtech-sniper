@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn, getImportanceColor, truncate } from "@/lib/utils";
-import type { ComplianceRequirement, ImportanceLevel } from "@/types";
+import type { ComplianceRequirement, ImportanceLevel, RequirementStatus } from "@/types";
 
 interface ComplianceMatrixProps {
   requirements: ComplianceRequirement[];
@@ -39,6 +39,16 @@ const importanceBadges: Record<
   evaluated: { label: "Evaluated", variant: "warning" },
   optional: { label: "Optional", variant: "default" },
   informational: { label: "Info", variant: "secondary" },
+};
+
+const statusBadges: Record<
+  RequirementStatus,
+  { label: string; variant: "default" | "success" | "warning" | "destructive" }
+> = {
+  open: { label: "Open", variant: "default" },
+  in_progress: { label: "In Progress", variant: "warning" },
+  blocked: { label: "Blocked", variant: "destructive" },
+  addressed: { label: "Addressed", variant: "success" },
 };
 
 export function ComplianceMatrix({
@@ -91,6 +101,9 @@ export function ComplianceMatrix({
               isGenerating && generatingId === requirement.id;
             const Icon = importanceIcons[requirement.importance];
             const badge = importanceBadges[requirement.importance];
+            const status =
+              requirement.status || (requirement.is_addressed ? "addressed" : "open");
+            const statusBadge = statusBadges[status];
 
             return (
               <div
@@ -141,6 +154,12 @@ export function ComplianceMatrix({
                       <Badge variant={badge.variant} className="text-[10px] px-1.5 py-0">
                         {badge.label}
                       </Badge>
+                      <Badge
+                        variant={statusBadge.variant}
+                        className="text-[10px] px-1.5 py-0"
+                      >
+                        {statusBadge.label}
+                      </Badge>
                     </div>
 
                     <p className="text-sm text-foreground line-clamp-2">
@@ -151,6 +170,31 @@ export function ComplianceMatrix({
                       <span className="inline-block mt-1.5 text-xs text-muted-foreground">
                         {requirement.category}
                       </span>
+                    )}
+
+                    {requirement.assigned_to && (
+                      <span className="block mt-1 text-xs text-muted-foreground">
+                        Owner: {requirement.assigned_to}
+                      </span>
+                    )}
+
+                    {requirement.tags && requirement.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {requirement.tags.slice(0, 3).map((tag) => (
+                          <Badge
+                            key={`${requirement.id}-${tag}`}
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                        {requirement.tags.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground">
+                            +{requirement.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -189,4 +233,3 @@ export function ComplianceMatrix({
     </div>
   );
 }
-

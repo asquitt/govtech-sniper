@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
   Search,
@@ -28,8 +28,8 @@ import {
   getDeadlineUrgency,
   cn,
 } from "@/lib/utils";
-import { rfpApi, ingestApi } from "@/lib/api";
-import type { RFPListItem, RFPStatus } from "@/types";
+import { rfpApi, ingestApi, savedSearchApi } from "@/lib/api";
+import type { RFPListItem, RFPStatus, SavedSearch } from "@/types";
 
 const statusConfig: Record<
   RFPStatus,
@@ -103,7 +103,20 @@ export default function OpportunitiesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showRecommended, setShowRecommended] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
+  const [savedSearchName, setSavedSearchName] = useState("");
+  const [savedSearchKeywords, setSavedSearchKeywords] = useState("");
+  const [savedSearchAgencies, setSavedSearchAgencies] = useState("");
+  const [savedSearchNaics, setSavedSearchNaics] = useState("");
+  const [savedSearchSetAside, setSavedSearchSetAside] = useState("");
+  const [savedSearchSourceType, setSavedSearchSourceType] = useState("");
+  const [savedSearchMinValue, setSavedSearchMinValue] = useState("");
+  const [savedSearchMaxValue, setSavedSearchMaxValue] = useState("");
+  const [savedSearchStatus, setSavedSearchStatus] = useState<RFPStatus | "">("");
+  const [activeSearchId, setActiveSearchId] = useState<number | null>(null);
+  const [activeSearchMatchIds, setActiveSearchMatchIds] = useState<number[]>([]);
   const [stats, setStats] = useState({
     total: 0,
     qualified: 0,
@@ -116,12 +129,14 @@ export default function OpportunitiesPage() {
       setIsLoading(true);
       setError(null);
 
-      const [rfpList, rfpStats] = await Promise.all([
+      const [rfpList, rfpStats, savedSearchList] = await Promise.all([
         rfpApi.list(),
         rfpApi.getStats(),
+        savedSearchApi.list(),
       ]);
 
       setRfps(rfpList);
+      setSavedSearches(savedSearchList);
       setStats({
         total: rfpStats.total,
         qualified: rfpStats.qualified,
@@ -170,12 +185,117 @@ export default function OpportunitiesPage() {
     }
   };
 
+  const handleCreateSavedSearch = async () => {
+    if (!savedSearchName.trim()) return;
+    try {
+      const filters: Record<string, unknown> = {
+        keywords: savedSearchKeywords
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        agencies: savedSearchAgencies
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        naics_codes: savedSearchNaics
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        set_asides: savedSearchSetAside
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        source_types: savedSearchSourceType
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        statuses: savedSearchStatus ? [savedSearchStatus] : [],
+      };
+
+      if (savedSearchMinValue) {
+        const min = Number(savedSearchMinValue);
+        if (!Number.isNaN(min)) {
+          filters.min_value = min;
+        }
+      }
+
+      if (savedSearchMaxValue) {
+        const max = Number(savedSearchMaxValue);
+        if (!Number.isNaN(max)) {
+          filters.max_value = max;
+        }
+      }
+
+      await savedSearchApi.create({
+        name: savedSearchName.trim(),
+        filters,
+      });
+
+      setSavedSearchName("");
+      setSavedSearchKeywords("");
+      setSavedSearchAgencies("");
+      setSavedSearchNaics("");
+      setSavedSearchSetAside("");
+      setSavedSearchSourceType("");
+      setSavedSearchMinValue("");
+      setSavedSearchMaxValue("");
+      setSavedSearchStatus("");
+
+      const savedSearchList = await savedSearchApi.list();
+      setSavedSearches(savedSearchList);
+    } catch (err) {
+      console.error("Failed to create saved search", err);
+      setError("Failed to create saved search.");
+    }
+  };
+
+  const handleRunSavedSearch = async (searchId: number) => {
+    try {
+      const result = await savedSearchApi.run(searchId);
+      setActiveSearchId(searchId);
+      setActiveSearchMatchIds(result.matches.map((match) => match.id));
+    } catch (err) {
+      console.error("Failed to run saved search", err);
+      setError("Failed to run saved search.");
+    }
+  };
+
+  const handleClearSavedSearch = () => {
+    setActiveSearchId(null);
+    setActiveSearchMatchIds([]);
+  };
+
+  const activeMatchSet = useMemo(
+    () => new Set(activeSearchMatchIds),
+    [activeSearchMatchIds]
+  );
+
   const filteredRfps = rfps.filter(
     (rfp) =>
       rfp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       rfp.solicitation_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       rfp.agency?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const baseRfps =
+    activeSearchId !== null
+      ? filteredRfps.filter((rfp) => activeMatchSet.has(rfp.id))
+      : filteredRfps;
+
+  const recommendedRfps = showRecommended
+    ? baseRfps.filter(
+        (rfp) =>
+          (rfp.recommendation_score ?? 0) >= 70 &&
+          (rfp.is_qualified ?? false)
+      )
+    : baseRfps;
+
+  const sortedRfps = [...recommendedRfps].sort((a, b) => {
+    const aScore = a.recommendation_score ?? 0;
+    const bScore = b.recommendation_score ?? 0;
+    if (aScore !== bScore) return bScore - aScore;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   if (error && !isLoading) {
     return (
@@ -201,14 +321,22 @@ export default function OpportunitiesPage() {
         title="Opportunities"
         description="Track and manage government contract opportunities"
         actions={
-          <Button onClick={handleSync} disabled={isSyncing}>
-            {isSyncing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-            Sync SAM.gov
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showRecommended ? "default" : "outline"}
+              onClick={() => setShowRecommended((prev) => !prev)}
+            >
+              Recommended
+            </Button>
+            <Button onClick={handleSync} disabled={isSyncing}>
+              {isSyncing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Sync SAM.gov
+            </Button>
+          </div>
         }
       />
 
@@ -272,6 +400,121 @@ export default function OpportunitiesPage() {
           </Card>
         </div>
 
+        <Card className="border border-border mb-6">
+          <CardContent className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Saved Searches</p>
+                <p className="text-xs text-muted-foreground">
+                  Reuse filters for federal and SLED opportunities.
+                </p>
+              </div>
+              {activeSearchId !== null && (
+                <Button variant="outline" size="sm" onClick={handleClearSavedSearch}>
+                  Clear Active Search
+                </Button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Search name"
+                value={savedSearchName}
+                onChange={(e) => setSavedSearchName(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Keywords (comma-separated)"
+                value={savedSearchKeywords}
+                onChange={(e) => setSavedSearchKeywords(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Agencies (comma-separated)"
+                value={savedSearchAgencies}
+                onChange={(e) => setSavedSearchAgencies(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="NAICS codes"
+                value={savedSearchNaics}
+                onChange={(e) => setSavedSearchNaics(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Set-Asides"
+                value={savedSearchSetAside}
+                onChange={(e) => setSavedSearchSetAside(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Source Type (federal, sled)"
+                value={savedSearchSourceType}
+                onChange={(e) => setSavedSearchSourceType(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Min Value"
+                value={savedSearchMinValue}
+                onChange={(e) => setSavedSearchMinValue(e.target.value)}
+              />
+              <input
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Max Value"
+                value={savedSearchMaxValue}
+                onChange={(e) => setSavedSearchMaxValue(e.target.value)}
+              />
+              <select
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                value={savedSearchStatus}
+                onChange={(e) =>
+                  setSavedSearchStatus(e.target.value as RFPStatus | "")
+                }
+              >
+                <option value="">Any Status</option>
+                {Object.keys(statusConfig).map((status) => (
+                  <option key={status} value={status}>
+                    {statusConfig[status as RFPStatus].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <Button onClick={handleCreateSavedSearch} size="sm">
+              Save Search
+            </Button>
+
+            {savedSearches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved searches yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {savedSearches.map((search) => (
+                  <div
+                    key={search.id}
+                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{search.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Last run: {search.last_run_at ? formatDate(search.last_run_at) : "—"} ·
+                        Matches: {search.last_match_count}
+                      </p>
+                    </div>
+                    <Button
+                      variant={activeSearchId === search.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleRunSavedSearch(search.id)}
+                    >
+                      {activeSearchId === search.id ? "Active" : "Run"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Search and Filters */}
         <div className="flex items-center gap-4 mb-4">
           <div className="relative flex-1">
@@ -300,7 +543,7 @@ export default function OpportunitiesPage() {
             <div className="flex items-center justify-center h-64">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : filteredRfps.length === 0 ? (
+          ) : sortedRfps.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64">
               <Target className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">
@@ -329,7 +572,7 @@ export default function OpportunitiesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRfps.map((rfp) => (
+                  {sortedRfps.map((rfp) => (
                     <tr
                       key={rfp.id}
                       className="border-b border-border hover:bg-secondary/50 transition-colors"
@@ -337,7 +580,7 @@ export default function OpportunitiesPage() {
                       <td className="p-4">
                         <div className="flex flex-col gap-1">
                           <Link
-                            href={`/analysis/${rfp.id}`}
+                            href={`/opportunities/${rfp.id}`}
                             className="font-medium text-foreground hover:text-primary transition-colors line-clamp-1"
                           >
                             {rfp.title}
@@ -362,10 +605,17 @@ export default function OpportunitiesPage() {
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <QualificationBadge
-                          isQualified={rfp.is_qualified}
-                          score={rfp.qualification_score}
-                        />
+                        <div className="flex flex-col gap-1">
+                          <QualificationBadge
+                            isQualified={rfp.is_qualified}
+                            score={rfp.qualification_score}
+                          />
+                          {rfp.recommendation_score !== undefined && (
+                            <Badge variant="outline" className="w-fit">
+                              Rec {Math.round(rfp.recommendation_score)}%
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-0.5">

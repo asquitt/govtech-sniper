@@ -18,6 +18,20 @@ from app.api.routes.export import router as export_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.teams import router as teams_router
 from app.api.routes.versions import router as versions_router
+from app.api.routes.integrations import router as integrations_router
+from app.api.routes.webhooks import router as webhooks_router
+from app.api.routes.dash import router as dash_router
+from app.api.routes.capture import router as capture_router
+from app.api.routes.contracts import router as contracts_router
+from app.api.routes.audit import router as audit_router
+from app.api.routes.saved_searches import router as saved_searches_router
+from app.api.routes.awards import router as awards_router
+from app.api.routes.contacts import router as contacts_router
+from app.api.routes.word_addin import router as word_addin_router
+from app.api.routes.graphics import router as graphics_router
+from app.api.routes.scim import router as scim_router
+from app.api.routes.secrets import router as secrets_router
+from app.api.routes.budget_intel import router as budget_intel_router
 
 __all__ = [
     "ingest_router",
@@ -34,5 +48,18 @@ __all__ = [
     "notifications_router",
     "teams_router",
     "versions_router",
+    "integrations_router",
+    "webhooks_router",
+    "dash_router",
+    "capture_router",
+    "contracts_router",
+    "audit_router",
+    "saved_searches_router",
+    "awards_router",
+    "contacts_router",
+    "word_addin_router",
+    "graphics_router",
+    "scim_router",
+    "secrets_router",
+    "budget_intel_router",
 ]
-

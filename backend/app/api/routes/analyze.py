@@ -4,21 +4,39 @@ RFP Sniper - Analysis Routes
 Endpoints for RFP analysis using Gemini AI.
 """
 
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 
 from app.database import get_session
 from app.api.deps import get_current_user_optional, resolve_user_id
 from app.services.auth_service import UserAuth
 from app.models.rfp import RFP, RFPStatus, ComplianceMatrix
-from app.schemas.rfp import AnalyzeResponse, ComplianceMatrixRead, ComplianceRequirementRead
+from app.schemas.rfp import (
+    AnalyzeResponse,
+    ComplianceMatrixRead,
+    ComplianceRequirementRead,
+    ComplianceRequirementCreate,
+    ComplianceRequirementUpdate,
+)
+from pydantic import BaseModel
 from app.tasks.analysis_tasks import analyze_rfp, run_killer_filter
 from app.config import settings
+from app.services.audit_service import log_audit_event
+from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/analyze", tags=["Analysis"])
+
+
+class ComplianceGapSummary(BaseModel):
+    rfp_id: int
+    total_open: int
+    mandatory_open: int
+    gaps: List[ComplianceRequirementRead]
 
 
 @router.post("/{rfp_id}", response_model=AnalyzeResponse)
@@ -163,6 +181,264 @@ async def get_compliance_matrix(
         created_at=matrix.created_at,
         updated_at=matrix.updated_at,
     )
+
+
+@router.get("/{rfp_id}/gaps", response_model=ComplianceGapSummary)
+async def get_compliance_gaps(
+    rfp_id: int = Path(..., description="RFP ID"),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceGapSummary:
+    result = await session.execute(
+        select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
+    )
+    matrix = result.scalar_one_or_none()
+    if not matrix:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        )
+
+    gaps = []
+    mandatory_open = 0
+    for req in matrix.requirements:
+        is_addressed = req.get("is_addressed")
+        status = req.get("status")
+        if is_addressed or status == "addressed":
+            continue
+        if req.get("importance") == "mandatory":
+            mandatory_open += 1
+        gaps.append(ComplianceRequirementRead(**req))
+
+    return ComplianceGapSummary(
+        rfp_id=rfp_id,
+        total_open=len(gaps),
+        mandatory_open=mandatory_open,
+        gaps=gaps,
+    )
+
+
+def _recalculate_matrix_counts(matrix: ComplianceMatrix) -> None:
+    total = len(matrix.requirements)
+    mandatory_count = 0
+    addressed_count = 0
+    for req in matrix.requirements:
+        if req.get("importance") == "mandatory":
+            mandatory_count += 1
+        if req.get("is_addressed"):
+            addressed_count += 1
+    matrix.total_requirements = total
+    matrix.mandatory_count = mandatory_count
+    matrix.addressed_count = addressed_count
+
+
+def _generate_requirement_id(existing: list[dict]) -> str:
+    existing_ids = {req.get("id") for req in existing}
+    index = len(existing) + 1
+    while True:
+        candidate = f"REQ-{index:03d}"
+        if candidate not in existing_ids:
+            return candidate
+        index += 1
+
+
+def _normalize_requirement_status(data: dict) -> dict:
+    if data.get("is_addressed"):
+        data["status"] = "addressed"
+    elif data.get("status") == "addressed":
+        data["is_addressed"] = True
+    elif "is_addressed" in data and not data["is_addressed"] and data.get("status") == "addressed":
+        data["status"] = "open"
+    if data.get("status") is None:
+        data.pop("status", None)
+    return data
+
+
+@router.post("/{rfp_id}/matrix", response_model=ComplianceMatrixRead)
+async def add_compliance_requirement(
+    rfp_id: int,
+    requirement: ComplianceRequirementCreate,
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceMatrixRead:
+    """
+    Add a new requirement to the compliance matrix.
+    """
+    result = await session.execute(
+        select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
+    )
+    matrix = result.scalar_one_or_none()
+    if not matrix:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        )
+
+    req_dict = requirement.model_dump()
+    req_dict = _normalize_requirement_status(req_dict)
+    if not req_dict.get("id"):
+        req_dict["id"] = _generate_requirement_id(matrix.requirements)
+    else:
+        existing_ids = {req.get("id") for req in matrix.requirements}
+        if req_dict["id"] in existing_ids:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Requirement ID {req_dict['id']} already exists.",
+            )
+
+    matrix.requirements.append(req_dict)
+    flag_modified(matrix, "requirements")
+    _recalculate_matrix_counts(matrix)
+    matrix.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        entity_type="compliance_matrix",
+        entity_id=matrix.id,
+        action="compliance.requirement.added",
+        metadata={"requirement_id": req_dict["id"], "rfp_id": rfp_id},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        event_type="compliance.requirement.added",
+        payload={"rfp_id": rfp_id, "requirement_id": req_dict["id"]},
+    )
+
+    await session.commit()
+    await session.refresh(matrix)
+
+    requirements = [ComplianceRequirementRead(**req) for req in matrix.requirements]
+    return ComplianceMatrixRead(
+        id=matrix.id,
+        rfp_id=matrix.rfp_id,
+        requirements=requirements,
+        total_requirements=matrix.total_requirements,
+        mandatory_count=matrix.mandatory_count,
+        addressed_count=matrix.addressed_count,
+        extraction_confidence=matrix.extraction_confidence,
+        created_at=matrix.created_at,
+        updated_at=matrix.updated_at,
+    )
+
+
+@router.patch("/{rfp_id}/matrix/{requirement_id}", response_model=ComplianceMatrixRead)
+async def update_compliance_requirement(
+    rfp_id: int,
+    requirement_id: str,
+    update: ComplianceRequirementUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceMatrixRead:
+    """
+    Update a requirement in the compliance matrix.
+    """
+    result = await session.execute(
+        select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
+    )
+    matrix = result.scalar_one_or_none()
+    if not matrix:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        )
+
+    update_data = update.model_dump(exclude_unset=True)
+    update_data = _normalize_requirement_status(update_data)
+    found = False
+    for req in matrix.requirements:
+        if req.get("id") == requirement_id:
+            req.update(update_data)
+            found = True
+            break
+
+    flag_modified(matrix, "requirements")
+
+    if not found:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    _recalculate_matrix_counts(matrix)
+    matrix.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        entity_type="compliance_matrix",
+        entity_id=matrix.id,
+        action="compliance.requirement.updated",
+        metadata={"requirement_id": requirement_id, "rfp_id": rfp_id},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        event_type="compliance.requirement.updated",
+        payload={"rfp_id": rfp_id, "requirement_id": requirement_id},
+    )
+
+    await session.commit()
+    await session.refresh(matrix)
+
+    requirements = [ComplianceRequirementRead(**req) for req in matrix.requirements]
+    return ComplianceMatrixRead(
+        id=matrix.id,
+        rfp_id=matrix.rfp_id,
+        requirements=requirements,
+        total_requirements=matrix.total_requirements,
+        mandatory_count=matrix.mandatory_count,
+        addressed_count=matrix.addressed_count,
+        extraction_confidence=matrix.extraction_confidence,
+        created_at=matrix.created_at,
+        updated_at=matrix.updated_at,
+    )
+
+
+@router.delete("/{rfp_id}/matrix/{requirement_id}")
+async def delete_compliance_requirement(
+    rfp_id: int,
+    requirement_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    Delete a requirement from the compliance matrix.
+    """
+    result = await session.execute(
+        select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
+    )
+    matrix = result.scalar_one_or_none()
+    if not matrix:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        )
+
+    original_len = len(matrix.requirements)
+    matrix.requirements = [
+        req for req in matrix.requirements if req.get("id") != requirement_id
+    ]
+    flag_modified(matrix, "requirements")
+
+    if len(matrix.requirements) == original_len:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+
+    _recalculate_matrix_counts(matrix)
+    matrix.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        entity_type="compliance_matrix",
+        entity_id=matrix.id,
+        action="compliance.requirement.deleted",
+        metadata={"requirement_id": requirement_id, "rfp_id": rfp_id},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        event_type="compliance.requirement.deleted",
+        payload={"rfp_id": rfp_id, "requirement_id": requirement_id},
+    )
+
+    await session.commit()
+
+    return {"message": "Requirement deleted", "requirement_id": requirement_id}
 
 
 @router.post("/{rfp_id}/filter")

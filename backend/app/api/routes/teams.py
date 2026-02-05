@@ -10,6 +10,7 @@ from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 from sqlmodel import select, Field, SQLModel, Column, Text, JSON
 from pydantic import BaseModel, EmailStr
 import structlog
@@ -155,6 +156,11 @@ class InviteRequest(BaseModel):
     role: TeamRole = TeamRole.MEMBER
 
 
+class TeamMemberUpdate(BaseModel):
+    """Update a team member's role."""
+    role: TeamRole
+
+
 class CommentCreate(BaseModel):
     """Create a comment."""
     content: str
@@ -202,7 +208,6 @@ async def list_teams(
                 TeamMember.is_active == True,
             )
         )
-        from sqlalchemy import func
         member_count = count_result.scalar() or 0
 
         teams.append(TeamResponse(
@@ -451,6 +456,54 @@ async def remove_member(
     logger.info("Member removed", team_id=team_id, user_id=user_id)
 
     return {"message": "Member removed from team"}
+
+
+@router.patch("/{team_id}/members/{user_id}")
+async def update_member_role(
+    team_id: int,
+    user_id: int,
+    request: TeamMemberUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    Update a member's role within a team.
+    """
+    membership_result = await session.execute(
+        select(TeamMember).where(
+            TeamMember.team_id == team_id,
+            TeamMember.user_id == current_user.id,
+            TeamMember.is_active == True,
+            TeamMember.role.in_([TeamRole.OWNER, TeamRole.ADMIN]),
+        )
+    )
+    current_member = membership_result.scalar_one_or_none()
+    if not current_member:
+        raise HTTPException(status_code=403, detail="Not authorized to update roles")
+
+    member_result = await session.execute(
+        select(TeamMember).where(
+            TeamMember.team_id == team_id,
+            TeamMember.user_id == user_id,
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+
+    if member.role == TeamRole.OWNER and request.role != TeamRole.OWNER:
+        raise HTTPException(status_code=400, detail="Cannot change owner role")
+
+    if request.role == TeamRole.OWNER and current_member.role != TeamRole.OWNER:
+        raise HTTPException(
+            status_code=403, detail="Only the owner can assign owner role"
+        )
+
+    member.role = request.role
+    await session.commit()
+    await session.refresh(member)
+
+    return {"message": "Member role updated", "user_id": user_id, "role": member.role.value}
 
 
 # =============================================================================

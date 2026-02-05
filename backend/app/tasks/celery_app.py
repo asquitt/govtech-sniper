@@ -19,6 +19,7 @@ celery_app = Celery(
         "app.tasks.analysis_tasks",
         "app.tasks.generation_tasks",
         "app.tasks.document_tasks",
+        "app.tasks.maintenance_tasks",
     ],
 )
 
@@ -72,6 +73,18 @@ celery_app.conf.update(
         "cleanup-caches": {
             "task": "app.tasks.analysis_tasks.cleanup_expired_caches",
             "schedule": crontab(minute=0, hour=2),  # 2 AM UTC
+            "options": {"queue": "maintenance"},
+        },
+        # Purge audit logs based on retention policy
+        "purge-audit-events": {
+            "task": "app.tasks.maintenance_tasks.purge_audit_events",
+            "schedule": crontab(minute=0, hour=1),  # 1 AM UTC
+            "options": {"queue": "maintenance"},
+        },
+        # Check operational alerts hourly
+        "check-operational-alerts": {
+            "task": "app.tasks.maintenance_tasks.check_operational_alerts",
+            "schedule": crontab(minute=0, hour="*/1"),
             "options": {"queue": "maintenance"},
         },
     },

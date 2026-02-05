@@ -25,6 +25,9 @@ from app.schemas.rfp import (
     SAMOpportunitySnapshotDiff,
 )
 from app.services.snapshot_service import build_snapshot_summary, diff_snapshot_summaries
+from app.services.audit_service import log_audit_event
+from app.services.webhook_service import dispatch_webhook_event
+from app.services.cache_service import cache_get, cache_set, cache_clear_prefix
 
 router = APIRouter(prefix="/rfps", tags=["RFPs"])
 
@@ -43,6 +46,10 @@ async def list_rfps(
     List RFPs for a user with optional filtering.
     """
     resolved_user_id = resolve_user_id(user_id, current_user)
+    cache_key = f"rfps:list:{resolved_user_id}:{status}:{qualified_only}:{skip}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        return cached
     query = select(RFP).where(RFP.user_id == resolved_user_id)
     
     if status:
@@ -55,8 +62,9 @@ async def list_rfps(
     
     result = await session.execute(query)
     rfps = result.scalars().all()
-    
-    return [RFPListItem.model_validate(rfp) for rfp in rfps]
+    payload = [RFPListItem.model_validate(rfp).model_dump() for rfp in rfps]
+    await cache_set(cache_key, payload)
+    return payload
 
 
 @router.get("/{rfp_id}", response_model=RFPRead)
@@ -216,8 +224,30 @@ async def create_rfp(
         **rfp_data.model_dump(),
     )
     session.add(rfp)
+    await session.flush()
+    await log_audit_event(
+        session,
+        user_id=resolved_user_id,
+        entity_type="rfp",
+        entity_id=rfp.id,
+        action="rfp.created",
+        metadata={"title": rfp.title, "solicitation_number": rfp.solicitation_number},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=resolved_user_id,
+        event_type="rfp.created",
+        payload={
+            "rfp_id": rfp.id,
+            "title": rfp.title,
+            "solicitation_number": rfp.solicitation_number,
+            "agency": rfp.agency,
+            "status": rfp.status,
+        },
+    )
     await session.commit()
     await session.refresh(rfp)
+    await cache_clear_prefix(f"rfps:list:{resolved_user_id}:")
     
     return RFPRead.model_validate(rfp)
 
@@ -247,8 +277,26 @@ async def update_rfp(
     from datetime import datetime
     rfp.updated_at = datetime.utcnow()
     
+    await log_audit_event(
+        session,
+        user_id=rfp.user_id,
+        entity_type="rfp",
+        entity_id=rfp.id,
+        action="rfp.updated",
+        metadata={"updated_fields": list(update_dict.keys())},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=rfp.user_id,
+        event_type="rfp.updated",
+        payload={
+            "rfp_id": rfp.id,
+            "updated_fields": list(update_dict.keys()),
+        },
+    )
     await session.commit()
     await session.refresh(rfp)
+    await cache_clear_prefix(f"rfps:list:{rfp.user_id}:")
     
     return RFPRead.model_validate(rfp)
 
@@ -269,8 +317,27 @@ async def delete_rfp(
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
     
+    await log_audit_event(
+        session,
+        user_id=rfp.user_id,
+        entity_type="rfp",
+        entity_id=rfp.id,
+        action="rfp.deleted",
+        metadata={"title": rfp.title, "solicitation_number": rfp.solicitation_number},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=rfp.user_id,
+        event_type="rfp.deleted",
+        payload={
+            "rfp_id": rfp.id,
+            "title": rfp.title,
+            "solicitation_number": rfp.solicitation_number,
+        },
+    )
     await session.delete(rfp)
     await session.commit()
+    await cache_clear_prefix(f"rfps:list:{rfp.user_id}:")
     
     return {"message": f"RFP {rfp_id} deleted"}
 

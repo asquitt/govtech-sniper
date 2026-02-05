@@ -15,12 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlmodel import SQLModel
 
 from app.main import app
+from app import models  # noqa: F401
 from app.database import get_session
 from app.models.user import User
 from app.models.rfp import RFP
 from app.models.proposal import Proposal, ProposalSection
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.services.auth_service import create_token_pair, hash_password
+from app.services.cache_service import cache_clear
 
 
 # Test database URL - use SQLite for testing
@@ -60,6 +62,14 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
     async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.drop_all)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def reset_cache() -> AsyncGenerator[None, None]:
+    """Ensure cache is cleared between tests to avoid cross-test pollution."""
+    await cache_clear()
+    yield
+    await cache_clear()
 
 
 @pytest_asyncio.fixture(scope="function")

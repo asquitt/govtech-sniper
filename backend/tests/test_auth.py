@@ -5,6 +5,7 @@ Tests for user registration, login, and token management.
 """
 
 import pytest
+import pyotp
 from httpx import AsyncClient
 
 from app.models.user import User
@@ -133,6 +134,35 @@ class TestLogin:
         assert response.status_code == 403
         assert "deactivated" in response.json()["detail"]
 
+    @pytest.mark.asyncio
+    async def test_login_requires_mfa(self, client: AsyncClient, db_session, test_user: User):
+        """Test login requires MFA code when enabled."""
+        secret = pyotp.random_base32()
+        test_user.mfa_secret = secret
+        test_user.mfa_enabled = True
+        await db_session.commit()
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user.email,
+                "password": "TestPassword123!",
+            },
+        )
+        assert response.status_code == 401
+        assert "MFA" in response.json()["detail"]
+
+        totp = pyotp.TOTP(secret)
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": test_user.email,
+                "password": "TestPassword123!",
+                "mfa_code": totp.now(),
+            },
+        )
+        assert response.status_code == 200
+
 
 class TestTokenRefresh:
     """Tests for token refresh."""
@@ -207,6 +237,33 @@ class TestPasswordChange:
         )
         assert response.status_code == 200
         assert "successfully" in response.json()["message"]
+
+
+class TestMFA:
+    """Tests for MFA enrollment and verification."""
+
+    @pytest.mark.asyncio
+    async def test_mfa_enroll_verify_disable(self, client: AsyncClient, auth_headers: dict):
+        enroll = await client.post("/api/v1/auth/mfa/enroll", headers=auth_headers)
+        assert enroll.status_code == 200
+        payload = enroll.json()
+        assert "secret" in payload
+        assert "otpauth_url" in payload
+
+        totp = pyotp.TOTP(payload["secret"])
+        verify = await client.post(
+            "/api/v1/auth/mfa/verify",
+            headers=auth_headers,
+            json={"code": totp.now()},
+        )
+        assert verify.status_code == 200
+
+        disable = await client.post(
+            "/api/v1/auth/mfa/disable",
+            headers=auth_headers,
+            json={"code": totp.now()},
+        )
+        assert disable.status_code == 200
 
     @pytest.mark.asyncio
     async def test_change_password_wrong_current(

@@ -45,6 +45,14 @@ class ImportanceLevel(str, Enum):
     INFORMATIONAL = "informational"
 
 
+class RequirementStatus(str, Enum):
+    """Status for compliance requirement tracking."""
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    BLOCKED = "blocked"
+    ADDRESSED = "addressed"
+
+
 # =============================================================================
 # Compliance Requirement (Pydantic model for JSON storage)
 # =============================================================================
@@ -63,6 +71,9 @@ class ComplianceRequirement(BaseModel):
     keywords: List[str] = []         # Key terms for matching
     is_addressed: bool = False       # Has user addressed this?
     notes: Optional[str] = None      # User annotations
+    status: RequirementStatus = RequirementStatus.OPEN
+    assigned_to: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -92,6 +103,18 @@ class RFPBase(SQLModel):
     # Contract Details
     estimated_value: Optional[int] = None  # In dollars
     place_of_performance: Optional[str] = Field(default=None, max_length=255)
+
+    # Market Intelligence (GovDash/Govly parity fields)
+    source_type: Optional[str] = Field(default=None, max_length=50)  # federal | sled | other
+    jurisdiction: Optional[str] = Field(default=None, max_length=255)
+    contract_vehicle: Optional[str] = Field(default=None, max_length=255)
+    incumbent_vendor: Optional[str] = Field(default=None, max_length=255)
+    buyer_contact_name: Optional[str] = Field(default=None, max_length=255)
+    buyer_contact_email: Optional[str] = Field(default=None, max_length=255)
+    buyer_contact_phone: Optional[str] = Field(default=None, max_length=50)
+    budget_estimate: Optional[int] = None
+    competitive_landscape: Optional[str] = Field(default=None, sa_column=Column(Text))
+    intel_notes: Optional[str] = Field(default=None, sa_column=Column(Text))
 
 
 class RFP(RFPBase, table=True):
@@ -180,4 +203,3 @@ class ComplianceMatrix(SQLModel, table=True):
         self.total_requirements = len(self.requirements)
         if requirement.importance == ImportanceLevel.MANDATORY:
             self.mandatory_count += 1
-

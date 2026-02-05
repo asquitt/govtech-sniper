@@ -65,6 +65,11 @@ class User(UserBase, table=True):
     api_calls_today: int = Field(default=0)
     api_calls_limit: int = Field(default=100)  # Based on tier
     last_api_reset: datetime = Field(default_factory=datetime.utcnow)
+
+    # MFA
+    mfa_enabled: bool = Field(default=False)
+    mfa_secret: Optional[str] = Field(default=None, max_length=255)
+    mfa_enabled_at: Optional[datetime] = None
     
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -121,4 +126,3 @@ class UserProfile(UserProfileBase, table=True):
     
     # Relationship
     user: Optional[User] = Relationship(back_populates="profile")
-

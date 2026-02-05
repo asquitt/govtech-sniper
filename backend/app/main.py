@@ -38,6 +38,20 @@ from app.api.routes import (
     notifications_router,
     teams_router,
     versions_router,
+    integrations_router,
+    webhooks_router,
+    dash_router,
+    capture_router,
+    contracts_router,
+    audit_router,
+    saved_searches_router,
+    awards_router,
+    contacts_router,
+    word_addin_router,
+    graphics_router,
+    scim_router,
+    secrets_router,
+    budget_intel_router,
 )
 
 # Configure structured logging
@@ -210,6 +224,9 @@ app.include_router(websocket_router)
 # Core API routes
 api_prefix = "/api/v1"
 
+# Health checks under API prefix for clients/tests
+app.include_router(health_router, prefix=api_prefix)
+
 # Authentication (no auth required for login/register)
 app.include_router(auth_router, prefix=api_prefix)
 
@@ -225,6 +242,20 @@ app.include_router(analytics_router, prefix=api_prefix)
 app.include_router(notifications_router, prefix=api_prefix)
 app.include_router(teams_router, prefix=api_prefix)
 app.include_router(versions_router, prefix=api_prefix)
+app.include_router(integrations_router, prefix=api_prefix)
+app.include_router(webhooks_router, prefix=api_prefix)
+app.include_router(dash_router, prefix=api_prefix)
+app.include_router(capture_router, prefix=api_prefix)
+app.include_router(contracts_router, prefix=api_prefix)
+app.include_router(audit_router, prefix=api_prefix)
+app.include_router(saved_searches_router, prefix=api_prefix)
+app.include_router(awards_router, prefix=api_prefix)
+app.include_router(contacts_router, prefix=api_prefix)
+app.include_router(word_addin_router, prefix=api_prefix)
+app.include_router(graphics_router, prefix=api_prefix)
+app.include_router(scim_router, prefix=api_prefix)
+app.include_router(secrets_router, prefix=api_prefix)
+app.include_router(budget_intel_router, prefix=api_prefix)
 
 
 # =============================================================================
@@ -281,4 +312,3 @@ if __name__ == "__main__":
         reload=settings.debug,
         log_level="debug" if settings.debug else "info",
     )
-

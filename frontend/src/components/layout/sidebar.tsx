@@ -44,9 +44,29 @@ const navItems: NavItem[] = [
     icon: BarChart3,
   },
   {
+    title: "Proposals",
+    href: "/proposals",
+    icon: FileSearch,
+  },
+  {
     title: "Knowledge Base",
     href: "/knowledge-base",
     icon: FolderOpen,
+  },
+  {
+    title: "Dash",
+    href: "/dash",
+    icon: Sparkles,
+  },
+  {
+    title: "Capture",
+    href: "/capture",
+    icon: Target,
+  },
+  {
+    title: "Contracts",
+    href: "/contracts",
+    icon: FileSearch,
   },
   {
     title: "Settings",
@@ -236,4 +256,3 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     </TooltipProvider>
   );
 }
-

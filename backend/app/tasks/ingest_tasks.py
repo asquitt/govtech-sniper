@@ -96,7 +96,9 @@ def ingest_sam_opportunities(
             raw_opportunities = await sam_service.search_opportunities_with_raw(params)
         except SAMGovAPIError as e:
             logger.error(f"SAM.gov API error: {e.message}")
-            raise self.retry(exc=e)
+            if e.retryable:
+                raise self.retry(exc=e)
+            raise e
 
         parsed_opportunities = []
         for raw_opp in raw_opportunities:
@@ -133,7 +135,9 @@ def ingest_sam_opportunities(
         snapshots_skipped = 0
         attachments_downloaded = 0
 
-        download_enabled = settings.sam_download_attachments and not settings.mock_sam_gov
+        download_enabled = settings.sam_download_attachments and (
+            not settings.mock_sam_gov or settings.sam_mock_attachments_dir
+        )
         download_queue = []
 
         async with get_celery_session_context() as session:
@@ -189,6 +193,12 @@ def ingest_sam_opportunities(
                 else:
                     rfp_id = existing_rfp.id
                     logger.debug(f"Skipping existing RFP: {opp.solicitation_number}")
+                    if (
+                        download_enabled
+                        and notice_id
+                        and (existing_rfp.attachment_paths is None or len(existing_rfp.attachment_paths) == 0)
+                    ):
+                        download_queue.append((rfp_id, notice_id))
 
                 # Snapshot raw payload for change tracking
                 if notice_id:

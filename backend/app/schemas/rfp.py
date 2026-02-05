@@ -7,9 +7,9 @@ Request/Response models for RFP endpoints.
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, computed_field, model_validator
 
-from app.models.rfp import ImportanceLevel, RFPStatus, RFPType
+from app.models.rfp import ImportanceLevel, RequirementStatus, RFPStatus, RFPType
 
 
 # =============================================================================
@@ -116,6 +116,18 @@ class RFPCreate(BaseModel):
     response_deadline: Optional[datetime] = None
     source_url: Optional[str] = None
     description: Optional[str] = None
+    estimated_value: Optional[int] = None
+    place_of_performance: Optional[str] = None
+    source_type: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    contract_vehicle: Optional[str] = None
+    incumbent_vendor: Optional[str] = None
+    buyer_contact_name: Optional[str] = None
+    buyer_contact_email: Optional[str] = None
+    buyer_contact_phone: Optional[str] = None
+    budget_estimate: Optional[int] = None
+    competitive_landscape: Optional[str] = None
+    intel_notes: Optional[str] = None
 
 
 class RFPRead(BaseModel):
@@ -141,6 +153,16 @@ class RFPRead(BaseModel):
     qualification_score: Optional[float]
     estimated_value: Optional[int]
     place_of_performance: Optional[str]
+    source_type: Optional[str]
+    jurisdiction: Optional[str]
+    contract_vehicle: Optional[str]
+    incumbent_vendor: Optional[str]
+    buyer_contact_name: Optional[str]
+    buyer_contact_email: Optional[str]
+    buyer_contact_phone: Optional[str]
+    budget_estimate: Optional[int]
+    competitive_landscape: Optional[str]
+    intel_notes: Optional[str]
     created_at: datetime
     updated_at: datetime
     analyzed_at: Optional[datetime]
@@ -154,6 +176,21 @@ class RFPUpdate(BaseModel):
     status: Optional[RFPStatus] = None
     description: Optional[str] = None
     response_deadline: Optional[datetime] = None
+    is_qualified: Optional[bool] = None
+    qualification_reason: Optional[str] = None
+    qualification_score: Optional[float] = None
+    estimated_value: Optional[int] = None
+    place_of_performance: Optional[str] = None
+    source_type: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    contract_vehicle: Optional[str] = None
+    incumbent_vendor: Optional[str] = None
+    buyer_contact_name: Optional[str] = None
+    buyer_contact_email: Optional[str] = None
+    buyer_contact_phone: Optional[str] = None
+    budget_estimate: Optional[int] = None
+    competitive_landscape: Optional[str] = None
+    intel_notes: Optional[str] = None
 
 
 class RFPListItem(BaseModel):
@@ -169,6 +206,31 @@ class RFPListItem(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def recommendation_score(self) -> float:
+        """
+        Lightweight recommendation score for sorting.
+        Combines qualification score and deadline urgency.
+        """
+        base = float(self.qualification_score) if self.qualification_score is not None else 50.0
+        bonus = 0.0
+        penalty = 0.0
+
+        if self.response_deadline:
+            days_left = (self.response_deadline - datetime.utcnow()).days
+            if days_left < 0:
+                penalty += 30.0
+            elif days_left <= 3:
+                bonus += 10.0
+            elif days_left <= 7:
+                bonus += 5.0
+            elif days_left > 30:
+                penalty += 5.0
+
+        score = max(0.0, min(100.0, base + bonus - penalty))
+        return round(score, 2)
 
 
 # =============================================================================
@@ -186,6 +248,51 @@ class ComplianceRequirementRead(BaseModel):
     keywords: List[str]
     is_addressed: bool
     notes: Optional[str]
+    status: RequirementStatus = RequirementStatus.OPEN
+    assigned_to: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_status(cls, values: dict) -> dict:
+        if isinstance(values, dict) and not values.get("status"):
+            values["status"] = (
+                RequirementStatus.ADDRESSED
+                if values.get("is_addressed")
+                else RequirementStatus.OPEN
+            )
+        return values
+
+
+class ComplianceRequirementCreate(BaseModel):
+    """Create a new compliance requirement."""
+    id: Optional[str] = None
+    section: str
+    requirement_text: str
+    importance: ImportanceLevel
+    category: Optional[str] = None
+    page_reference: Optional[int] = None
+    keywords: List[str] = Field(default_factory=list)
+    is_addressed: bool = False
+    notes: Optional[str] = None
+    status: RequirementStatus = RequirementStatus.OPEN
+    assigned_to: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+
+
+class ComplianceRequirementUpdate(BaseModel):
+    """Update fields on a compliance requirement."""
+    section: Optional[str] = None
+    requirement_text: Optional[str] = None
+    importance: Optional[ImportanceLevel] = None
+    category: Optional[str] = None
+    page_reference: Optional[int] = None
+    keywords: Optional[List[str]] = None
+    is_addressed: Optional[bool] = None
+    notes: Optional[str] = None
+    status: Optional[RequirementStatus] = None
+    assigned_to: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class ComplianceMatrixRead(BaseModel):
