@@ -7,7 +7,7 @@ Request/Response models for RFP endpoints.
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, computed_field
 
 from app.models.rfp import ImportanceLevel, RFPStatus, RFPType
 
@@ -169,6 +169,31 @@ class RFPListItem(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def recommendation_score(self) -> float:
+        """
+        Lightweight recommendation score for sorting.
+        Combines qualification score and deadline urgency.
+        """
+        base = float(self.qualification_score) if self.qualification_score is not None else 50.0
+        bonus = 0.0
+        penalty = 0.0
+
+        if self.response_deadline:
+            days_left = (self.response_deadline - datetime.utcnow()).days
+            if days_left < 0:
+                penalty += 30.0
+            elif days_left <= 3:
+                bonus += 10.0
+            elif days_left <= 7:
+                bonus += 5.0
+            elif days_left > 30:
+                penalty += 5.0
+
+        score = max(0.0, min(100.0, base + bonus - penalty))
+        return round(score, 2)
 
 
 # =============================================================================
