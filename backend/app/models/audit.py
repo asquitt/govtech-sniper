@@ -29,7 +29,7 @@ class AuditEvent(SQLModel, table=True):
     action: str = Field(max_length=128, index=True)
 
     # Optional metadata for context (immutable snapshot)
-    metadata: dict = Field(default={}, sa_column=Column(JSON))
+    event_metadata: dict = Field(default={}, sa_column=Column("metadata", JSON))
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

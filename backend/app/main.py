@@ -215,6 +215,9 @@ app.include_router(websocket_router)
 # Core API routes
 api_prefix = "/api/v1"
 
+# Health checks under API prefix for clients/tests
+app.include_router(health_router, prefix=api_prefix)
+
 # Authentication (no auth required for login/register)
 app.include_router(auth_router, prefix=api_prefix)
 

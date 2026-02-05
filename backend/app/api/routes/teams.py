@@ -10,6 +10,7 @@ from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 from sqlmodel import select, Field, SQLModel, Column, Text, JSON
 from pydantic import BaseModel, EmailStr
 import structlog
@@ -202,7 +203,6 @@ async def list_teams(
                 TeamMember.is_active == True,
             )
         )
-        from sqlalchemy import func
         member_count = count_result.scalar() or 0
 
         teams.append(TeamResponse(

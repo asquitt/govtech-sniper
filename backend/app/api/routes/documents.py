@@ -64,6 +64,52 @@ async def list_documents(
     return DocumentListResponse(documents=items, total=len(items))
 
 
+@router.get("/types/list")
+async def list_document_types() -> List[dict]:
+    """
+    Get all available document types.
+    """
+    return [
+        {"value": t.value, "label": t.value.replace("_", " ").title()}
+        for t in DocumentType
+    ]
+
+
+@router.get("/stats")
+async def get_document_stats(
+    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    Get document statistics for the current user.
+    """
+    from sqlalchemy import func
+
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    total_result = await session.execute(
+        select(func.count(KnowledgeBaseDocument.id)).where(
+            KnowledgeBaseDocument.user_id == current_user.id
+        )
+    )
+    total = total_result.scalar() or 0
+
+    by_type_result = await session.execute(
+        select(
+            KnowledgeBaseDocument.document_type,
+            func.count(KnowledgeBaseDocument.id),
+        )
+        .where(KnowledgeBaseDocument.user_id == current_user.id)
+        .group_by(KnowledgeBaseDocument.document_type)
+    )
+    by_type = {row[0].value: row[1] for row in by_type_result.all()}
+
+    return {"total_documents": total, "by_type": by_type}
+
+
+
+
 @router.get("/{document_id}", response_model=DocumentRead)
 async def get_document(
     document_id: int = Path(..., description="Document ID"),
@@ -283,45 +329,3 @@ async def delete_document(
     return {"message": f"Document {document_id} deleted"}
 
 
-@router.get("/types/list")
-async def list_document_types() -> List[dict]:
-    """
-    Get all available document types.
-    """
-    return [
-        {"value": t.value, "label": t.value.replace("_", " ").title()}
-        for t in DocumentType
-    ]
-
-
-@router.get("/stats")
-async def get_document_stats(
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
-    """
-    Get document statistics for the current user.
-    """
-    from sqlalchemy import func
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    total_result = await session.execute(
-        select(func.count(KnowledgeBaseDocument.id)).where(
-            KnowledgeBaseDocument.user_id == current_user.id
-        )
-    )
-    total = total_result.scalar() or 0
-
-    by_type_result = await session.execute(
-        select(
-            KnowledgeBaseDocument.document_type,
-            func.count(KnowledgeBaseDocument.id),
-        )
-        .where(KnowledgeBaseDocument.user_id == current_user.id)
-        .group_by(KnowledgeBaseDocument.document_type)
-    )
-    by_type = {row[0].value: row[1] for row in by_type_result.all()}
-
-    return {"total_documents": total, "by_type": by_type}

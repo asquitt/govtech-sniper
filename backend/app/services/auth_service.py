@@ -226,6 +226,42 @@ def decode_token(token: str) -> Optional[TokenData]:
         return None
 
 
+def decode_access_token(token: str) -> Optional[TokenData]:
+    """
+    Decode and validate an access token.
+
+    Returns TokenData if the token is valid and of type 'access'.
+    """
+    try:
+        payload = jwt.decode(
+            token,
+            settings.secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+
+        if payload.get("type") != "access":
+            logger.warning("Token is not an access token")
+            return None
+
+        user_id = int(payload.get("sub"))
+        email = payload.get("email", "")
+        tier = payload.get("tier", "free")
+        exp = datetime.fromtimestamp(payload.get("exp", 0))
+
+        return TokenData(
+            user_id=user_id,
+            email=email,
+            tier=tier,
+            exp=exp,
+        )
+    except JWTError as e:
+        logger.warning(f"Access token decode error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Access token decode error: {e}")
+        return None
+
+
 def decode_refresh_token(token: str) -> Optional[int]:
     """
     Decode a refresh token and return user_id.

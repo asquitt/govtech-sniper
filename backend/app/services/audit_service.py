@@ -28,7 +28,7 @@ async def log_audit_event(
         entity_type=entity_type,
         entity_id=entity_id,
         action=action,
-        metadata=metadata or {},
+        event_metadata=metadata or {},
     )
     session.add(event)
     return event

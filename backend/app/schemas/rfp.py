@@ -154,6 +154,11 @@ class RFPUpdate(BaseModel):
     status: Optional[RFPStatus] = None
     description: Optional[str] = None
     response_deadline: Optional[datetime] = None
+    is_qualified: Optional[bool] = None
+    qualification_reason: Optional[str] = None
+    qualification_score: Optional[float] = None
+    estimated_value: Optional[int] = None
+    place_of_performance: Optional[str] = None
 
 
 class RFPListItem(BaseModel):

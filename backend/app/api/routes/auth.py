@@ -39,7 +39,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 class RegisterRequest(BaseModel):
     """User registration request."""
     email: EmailStr
-    password: str = Field(..., min_length=8)
+    password: str
     full_name: str = Field(..., min_length=2, max_length=255)
     company_name: Optional[str] = Field(None, max_length=255)
 
@@ -58,7 +58,7 @@ class RefreshRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     """Password change request."""
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str
 
 
 class UserResponse(BaseModel):
