@@ -50,6 +50,17 @@ class TestCapture:
         assert response.status_code == 200
         assert response.json()["stage"] == "proposal"
 
+        # List capture plans
+        response = await client.get(
+            "/api/v1/capture/plans",
+            headers=auth_headers,
+            params={"include_rfp": True},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["plans"][0]["rfp_id"] == test_rfp.id
+
         # Create gate review
         response = await client.post(
             "/api/v1/capture/gate-reviews",
