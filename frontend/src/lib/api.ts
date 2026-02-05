@@ -10,6 +10,9 @@ import type {
   CapturePlanListItem,
   CaptureStage,
   BidDecision,
+  GateReview,
+  TeamingPartner,
+  TeamingPartnerLink,
   TaskResponse,
   TaskStatus,
   SAMSearchParams,
@@ -476,6 +479,58 @@ export const captureApi = {
     }>
   ): Promise<CapturePlan> => {
     const { data } = await api.patch(`/capture/plans/${planId}`, payload);
+    return data;
+  },
+
+  listGateReviews: async (rfpId: number): Promise<GateReview[]> => {
+    const { data } = await api.get("/capture/gate-reviews", {
+      params: { rfp_id: rfpId },
+    });
+    return data;
+  },
+
+  createGateReview: async (payload: {
+    rfp_id: number;
+    stage?: CaptureStage;
+    decision?: BidDecision;
+    notes?: string | null;
+  }): Promise<GateReview> => {
+    const { data } = await api.post("/capture/gate-reviews", payload);
+    return data;
+  },
+
+  listPartners: async (): Promise<TeamingPartner[]> => {
+    const { data } = await api.get("/capture/partners");
+    return data;
+  },
+
+  createPartner: async (payload: {
+    name: string;
+    partner_type?: string | null;
+    contact_name?: string | null;
+    contact_email?: string | null;
+    notes?: string | null;
+  }): Promise<TeamingPartner> => {
+    const { data } = await api.post("/capture/partners", payload);
+    return data;
+  },
+
+  linkPartner: async (payload: {
+    rfp_id: number;
+    partner_id: number;
+    role?: string | null;
+  }): Promise<TeamingPartnerLink> => {
+    const { data } = await api.post("/capture/partners/link", payload);
+    return data;
+  },
+
+  listPartnerLinks: async (rfpId: number): Promise<{
+    links: TeamingPartnerLink[];
+    total: number;
+  }> => {
+    const { data } = await api.get("/capture/partners/links", {
+      params: { rfp_id: rfpId },
+    });
     return data;
   },
 };

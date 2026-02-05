@@ -8,6 +8,9 @@ vi.mock("@/lib/api", () => ({
     listPlans: vi.fn(),
     createPlan: vi.fn(),
     updatePlan: vi.fn(),
+    listPartners: vi.fn(),
+    listPartnerLinks: vi.fn(),
+    listGateReviews: vi.fn(),
   },
   rfpApi: {
     list: vi.fn(),
@@ -30,6 +33,9 @@ describe("CapturePage", () => {
       },
     ]);
     mockedCaptureApi.listPlans.mockResolvedValue([]);
+    mockedCaptureApi.listPartners.mockResolvedValue([]);
+    mockedCaptureApi.listPartnerLinks.mockResolvedValue({ links: [], total: 0 });
+    mockedCaptureApi.listGateReviews.mockResolvedValue([]);
   });
 
   it("renders capture pipeline header", async () => {

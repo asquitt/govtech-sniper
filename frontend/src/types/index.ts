@@ -96,6 +96,35 @@ export interface CapturePlanListItem extends CapturePlan {
   rfp_status?: RFPStatus | null;
 }
 
+export interface GateReview {
+  id: number;
+  rfp_id: number;
+  reviewer_id: number;
+  stage: CaptureStage;
+  decision: BidDecision;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface TeamingPartner {
+  id: number;
+  name: string;
+  partner_type?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamingPartnerLink {
+  id: number;
+  rfp_id: number;
+  partner_id: number;
+  role?: string | null;
+  created_at: string;
+}
+
 // -----------------------------------------------------------------------------
 // Capture Types
 // -----------------------------------------------------------------------------
