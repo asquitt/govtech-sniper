@@ -361,7 +361,7 @@ export default function OpportunitiesPage() {
                       <td className="p-4">
                         <div className="flex flex-col gap-1">
                           <Link
-                            href={`/analysis/${rfp.id}`}
+                            href={`/opportunities/${rfp.id}`}
                             className="font-medium text-foreground hover:text-primary transition-colors line-clamp-1"
                           >
                             {rfp.title}

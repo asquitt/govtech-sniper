@@ -19,4 +19,5 @@
 
 ## Status
 - Implemented capture plan, gate reviews, teaming partners, and tests.
-- Next: add discover scoring enhancements and UI wiring.
+- Added discover scoring improvements, opportunity detail view, and snapshot diff UI.
+- Phase 1 complete.

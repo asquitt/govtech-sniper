@@ -261,7 +261,20 @@ export const rfpApi = {
     summary_to: Record<string, unknown>;
   }> => {
     const { data } = await api.get(`/rfps/${rfpId}/snapshots/diff`, { params });
-    return data;
+    return {
+      ...data,
+      changes: (data.changes || []).map((change: {
+        field: string;
+        from_value?: string | null;
+        to_value?: string | null;
+        before?: string | null;
+        after?: string | null;
+      }) => ({
+        field: change.field,
+        before: change.before ?? change.from_value ?? null,
+        after: change.after ?? change.to_value ?? null,
+      })),
+    };
   },
 
   create: async (rfp: Partial<RFP>): Promise<RFP> => {
