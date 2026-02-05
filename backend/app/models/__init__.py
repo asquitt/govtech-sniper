@@ -25,6 +25,7 @@ from app.models.integration import (
 )
 from app.models.webhook import WebhookSubscription, WebhookDelivery, WebhookDeliveryStatus
 from app.models.dash import DashSession, DashMessage, DashRole
+from app.models.saved_search import SavedSearch
 from app.models.capture import (
     CapturePlan,
     CaptureStage,
@@ -70,6 +71,7 @@ __all__ = [
     "DashSession",
     "DashMessage",
     "DashRole",
+    "SavedSearch",
     "CapturePlan",
     "CaptureStage",
     "BidDecision",

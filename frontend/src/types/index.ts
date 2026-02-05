@@ -45,6 +45,16 @@ export interface RFP {
   qualification_score?: number;
   estimated_value?: number;
   place_of_performance?: string;
+  source_type?: string;
+  jurisdiction?: string;
+  contract_vehicle?: string;
+  incumbent_vendor?: string;
+  buyer_contact_name?: string;
+  buyer_contact_email?: string;
+  buyer_contact_phone?: string;
+  budget_estimate?: number;
+  competitive_landscape?: string;
+  intel_notes?: string;
   created_at: string;
   updated_at: string;
   analyzed_at?: string;
@@ -61,6 +71,28 @@ export interface RFPListItem {
   recommendation_score?: number;
   response_deadline?: string;
   created_at: string;
+}
+
+// -----------------------------------------------------------------------------
+// Saved Search Types
+// -----------------------------------------------------------------------------
+
+export interface SavedSearch {
+  id: number;
+  name: string;
+  filters: Record<string, unknown>;
+  is_active: boolean;
+  last_run_at?: string | null;
+  last_match_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SavedSearchRunResult {
+  search_id: number;
+  match_count: number;
+  matches: RFPListItem[];
+  ran_at: string;
 }
 
 // -----------------------------------------------------------------------------

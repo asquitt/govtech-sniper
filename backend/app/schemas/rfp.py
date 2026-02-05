@@ -116,6 +116,18 @@ class RFPCreate(BaseModel):
     response_deadline: Optional[datetime] = None
     source_url: Optional[str] = None
     description: Optional[str] = None
+    estimated_value: Optional[int] = None
+    place_of_performance: Optional[str] = None
+    source_type: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    contract_vehicle: Optional[str] = None
+    incumbent_vendor: Optional[str] = None
+    buyer_contact_name: Optional[str] = None
+    buyer_contact_email: Optional[str] = None
+    buyer_contact_phone: Optional[str] = None
+    budget_estimate: Optional[int] = None
+    competitive_landscape: Optional[str] = None
+    intel_notes: Optional[str] = None
 
 
 class RFPRead(BaseModel):
@@ -141,6 +153,16 @@ class RFPRead(BaseModel):
     qualification_score: Optional[float]
     estimated_value: Optional[int]
     place_of_performance: Optional[str]
+    source_type: Optional[str]
+    jurisdiction: Optional[str]
+    contract_vehicle: Optional[str]
+    incumbent_vendor: Optional[str]
+    buyer_contact_name: Optional[str]
+    buyer_contact_email: Optional[str]
+    buyer_contact_phone: Optional[str]
+    budget_estimate: Optional[int]
+    competitive_landscape: Optional[str]
+    intel_notes: Optional[str]
     created_at: datetime
     updated_at: datetime
     analyzed_at: Optional[datetime]
@@ -159,6 +181,16 @@ class RFPUpdate(BaseModel):
     qualification_score: Optional[float] = None
     estimated_value: Optional[int] = None
     place_of_performance: Optional[str] = None
+    source_type: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    contract_vehicle: Optional[str] = None
+    incumbent_vendor: Optional[str] = None
+    buyer_contact_name: Optional[str] = None
+    buyer_contact_email: Optional[str] = None
+    buyer_contact_phone: Optional[str] = None
+    budget_estimate: Optional[int] = None
+    competitive_landscape: Optional[str] = None
+    intel_notes: Optional[str] = None
 
 
 class RFPListItem(BaseModel):

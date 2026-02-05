@@ -13,6 +13,7 @@ vi.mock("@/lib/api", () => ({
     get: vi.fn(),
     getSnapshots: vi.fn(),
     getSnapshotDiff: vi.fn(),
+    update: vi.fn(),
   },
 }));
 

@@ -48,3 +48,16 @@ This roadmap is the end-to-end plan from foundation through full GovDash-equival
 - Admin settings, roles, and permissions.
 - Observability dashboards and advanced audit views.
 
+## Phase 6 - Production Hardening
+- Real SSO flows, SCIM provisioning, MFA.
+- Encryption and secrets management.
+- Migrations, background jobs, caching.
+- SLO dashboards and alerting.
+- E2E and load testing.
+
+## Phase 7 - GovDash + Govly Parity Expansion
+- Saved searches and alerting for opportunities.
+- Market intelligence fields (vehicles, incumbents, contacts, budgets).
+- Pipeline customization and Kanban capture views.
+- Word add-in workflows and graphics request pipeline.
+- Competitive intel summaries and contract intelligence.

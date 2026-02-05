@@ -1,12 +1,17 @@
 import { render, screen } from "@testing-library/react";
 import OpportunitiesPage from "@/app/(dashboard)/opportunities/page";
-import { rfpApi, ingestApi } from "@/lib/api";
+import { rfpApi, ingestApi, savedSearchApi } from "@/lib/api";
 import { vi } from "vitest";
 
 vi.mock("@/lib/api", () => ({
   rfpApi: {
     list: vi.fn(),
     getStats: vi.fn(),
+  },
+  savedSearchApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+    run: vi.fn(),
   },
   ingestApi: {
     triggerSamSearch: vi.fn(),
@@ -16,6 +21,7 @@ vi.mock("@/lib/api", () => ({
 
 const mockedRfpApi = vi.mocked(rfpApi);
 const mockedIngestApi = vi.mocked(ingestApi);
+const mockedSavedSearchApi = vi.mocked(savedSearchApi);
 
 describe("OpportunitiesPage", () => {
   beforeEach(() => {
@@ -39,6 +45,8 @@ describe("OpportunitiesPage", () => {
       pending_filter: 0,
       by_status: { analyzing: 0 },
     });
+
+    mockedSavedSearchApi.list.mockResolvedValue([]);
 
     mockedIngestApi.triggerSamSearch.mockResolvedValue({ task_id: "task-1" });
     mockedIngestApi.getTaskStatus.mockResolvedValue({ status: "completed" });

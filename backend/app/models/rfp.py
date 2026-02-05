@@ -104,6 +104,18 @@ class RFPBase(SQLModel):
     estimated_value: Optional[int] = None  # In dollars
     place_of_performance: Optional[str] = Field(default=None, max_length=255)
 
+    # Market Intelligence (GovDash/Govly parity fields)
+    source_type: Optional[str] = Field(default=None, max_length=50)  # federal | sled | other
+    jurisdiction: Optional[str] = Field(default=None, max_length=255)
+    contract_vehicle: Optional[str] = Field(default=None, max_length=255)
+    incumbent_vendor: Optional[str] = Field(default=None, max_length=255)
+    buyer_contact_name: Optional[str] = Field(default=None, max_length=255)
+    buyer_contact_email: Optional[str] = Field(default=None, max_length=255)
+    buyer_contact_phone: Optional[str] = Field(default=None, max_length=50)
+    budget_estimate: Optional[int] = None
+    competitive_landscape: Optional[str] = Field(default=None, sa_column=Column(Text))
+    intel_notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+
 
 class RFP(RFPBase, table=True):
     """

@@ -33,6 +33,8 @@ import type {
   IntegrationSyncRun,
   IntegrationWebhookEvent,
   IntegrationSsoAuthorizeResponse,
+  SavedSearch,
+  SavedSearchRunResult,
   AuditEvent,
   AuditSummary,
   ObservabilityMetrics,
@@ -308,6 +310,43 @@ export const rfpApi = {
     pending_filter: number;
   }> => {
     const { data } = await api.get("/rfps/stats/summary");
+    return data;
+  },
+};
+
+// =============================================================================
+// Saved Search Endpoints
+// =============================================================================
+
+export const savedSearchApi = {
+  list: async (): Promise<SavedSearch[]> => {
+    const { data } = await api.get("/saved-searches");
+    return data;
+  },
+
+  create: async (payload: {
+    name: string;
+    filters: Record<string, unknown>;
+    is_active?: boolean;
+  }): Promise<SavedSearch> => {
+    const { data } = await api.post("/saved-searches", payload);
+    return data;
+  },
+
+  update: async (
+    searchId: number,
+    payload: Partial<{ name: string; filters: Record<string, unknown>; is_active: boolean }>
+  ): Promise<SavedSearch> => {
+    const { data } = await api.patch(`/saved-searches/${searchId}`, payload);
+    return data;
+  },
+
+  remove: async (searchId: number): Promise<void> => {
+    await api.delete(`/saved-searches/${searchId}`);
+  },
+
+  run: async (searchId: number): Promise<SavedSearchRunResult> => {
+    const { data } = await api.post(`/saved-searches/${searchId}/run`, {});
     return data;
   },
 };
