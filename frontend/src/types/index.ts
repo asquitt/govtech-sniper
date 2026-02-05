@@ -96,6 +96,43 @@ export interface SavedSearchRunResult {
 }
 
 // -----------------------------------------------------------------------------
+// Award & Contact Intelligence
+// -----------------------------------------------------------------------------
+
+export interface AwardRecord {
+  id: number;
+  rfp_id?: number | null;
+  notice_id?: string | null;
+  solicitation_number?: string | null;
+  contract_number?: string | null;
+  agency?: string | null;
+  awardee_name: string;
+  award_amount?: number | null;
+  award_date?: string | null;
+  contract_vehicle?: string | null;
+  naics_code?: string | null;
+  set_aside?: string | null;
+  place_of_performance?: string | null;
+  description?: string | null;
+  source_url?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OpportunityContact {
+  id: number;
+  rfp_id?: number | null;
+  name: string;
+  role?: string | null;
+  organization?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------------
 // Capture Types
 // -----------------------------------------------------------------------------
 
@@ -110,6 +147,8 @@ export type CaptureStage =
 
 export type BidDecision = "pending" | "bid" | "no_bid";
 
+export type CaptureFieldType = "text" | "number" | "select" | "date" | "boolean";
+
 export interface CapturePlan {
   id: number;
   rfp_id: number;
@@ -120,6 +159,26 @@ export interface CapturePlan {
   notes?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CaptureCustomField {
+  id: number;
+  name: string;
+  field_type: CaptureFieldType;
+  options: string[];
+  stage?: CaptureStage | null;
+  is_required: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaptureFieldValue {
+  field: CaptureCustomField;
+  value?: unknown | null;
+}
+
+export interface CaptureFieldValueList {
+  fields: CaptureFieldValue[];
 }
 
 export interface CapturePlanListItem extends CapturePlan {

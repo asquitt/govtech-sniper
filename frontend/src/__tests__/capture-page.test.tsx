@@ -8,6 +8,10 @@ vi.mock("@/lib/api", () => ({
     listPlans: vi.fn(),
     createPlan: vi.fn(),
     updatePlan: vi.fn(),
+    listFields: vi.fn(),
+    createField: vi.fn(),
+    listPlanFields: vi.fn(),
+    savePlanFields: vi.fn(),
     listPartners: vi.fn(),
     listPartnerLinks: vi.fn(),
     listGateReviews: vi.fn(),
@@ -33,6 +37,8 @@ describe("CapturePage", () => {
       },
     ]);
     mockedCaptureApi.listPlans.mockResolvedValue([]);
+    mockedCaptureApi.listFields.mockResolvedValue([]);
+    mockedCaptureApi.listPlanFields.mockResolvedValue({ fields: [] });
     mockedCaptureApi.listPartners.mockResolvedValue([]);
     mockedCaptureApi.listPartnerLinks.mockResolvedValue({ links: [], total: 0 });
     mockedCaptureApi.listGateReviews.mockResolvedValue([]);

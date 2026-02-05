@@ -62,6 +62,8 @@ async def init_db() -> None:
             capture,
             contract,
             saved_search,
+            award,
+            contact,
         )
         
         # Create all tables (dev only - use Alembic in production)

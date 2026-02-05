@@ -14,6 +14,9 @@ import type {
   TeamingPartner,
   TeamingPartnerLink,
   RFPListItem,
+  CaptureCustomField,
+  CaptureFieldType,
+  CaptureFieldValue,
 } from "@/types";
 
 const stageOptions: { value: CaptureStage; label: string }[] = [
@@ -39,6 +42,13 @@ export default function CapturePage() {
   const [partnerLinks, setPartnerLinks] = useState<TeamingPartnerLink[]>([]);
   const [gateReviews, setGateReviews] = useState<GateReview[]>([]);
   const [selectedRfpId, setSelectedRfpId] = useState<number | null>(null);
+  const [customFields, setCustomFields] = useState<CaptureCustomField[]>([]);
+  const [planFieldValues, setPlanFieldValues] = useState<CaptureFieldValue[]>([]);
+  const [customFieldName, setCustomFieldName] = useState("");
+  const [customFieldType, setCustomFieldType] = useState<CaptureFieldType>("text");
+  const [customFieldOptions, setCustomFieldOptions] = useState("");
+  const [customFieldStage, setCustomFieldStage] = useState<CaptureStage | "">("");
+  const [customFieldRequired, setCustomFieldRequired] = useState(false);
   const [partnerName, setPartnerName] = useState("");
   const [partnerType, setPartnerType] = useState("");
   const [linkPartnerId, setLinkPartnerId] = useState<number | null>(null);
@@ -47,6 +57,8 @@ export default function CapturePage() {
   const [gateReviewDecision, setGateReviewDecision] =
     useState<BidDecision>("pending");
   const [gateReviewNotes, setGateReviewNotes] = useState("");
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  const [isSavingFields, setIsSavingFields] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,14 +66,16 @@ export default function CapturePage() {
     try {
       setIsLoading(true);
       setError(null);
-      const [rfpList, planList, partnerList] = await Promise.all([
+      const [rfpList, planList, partnerList, fieldList] = await Promise.all([
         rfpApi.list({ limit: 100 }),
         captureApi.listPlans(),
         captureApi.listPartners(),
+        captureApi.listFields(),
       ]);
       setRfps(rfpList);
       setPlans(planList);
       setPartners(partnerList);
+      setCustomFields(fieldList);
       if (
         rfpList.length > 0 &&
         (selectedRfpId === null ||
@@ -81,28 +95,45 @@ export default function CapturePage() {
     fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    const fetchRfpDetails = async () => {
-      if (!selectedRfpId) return;
-      try {
-        const [linksResult, reviewsResult] = await Promise.all([
-          captureApi.listPartnerLinks(selectedRfpId),
-          captureApi.listGateReviews(selectedRfpId),
-        ]);
-        setPartnerLinks(linksResult.links);
-        setGateReviews(reviewsResult);
-      } catch (err) {
-        console.error("Failed to load capture details", err);
-      }
-    };
-    fetchRfpDetails();
-  }, [selectedRfpId]);
-
   const planByRfp = useMemo(() => {
     const map = new Map<number, CapturePlanListItem>();
     plans.forEach((plan) => map.set(plan.rfp_id, plan));
     return map;
   }, [plans]);
+
+  const plansByStage = useMemo(() => {
+    const map = new Map<CaptureStage, CapturePlanListItem[]>();
+    stageOptions.forEach((option) => map.set(option.value, []));
+    plans.forEach((plan) => {
+      const bucket = map.get(plan.stage);
+      if (bucket) {
+        bucket.push(plan);
+      } else {
+        map.set(plan.stage, [plan]);
+      }
+    });
+    return map;
+  }, [plans]);
+
+  useEffect(() => {
+    const fetchRfpDetails = async () => {
+      if (!selectedRfpId) return;
+      try {
+        const plan = planByRfp.get(selectedRfpId);
+        const [linksResult, reviewsResult, fieldsResult] = await Promise.all([
+          captureApi.listPartnerLinks(selectedRfpId),
+          captureApi.listGateReviews(selectedRfpId),
+          plan ? captureApi.listPlanFields(plan.id) : Promise.resolve({ fields: [] }),
+        ]);
+        setPartnerLinks(linksResult.links);
+        setGateReviews(reviewsResult);
+        setPlanFieldValues(fieldsResult.fields ?? []);
+      } catch (err) {
+        console.error("Failed to load capture details", err);
+      }
+    };
+    fetchRfpDetails();
+  }, [selectedRfpId, planByRfp]);
 
   const handleCreatePlan = async (rfpId: number) => {
     try {
@@ -178,6 +209,112 @@ export default function CapturePage() {
     }
   };
 
+  const handleCreateCustomField = async () => {
+    if (!customFieldName.trim()) return;
+    try {
+      const options =
+        customFieldType === "select"
+          ? customFieldOptions
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : [];
+      const field = await captureApi.createField({
+        name: customFieldName.trim(),
+        field_type: customFieldType,
+        options,
+        stage: customFieldStage || null,
+        is_required: customFieldRequired,
+      });
+      setCustomFields((prev) => [...prev, field]);
+      setCustomFieldName("");
+      setCustomFieldOptions("");
+      setCustomFieldStage("");
+      setCustomFieldRequired(false);
+    } catch (err) {
+      console.error("Failed to create custom field", err);
+      setError("Failed to create custom field.");
+    }
+  };
+
+  const handleFieldValueChange = (fieldId: number, value: unknown) => {
+    setPlanFieldValues((prev) =>
+      prev.map((item) =>
+        item.field.id === fieldId ? { ...item, value } : item
+      )
+    );
+  };
+
+  const handleSavePlanFields = async () => {
+    const plan = selectedRfpId ? planByRfp.get(selectedRfpId) : null;
+    if (!plan) return;
+    try {
+      setIsSavingFields(true);
+      const updated = await captureApi.savePlanFields(plan.id, planFieldValues);
+      setPlanFieldValues(updated.fields);
+    } catch (err) {
+      console.error("Failed to save custom fields", err);
+      setError("Failed to save custom fields.");
+    } finally {
+      setIsSavingFields(false);
+    }
+  };
+
+  const renderFieldControl = (item: CaptureFieldValue) => {
+    const value = item.value ?? "";
+    if (item.field.field_type === "select") {
+      return (
+        <select
+          className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+          value={String(value)}
+          onChange={(e) => handleFieldValueChange(item.field.id, e.target.value)}
+        >
+          <option value="">Select option</option>
+          {item.field.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    if (item.field.field_type === "boolean") {
+      return (
+        <select
+          className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+          value={value === "" ? "" : String(value)}
+          onChange={(e) =>
+            handleFieldValueChange(
+              item.field.id,
+              e.target.value === "" ? "" : e.target.value === "true"
+            )
+          }
+        >
+          <option value="">Select</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      );
+    }
+
+    return (
+      <input
+        className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+        type={item.field.field_type === "date" ? "date" : "text"}
+        value={String(value)}
+        onChange={(e) =>
+          handleFieldValueChange(
+            item.field.id,
+            item.field.field_type === "number"
+              ? Number(e.target.value)
+              : e.target.value
+          )
+        }
+      />
+    );
+  };
+
   const partnerById = useMemo(() => {
     const map = new Map<number, TeamingPartner>();
     partners.forEach((partner) => map.set(partner.id, partner));
@@ -233,81 +370,158 @@ export default function CapturePage() {
         </div>
 
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="px-4 py-3 border-b border-border text-sm font-medium">
-            Capture Pipeline
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between text-sm font-medium">
+            <span>Capture Pipeline</span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={viewMode === "list" ? "default" : "outline"}
+                onClick={() => setViewMode("list")}
+              >
+                List
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "kanban" ? "default" : "outline"}
+                onClick={() => setViewMode("kanban")}
+              >
+                Kanban
+              </Button>
+            </div>
           </div>
-          <div className="divide-y divide-border">
-            {rfps.map((rfp) => {
-              const plan = planByRfp.get(rfp.id);
-              return (
-                <div key={rfp.id} className="px-4 py-4 flex flex-col gap-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-base font-semibold text-foreground">
-                        {rfp.title}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {rfp.agency || "Unknown agency"}
-                      </p>
+
+          {viewMode === "list" ? (
+            <div className="divide-y divide-border">
+              {rfps.map((rfp) => {
+                const plan = planByRfp.get(rfp.id);
+                return (
+                  <div key={rfp.id} className="px-4 py-4 flex flex-col gap-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-base font-semibold text-foreground">
+                          {rfp.title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {rfp.agency || "Unknown agency"}
+                        </p>
+                      </div>
+                      {plan ? (
+                        <Badge variant="outline">Plan Active</Badge>
+                      ) : (
+                        <Badge variant="destructive">No Plan</Badge>
+                      )}
                     </div>
+
                     {plan ? (
-                      <Badge variant="outline">Plan Active</Badge>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <label className="text-sm text-muted-foreground">
+                          Stage
+                          <select
+                            className="ml-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                            value={plan.stage}
+                            onChange={(e) =>
+                              handleUpdatePlan(plan.id, {
+                                stage: e.target.value as CaptureStage,
+                              })
+                            }
+                          >
+                            {stageOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-sm text-muted-foreground">
+                          Decision
+                          <select
+                            className="ml-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                            value={plan.bid_decision}
+                            onChange={(e) =>
+                              handleUpdatePlan(plan.id, {
+                                bid_decision: e.target.value as BidDecision,
+                              })
+                            }
+                          >
+                            {decisionOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <span className="text-sm text-muted-foreground">
+                          Win Probability: {plan.win_probability ?? "N/A"}%
+                        </span>
+                      </div>
                     ) : (
-                      <Badge variant="destructive">No Plan</Badge>
+                      <Button onClick={() => handleCreatePlan(rfp.id)}>
+                        Create Capture Plan
+                      </Button>
                     )}
                   </div>
-
-                  {plan ? (
-                    <div className="flex flex-wrap items-center gap-4">
-                      <label className="text-sm text-muted-foreground">
-                        Stage
-                        <select
-                          className="ml-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                          value={plan.stage}
-                          onChange={(e) =>
-                            handleUpdatePlan(plan.id, {
-                              stage: e.target.value as CaptureStage,
-                            })
-                          }
-                        >
-                          {stageOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="text-sm text-muted-foreground">
-                        Decision
-                        <select
-                          className="ml-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                          value={plan.bid_decision}
-                          onChange={(e) =>
-                            handleUpdatePlan(plan.id, {
-                              bid_decision: e.target.value as BidDecision,
-                            })
-                          }
-                        >
-                          {decisionOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <span className="text-sm text-muted-foreground">
-                        Win Probability: {plan.win_probability ?? "N/A"}%
-                      </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid gap-4 p-4 md:grid-cols-3 lg:grid-cols-4">
+              {stageOptions.map((stage) => {
+                const stagePlans = plansByStage.get(stage.value) || [];
+                return (
+                  <div
+                    key={stage.value}
+                    className="rounded-lg border border-border bg-background/40"
+                  >
+                    <div className="px-3 py-2 border-b border-border text-xs font-medium uppercase text-muted-foreground">
+                      {stage.label} ({stagePlans.length})
                     </div>
-                  ) : (
-                    <Button onClick={() => handleCreatePlan(rfp.id)}>
-                      Create Capture Plan
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    <div className="space-y-2 p-3">
+                      {stagePlans.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No plans in this stage.
+                        </p>
+                      ) : (
+                        stagePlans.map((plan) => (
+                          <div
+                            key={plan.id}
+                            className="rounded-md border border-border bg-card px-3 py-2 text-sm space-y-2"
+                          >
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {plan.rfp_title || `RFP ${plan.rfp_id}`}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {plan.rfp_agency || "Unknown agency"}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>Decision: {plan.bid_decision}</span>
+                              <span>Win: {plan.win_probability ?? "N/A"}%</span>
+                            </div>
+                            <select
+                              className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                              value={plan.stage}
+                              onChange={(e) =>
+                                handleUpdatePlan(plan.id, {
+                                  stage: e.target.value as CaptureStage,
+                                })
+                              }
+                            >
+                              {stageOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  Move to {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-6 mt-6">
@@ -482,6 +696,91 @@ export default function CapturePage() {
                 })
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-4 space-y-4 mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Custom Fields</p>
+              <p className="text-xs text-muted-foreground">
+                Add capture-specific fields and set values per opportunity.
+              </p>
+            </div>
+            <Button size="sm" onClick={handleSavePlanFields} disabled={isSavingFields}>
+              {isSavingFields ? "Saving..." : "Save Values"}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <input
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              placeholder="Field name"
+              value={customFieldName}
+              onChange={(e) => setCustomFieldName(e.target.value)}
+            />
+            <select
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              value={customFieldType}
+              onChange={(e) => setCustomFieldType(e.target.value as CaptureFieldType)}
+            >
+              <option value="text">Text</option>
+              <option value="number">Number</option>
+              <option value="select">Select</option>
+              <option value="date">Date</option>
+              <option value="boolean">Boolean</option>
+            </select>
+            <input
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              placeholder="Options (comma-separated)"
+              value={customFieldOptions}
+              onChange={(e) => setCustomFieldOptions(e.target.value)}
+              disabled={customFieldType !== "select"}
+            />
+            <select
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              value={customFieldStage}
+              onChange={(e) => setCustomFieldStage(e.target.value as CaptureStage | "")}
+            >
+              <option value="">Any Stage</option>
+              {stageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={customFieldRequired}
+                onChange={(e) => setCustomFieldRequired(e.target.checked)}
+              />
+              Required
+            </label>
+            <Button onClick={handleCreateCustomField}>Add Field</Button>
+          </div>
+
+          <div className="space-y-3">
+            {planFieldValues.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No custom fields available for this plan.
+              </p>
+            ) : (
+              planFieldValues.map((item) => (
+                <div
+                  key={item.field.id}
+                  className="grid grid-cols-3 gap-3 items-center text-sm"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{item.field.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.field.field_type} {item.field.is_required ? "· Required" : ""}
+                    </p>
+                  </div>
+                  <div className="col-span-2">{renderFieldControl(item)}</div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

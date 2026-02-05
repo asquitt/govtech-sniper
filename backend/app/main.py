@@ -45,6 +45,8 @@ from app.api.routes import (
     contracts_router,
     audit_router,
     saved_searches_router,
+    awards_router,
+    contacts_router,
 )
 
 # Configure structured logging
@@ -242,6 +244,8 @@ app.include_router(capture_router, prefix=api_prefix)
 app.include_router(contracts_router, prefix=api_prefix)
 app.include_router(audit_router, prefix=api_prefix)
 app.include_router(saved_searches_router, prefix=api_prefix)
+app.include_router(awards_router, prefix=api_prefix)
+app.include_router(contacts_router, prefix=api_prefix)
 
 
 # =============================================================================

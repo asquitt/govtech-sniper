@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 from enum import Enum
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Column, JSON
 
 
 class CaptureStage(str, Enum):
@@ -94,3 +94,46 @@ class RFPTeamingPartner(SQLModel, table=True):
     role: Optional[str] = Field(default=None, max_length=255)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CaptureFieldType(str, Enum):
+    TEXT = "text"
+    NUMBER = "number"
+    SELECT = "select"
+    DATE = "date"
+    BOOLEAN = "boolean"
+
+
+class CaptureCustomField(SQLModel, table=True):
+    """
+    Custom fields for capture plans.
+    """
+    __tablename__ = "capture_custom_fields"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    name: str = Field(max_length=255)
+    field_type: CaptureFieldType = Field(default=CaptureFieldType.TEXT)
+    options: list = Field(default=[], sa_column=Column(JSON))
+    stage: Optional[CaptureStage] = Field(default=None)
+    is_required: bool = Field(default=False)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CaptureFieldValue(SQLModel, table=True):
+    """
+    Values for custom fields on a capture plan.
+    """
+    __tablename__ = "capture_field_values"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    capture_plan_id: int = Field(foreign_key="capture_plans.id", index=True)
+    field_id: int = Field(foreign_key="capture_custom_fields.id", index=True)
+
+    value: dict = Field(default={}, sa_column=Column(JSON))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -5,11 +5,11 @@ Request/response models for capture pipeline.
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from pydantic import BaseModel, Field
 
-from app.models.capture import CaptureStage, BidDecision
+from app.models.capture import CaptureStage, BidDecision, CaptureFieldType
 
 
 class CapturePlanCreate(BaseModel):
@@ -119,3 +119,51 @@ class TeamingPartnerLinkRead(BaseModel):
 class TeamingPartnerLinkList(BaseModel):
     links: List[TeamingPartnerLinkRead]
     total: int
+
+
+# -----------------------------------------------------------------------------
+# Custom Fields
+# -----------------------------------------------------------------------------
+
+
+class CaptureFieldCreate(BaseModel):
+    name: str
+    field_type: CaptureFieldType = CaptureFieldType.TEXT
+    options: Optional[List[str]] = None
+    stage: Optional[CaptureStage] = None
+    is_required: bool = False
+
+
+class CaptureFieldUpdate(BaseModel):
+    name: Optional[str] = None
+    field_type: Optional[CaptureFieldType] = None
+    options: Optional[List[str]] = None
+    stage: Optional[CaptureStage] = None
+    is_required: Optional[bool] = None
+
+
+class CaptureFieldRead(BaseModel):
+    id: int
+    name: str
+    field_type: CaptureFieldType
+    options: List[str]
+    stage: Optional[CaptureStage]
+    is_required: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CaptureFieldValueUpdate(BaseModel):
+    field_id: int
+    value: Any
+
+
+class CaptureFieldValueRead(BaseModel):
+    field: CaptureFieldRead
+    value: Optional[Any] = None
+
+
+class CaptureFieldValueList(BaseModel):
+    fields: List[CaptureFieldValueRead]

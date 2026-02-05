@@ -25,6 +25,8 @@ from app.api.routes.capture import router as capture_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.saved_searches import router as saved_searches_router
+from app.api.routes.awards import router as awards_router
+from app.api.routes.contacts import router as contacts_router
 
 __all__ = [
     "ingest_router",
@@ -48,4 +50,6 @@ __all__ = [
     "contracts_router",
     "audit_router",
     "saved_searches_router",
+    "awards_router",
+    "contacts_router",
 ]

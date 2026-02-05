@@ -16,6 +16,10 @@ import type {
   GateReview,
   TeamingPartner,
   TeamingPartnerLink,
+  CaptureCustomField,
+  CaptureFieldValueList,
+  CaptureFieldValue,
+  CaptureFieldType,
   ContractAward,
   ContractDeliverable,
   ContractStatus,
@@ -35,6 +39,8 @@ import type {
   IntegrationSsoAuthorizeResponse,
   SavedSearch,
   SavedSearchRunResult,
+  AwardRecord,
+  OpportunityContact,
   AuditEvent,
   AuditSummary,
   ObservabilityMetrics,
@@ -348,6 +354,62 @@ export const savedSearchApi = {
   run: async (searchId: number): Promise<SavedSearchRunResult> => {
     const { data } = await api.post(`/saved-searches/${searchId}/run`, {});
     return data;
+  },
+};
+
+// =============================================================================
+// Award Intelligence Endpoints
+// =============================================================================
+
+export const awardApi = {
+  list: async (params?: { rfp_id?: number }): Promise<AwardRecord[]> => {
+    const { data } = await api.get("/awards", { params });
+    return data;
+  },
+
+  create: async (payload: Partial<AwardRecord>): Promise<AwardRecord> => {
+    const { data } = await api.post("/awards", payload);
+    return data;
+  },
+
+  update: async (
+    awardId: number,
+    payload: Partial<AwardRecord>
+  ): Promise<AwardRecord> => {
+    const { data } = await api.patch(`/awards/${awardId}`, payload);
+    return data;
+  },
+
+  remove: async (awardId: number): Promise<void> => {
+    await api.delete(`/awards/${awardId}`);
+  },
+};
+
+// =============================================================================
+// Opportunity Contact Endpoints
+// =============================================================================
+
+export const contactApi = {
+  list: async (params?: { rfp_id?: number }): Promise<OpportunityContact[]> => {
+    const { data } = await api.get("/contacts", { params });
+    return data;
+  },
+
+  create: async (payload: Partial<OpportunityContact>): Promise<OpportunityContact> => {
+    const { data } = await api.post("/contacts", payload);
+    return data;
+  },
+
+  update: async (
+    contactId: number,
+    payload: Partial<OpportunityContact>
+  ): Promise<OpportunityContact> => {
+    const { data } = await api.patch(`/contacts/${contactId}`, payload);
+    return data;
+  },
+
+  remove: async (contactId: number): Promise<void> => {
+    await api.delete(`/contacts/${contactId}`);
   },
 };
 
@@ -699,6 +761,56 @@ export const captureApi = {
   listPlans: async (): Promise<CapturePlanListItem[]> => {
     const { data } = await api.get("/capture/plans", { params: { include_rfp: true } });
     return data.plans ?? data;
+  },
+
+  listFields: async (): Promise<CaptureCustomField[]> => {
+    const { data } = await api.get("/capture/fields");
+    return data;
+  },
+
+  createField: async (payload: {
+    name: string;
+    field_type?: CaptureFieldType;
+    options?: string[];
+    stage?: CaptureStage | null;
+    is_required?: boolean;
+  }): Promise<CaptureCustomField> => {
+    const { data } = await api.post("/capture/fields", payload);
+    return data;
+  },
+
+  updateField: async (
+    fieldId: number,
+    payload: Partial<{
+      name: string;
+      field_type: CaptureFieldType;
+      options: string[];
+      stage: CaptureStage | null;
+      is_required: boolean;
+    }>
+  ): Promise<CaptureCustomField> => {
+    const { data } = await api.patch(`/capture/fields/${fieldId}`, payload);
+    return data;
+  },
+
+  removeField: async (fieldId: number): Promise<void> => {
+    await api.delete(`/capture/fields/${fieldId}`);
+  },
+
+  listPlanFields: async (planId: number): Promise<CaptureFieldValueList> => {
+    const { data } = await api.get(`/capture/plans/${planId}/fields`);
+    return data;
+  },
+
+  savePlanFields: async (
+    planId: number,
+    payload: CaptureFieldValue[]
+  ): Promise<CaptureFieldValueList> => {
+    const { data } = await api.put(
+      `/capture/plans/${planId}/fields`,
+      payload.map((item) => ({ field_id: item.field.id, value: item.value }))
+    );
+    return data;
   },
 
   createPlan: async (payload: {

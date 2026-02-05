@@ -33,7 +33,12 @@ from app.models.capture import (
     GateReview,
     TeamingPartner,
     RFPTeamingPartner,
+    CaptureCustomField,
+    CaptureFieldValue,
+    CaptureFieldType,
 )
+from app.models.award import AwardRecord
+from app.models.contact import OpportunityContact
 from app.models.contract import (
     ContractAward,
     ContractStatus,
@@ -78,6 +83,11 @@ __all__ = [
     "GateReview",
     "TeamingPartner",
     "RFPTeamingPartner",
+    "CaptureCustomField",
+    "CaptureFieldValue",
+    "CaptureFieldType",
+    "AwardRecord",
+    "OpportunityContact",
     "ContractAward",
     "ContractStatus",
     "ContractDeliverable",

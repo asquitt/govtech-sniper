@@ -18,9 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { rfpApi } from "@/lib/api";
+import { awardApi, contactApi, rfpApi } from "@/lib/api";
 import { cn, daysUntilDeadline, formatDate, getDeadlineUrgency } from "@/lib/utils";
-import type { RFP, RFPStatus } from "@/types";
+import type { AwardRecord, OpportunityContact, RFP, RFPStatus } from "@/types";
 
 type Snapshot = {
   id: number;
@@ -98,6 +98,27 @@ export default function OpportunityDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [awards, setAwards] = useState<AwardRecord[]>([]);
+  const [contacts, setContacts] = useState<OpportunityContact[]>([]);
+  const [awardForm, setAwardForm] = useState({
+    awardee_name: "",
+    award_amount: "",
+    award_date: "",
+    contract_vehicle: "",
+    contract_number: "",
+    description: "",
+    source_url: "",
+  });
+  const [contactForm, setContactForm] = useState({
+    name: "",
+    role: "",
+    organization: "",
+    email: "",
+    phone: "",
+    notes: "",
+  });
+  const [isSavingAward, setIsSavingAward] = useState(false);
+  const [isSavingContact, setIsSavingContact] = useState(false);
   const [intelForm, setIntelForm] = useState({
     source_type: "",
     jurisdiction: "",
@@ -131,12 +152,16 @@ export default function OpportunityDetailPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const [rfpData, snapshotData] = await Promise.all([
+      const [rfpData, snapshotData, awardData, contactData] = await Promise.all([
         rfpApi.get(rfpId),
         rfpApi.getSnapshots(rfpId, { limit: 20 }),
+        awardApi.list({ rfp_id: rfpId }),
+        contactApi.list({ rfp_id: rfpId }),
       ]);
       setRfp(rfpData);
       setSnapshots(snapshotData);
+      setAwards(awardData);
+      setContacts(contactData);
 
       if (snapshotData.length >= 2) {
         setToSnapshotId(snapshotData[0].id);
@@ -205,6 +230,80 @@ export default function OpportunityDetailPage() {
       setError("Failed to save market intelligence.");
     } finally {
       setIsSavingIntel(false);
+    }
+  };
+
+  const handleAwardChange = (field: keyof typeof awardForm, value: string) => {
+    setAwardForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleContactChange = (field: keyof typeof contactForm, value: string) => {
+    setContactForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreateAward = async () => {
+    if (!rfp || !awardForm.awardee_name.trim()) return;
+    try {
+      setIsSavingAward(true);
+      const payload = {
+        rfp_id: rfp.id,
+        awardee_name: awardForm.awardee_name.trim(),
+        award_amount: awardForm.award_amount
+          ? Number(awardForm.award_amount)
+          : undefined,
+        award_date: awardForm.award_date || undefined,
+        contract_vehicle: awardForm.contract_vehicle || undefined,
+        contract_number: awardForm.contract_number || undefined,
+        description: awardForm.description || undefined,
+        source_url: awardForm.source_url || undefined,
+      };
+      const created = await awardApi.create(payload);
+      setAwards((prev) => [created, ...prev]);
+      setAwardForm({
+        awardee_name: "",
+        award_amount: "",
+        award_date: "",
+        contract_vehicle: "",
+        contract_number: "",
+        description: "",
+        source_url: "",
+      });
+    } catch (err) {
+      console.error("Failed to create award record", err);
+      setError("Failed to create award record.");
+    } finally {
+      setIsSavingAward(false);
+    }
+  };
+
+  const handleCreateContact = async () => {
+    if (!rfp || !contactForm.name.trim()) return;
+    try {
+      setIsSavingContact(true);
+      const payload = {
+        rfp_id: rfp.id,
+        name: contactForm.name.trim(),
+        role: contactForm.role || undefined,
+        organization: contactForm.organization || undefined,
+        email: contactForm.email || undefined,
+        phone: contactForm.phone || undefined,
+        notes: contactForm.notes || undefined,
+      };
+      const created = await contactApi.create(payload);
+      setContacts((prev) => [created, ...prev]);
+      setContactForm({
+        name: "",
+        role: "",
+        organization: "",
+        email: "",
+        phone: "",
+        notes: "",
+      });
+    } catch (err) {
+      console.error("Failed to create contact", err);
+      setError("Failed to create contact.");
+    } finally {
+      setIsSavingContact(false);
     }
   };
 
@@ -474,6 +573,179 @@ export default function OpportunityDetailPage() {
                     onChange={(e) => handleIntelChange("intel_notes", e.target.value)}
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Award Intelligence</p>
+                    <p className="text-xs text-muted-foreground">
+                      Track awardees, values, and vehicles tied to this opportunity.
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={handleCreateAward} disabled={isSavingAward}>
+                    {isSavingAward ? "Saving..." : "Add Award"}
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Awardee Name"
+                    value={awardForm.awardee_name}
+                    onChange={(e) => handleAwardChange("awardee_name", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Award Amount"
+                    value={awardForm.award_amount}
+                    onChange={(e) => handleAwardChange("award_amount", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Award Date (YYYY-MM-DD)"
+                    value={awardForm.award_date}
+                    onChange={(e) => handleAwardChange("award_date", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Contract Vehicle"
+                    value={awardForm.contract_vehicle}
+                    onChange={(e) => handleAwardChange("contract_vehicle", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Contract Number"
+                    value={awardForm.contract_number}
+                    onChange={(e) => handleAwardChange("contract_number", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Source URL"
+                    value={awardForm.source_url}
+                    onChange={(e) => handleAwardChange("source_url", e.target.value)}
+                  />
+                </div>
+
+                <textarea
+                  className="min-h-[80px] rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  placeholder="Award description or notes"
+                  value={awardForm.description}
+                  onChange={(e) => handleAwardChange("description", e.target.value)}
+                />
+
+                {awards.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No awards recorded yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {awards.map((award) => (
+                      <div
+                        key={award.id}
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {award.awardee_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {award.award_amount
+                              ? `$${award.award_amount.toLocaleString()}`
+                              : "—"}{" "}
+                            · {award.contract_vehicle || "Vehicle unknown"}
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {award.award_date ? formatDate(award.award_date) : "Date TBD"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Opportunity Contacts</p>
+                    <p className="text-xs text-muted-foreground">
+                      Track buyers, stakeholders, and partner contacts.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleCreateContact}
+                    disabled={isSavingContact}
+                  >
+                    {isSavingContact ? "Saving..." : "Add Contact"}
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Name"
+                    value={contactForm.name}
+                    onChange={(e) => handleContactChange("name", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Role"
+                    value={contactForm.role}
+                    onChange={(e) => handleContactChange("role", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Organization"
+                    value={contactForm.organization}
+                    onChange={(e) => handleContactChange("organization", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Email"
+                    value={contactForm.email}
+                    onChange={(e) => handleContactChange("email", e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Phone"
+                    value={contactForm.phone}
+                    onChange={(e) => handleContactChange("phone", e.target.value)}
+                  />
+                </div>
+
+                <textarea
+                  className="min-h-[80px] rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  placeholder="Contact notes"
+                  value={contactForm.notes}
+                  onChange={(e) => handleContactChange("notes", e.target.value)}
+                />
+
+                {contacts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No contacts yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {contacts.map((contact) => (
+                      <div
+                        key={contact.id}
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <div>
+                          <p className="font-medium text-foreground">{contact.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {contact.role || "Role unknown"} · {contact.organization || "Org"}
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {contact.email || contact.phone || "No contact info"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

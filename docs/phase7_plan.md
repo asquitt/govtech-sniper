@@ -30,4 +30,6 @@
 
 ## Status
 - In progress.
-- Saved searches + market intelligence fields shipped in this phase.
+- Saved searches + market intelligence fields shipped.
+- Award intelligence and contact enrichment shipped.
+- Capture custom fields + Kanban pipeline shipped.

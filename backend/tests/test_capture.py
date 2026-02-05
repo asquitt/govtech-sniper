@@ -116,3 +116,57 @@ class TestCapture:
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1
+
+    @pytest.mark.asyncio
+    async def test_capture_custom_fields(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_rfp: RFP,
+    ):
+        # Create capture plan
+        response = await client.post(
+            "/api/v1/capture/plans",
+            headers=auth_headers,
+            json={"rfp_id": test_rfp.id},
+        )
+        assert response.status_code == 200
+        plan_id = response.json()["id"]
+
+        # Create custom field
+        response = await client.post(
+            "/api/v1/capture/fields",
+            headers=auth_headers,
+            json={
+                "name": "Customer Priority",
+                "field_type": "select",
+                "options": ["High", "Medium", "Low"],
+                "is_required": True,
+            },
+        )
+        assert response.status_code == 200
+        field_id = response.json()["id"]
+
+        # List fields
+        response = await client.get("/api/v1/capture/fields", headers=auth_headers)
+        assert response.status_code == 200
+        assert len(response.json()) >= 1
+
+        # Update plan fields
+        response = await client.put(
+            f"/api/v1/capture/plans/{plan_id}/fields",
+            headers=auth_headers,
+            json=[{"field_id": field_id, "value": "High"}],
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["fields"][0]["value"] == "High"
+
+        # List plan fields
+        response = await client.get(
+            f"/api/v1/capture/plans/{plan_id}/fields",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        fields = response.json()["fields"]
+        assert any(field["field"]["id"] == field_id for field in fields)
