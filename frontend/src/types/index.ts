@@ -133,6 +133,22 @@ export interface OpportunityContact {
 }
 
 // -----------------------------------------------------------------------------
+// Budget Intelligence
+// -----------------------------------------------------------------------------
+
+export interface BudgetIntelligence {
+  id: number;
+  rfp_id?: number | null;
+  title: string;
+  fiscal_year?: number | null;
+  amount?: number | null;
+  source_url?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------------
 // Word Add-in Types
 // -----------------------------------------------------------------------------
 
@@ -237,6 +253,26 @@ export interface CapturePlanListItem extends CapturePlan {
   rfp_status?: RFPStatus | null;
 }
 
+export interface CaptureCompetitor {
+  id: number;
+  rfp_id: number;
+  user_id: number;
+  name: string;
+  incumbent: boolean;
+  strengths?: string | null;
+  weaknesses?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaptureMatchInsight {
+  plan_id: number;
+  rfp_id: number;
+  summary: string;
+  factors: Array<{ factor: string; value: unknown }>;
+}
+
 export interface GateReview {
   id: number;
   rfp_id: number;
@@ -302,6 +338,7 @@ export interface ContractDeliverable {
   due_date?: string | null;
   status: DeliverableStatus;
   notes?: string | null;
+  risk_flag?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -507,6 +544,26 @@ export interface CapturePlanListItem extends CapturePlan {
   rfp_title: string;
   rfp_agency?: string | null;
   rfp_status?: RFPStatus | null;
+}
+
+export interface CaptureCompetitor {
+  id: number;
+  rfp_id: number;
+  user_id: number;
+  name: string;
+  incumbent: boolean;
+  strengths?: string | null;
+  weaknesses?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CaptureMatchInsight {
+  plan_id: number;
+  rfp_id: number;
+  summary: string;
+  factors: Array<{ factor: string; value: unknown }>;
 }
 
 // -----------------------------------------------------------------------------

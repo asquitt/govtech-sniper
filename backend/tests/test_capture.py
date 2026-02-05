@@ -61,6 +61,14 @@ class TestCapture:
         assert data["total"] == 1
         assert data["plans"][0]["rfp_id"] == test_rfp.id
 
+        response = await client.get(
+            f"/api/v1/capture/plans/{plan['id']}/match-insight",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        insight = response.json()
+        assert insight["plan_id"] == plan["id"]
+
         # Create gate review
         response = await client.post(
             "/api/v1/capture/gate-reviews",
@@ -116,6 +124,48 @@ class TestCapture:
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1
+
+    @pytest.mark.asyncio
+    async def test_competitors(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_rfp: RFP,
+    ):
+        response = await client.post(
+            "/api/v1/capture/competitors",
+            headers=auth_headers,
+            json={
+                "rfp_id": test_rfp.id,
+                "name": "Competitor A",
+                "incumbent": True,
+                "strengths": "Past performance",
+            },
+        )
+        assert response.status_code == 200
+        competitor_id = response.json()["id"]
+
+        response = await client.get(
+            "/api/v1/capture/competitors",
+            headers=auth_headers,
+            params={"rfp_id": test_rfp.id},
+        )
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+        response = await client.patch(
+            f"/api/v1/capture/competitors/{competitor_id}",
+            headers=auth_headers,
+            json={"notes": "Updated notes"},
+        )
+        assert response.status_code == 200
+        assert response.json()["notes"] == "Updated notes"
+
+        response = await client.delete(
+            f"/api/v1/capture/competitors/{competitor_id}",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_capture_custom_fields(

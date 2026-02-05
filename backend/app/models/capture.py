@@ -137,3 +137,23 @@ class CaptureFieldValue(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CaptureCompetitor(SQLModel, table=True):
+    """
+    Competitive intelligence entries for an opportunity.
+    """
+    __tablename__ = "capture_competitors"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    rfp_id: int = Field(foreign_key="rfps.id", index=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    name: str = Field(max_length=255)
+    incumbent: bool = Field(default=False)
+    strengths: Optional[str] = None
+    weaknesses: Optional[str] = None
+    notes: Optional[str] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

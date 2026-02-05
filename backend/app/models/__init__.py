@@ -36,11 +36,14 @@ from app.models.capture import (
     CaptureCustomField,
     CaptureFieldValue,
     CaptureFieldType,
+    CaptureCompetitor,
 )
 from app.models.award import AwardRecord
 from app.models.contact import OpportunityContact
 from app.models.word_addin import WordAddinSession, WordAddinEvent, WordAddinSessionStatus
 from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
+from app.models.secret import SecretRecord
+from app.models.budget_intel import BudgetIntelligence
 from app.models.contract import (
     ContractAward,
     ContractStatus,
@@ -88,6 +91,7 @@ __all__ = [
     "CaptureCustomField",
     "CaptureFieldValue",
     "CaptureFieldType",
+    "CaptureCompetitor",
     "AwardRecord",
     "OpportunityContact",
     "WordAddinSession",
@@ -95,6 +99,8 @@ __all__ = [
     "WordAddinSessionStatus",
     "ProposalGraphicRequest",
     "GraphicsRequestStatus",
+    "SecretRecord",
+    "BudgetIntelligence",
     "ContractAward",
     "ContractStatus",
     "ContractDeliverable",

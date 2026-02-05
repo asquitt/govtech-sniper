@@ -22,6 +22,7 @@ from app.models.capture import (
     RFPTeamingPartner,
     CaptureCustomField,
     CaptureFieldValue,
+    CaptureCompetitor,
 )
 from app.schemas.capture import (
     CapturePlanCreate,
@@ -43,6 +44,10 @@ from app.schemas.capture import (
     CaptureFieldValueUpdate,
     CaptureFieldValueRead,
     CaptureFieldValueList,
+    CaptureCompetitorCreate,
+    CaptureCompetitorUpdate,
+    CaptureCompetitorRead,
+    CaptureMatchInsight,
 )
 from app.services.audit_service import log_audit_event
 from app.services.webhook_service import dispatch_webhook_event
@@ -144,6 +149,49 @@ async def list_capture_plans(
         ]
 
     return CapturePlanListResponse(plans=items, total=len(items))
+
+
+@router.get("/plans/{plan_id}/match-insight", response_model=CaptureMatchInsight)
+async def get_match_insight(
+    plan_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CaptureMatchInsight:
+    result = await session.execute(
+        select(CapturePlan).where(
+            CapturePlan.id == plan_id,
+            CapturePlan.owner_id == current_user.id,
+        )
+    )
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Capture plan not found")
+
+    rfp_result = await session.execute(
+        select(RFP).where(RFP.id == plan.rfp_id, RFP.user_id == current_user.id)
+    )
+    rfp = rfp_result.scalar_one_or_none()
+
+    factors = []
+    if plan.win_probability is not None:
+        factors.append({"factor": "win_probability", "value": plan.win_probability})
+    if rfp and rfp.is_qualified is not None:
+        factors.append({"factor": "qualified", "value": rfp.is_qualified})
+    if rfp and rfp.response_deadline:
+        days_left = (rfp.response_deadline - datetime.utcnow()).days
+        factors.append({"factor": "deadline_days", "value": days_left})
+
+    summary = (
+        f"Bid decision is {plan.bid_decision.value} with win probability "
+        f"{plan.win_probability if plan.win_probability is not None else 'N/A'}%."
+    )
+
+    return CaptureMatchInsight(
+        plan_id=plan.id,
+        rfp_id=plan.rfp_id,
+        summary=summary,
+        factors=factors,
+    )
 
 
 @router.get("/plans/{rfp_id}", response_model=CapturePlanRead)
@@ -685,3 +733,126 @@ async def update_capture_plan_fields(
     await session.commit()
 
     return await list_capture_plan_fields(plan_id, current_user, session)
+
+
+# -----------------------------------------------------------------------------
+# Competitive Intelligence
+# -----------------------------------------------------------------------------
+
+
+@router.get("/competitors", response_model=List[CaptureCompetitorRead])
+async def list_competitors(
+    rfp_id: int = Query(..., ge=1),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[CaptureCompetitorRead]:
+    result = await session.execute(
+        select(CaptureCompetitor).where(
+            CaptureCompetitor.rfp_id == rfp_id,
+            CaptureCompetitor.user_id == current_user.id,
+        )
+    )
+    competitors = result.scalars().all()
+    return [CaptureCompetitorRead.model_validate(c) for c in competitors]
+
+
+@router.post("/competitors", response_model=CaptureCompetitorRead)
+async def create_competitor(
+    payload: CaptureCompetitorCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CaptureCompetitorRead:
+    rfp_result = await session.execute(
+        select(RFP).where(RFP.id == payload.rfp_id, RFP.user_id == current_user.id)
+    )
+    if not rfp_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="RFP not found")
+
+    competitor = CaptureCompetitor(
+        rfp_id=payload.rfp_id,
+        user_id=current_user.id,
+        name=payload.name,
+        incumbent=payload.incumbent,
+        strengths=payload.strengths,
+        weaknesses=payload.weaknesses,
+        notes=payload.notes,
+    )
+    session.add(competitor)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="capture_competitor",
+        entity_id=competitor.id,
+        action="capture.competitor_created",
+        metadata={"rfp_id": payload.rfp_id, "name": payload.name},
+    )
+    await session.commit()
+    await session.refresh(competitor)
+
+    return CaptureCompetitorRead.model_validate(competitor)
+
+
+@router.patch("/competitors/{competitor_id}", response_model=CaptureCompetitorRead)
+async def update_competitor(
+    competitor_id: int,
+    payload: CaptureCompetitorUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CaptureCompetitorRead:
+    result = await session.execute(
+        select(CaptureCompetitor).where(
+            CaptureCompetitor.id == competitor_id,
+            CaptureCompetitor.user_id == current_user.id,
+        )
+    )
+    competitor = result.scalar_one_or_none()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(competitor, field, value)
+    competitor.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="capture_competitor",
+        entity_id=competitor.id,
+        action="capture.competitor_updated",
+        metadata={"updated_fields": list(update_data.keys())},
+    )
+    await session.commit()
+    await session.refresh(competitor)
+    return CaptureCompetitorRead.model_validate(competitor)
+
+
+@router.delete("/competitors/{competitor_id}")
+async def delete_competitor(
+    competitor_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(CaptureCompetitor).where(
+            CaptureCompetitor.id == competitor_id,
+            CaptureCompetitor.user_id == current_user.id,
+        )
+    )
+    competitor = result.scalar_one_or_none()
+    if not competitor:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="capture_competitor",
+        entity_id=competitor.id,
+        action="capture.competitor_deleted",
+        metadata={"rfp_id": competitor.rfp_id},
+    )
+    await session.delete(competitor)
+    await session.commit()
+    return {"message": "Competitor deleted"}

@@ -29,6 +29,9 @@ from app.api.routes.awards import router as awards_router
 from app.api.routes.contacts import router as contacts_router
 from app.api.routes.word_addin import router as word_addin_router
 from app.api.routes.graphics import router as graphics_router
+from app.api.routes.scim import router as scim_router
+from app.api.routes.secrets import router as secrets_router
+from app.api.routes.budget_intel import router as budget_intel_router
 
 __all__ = [
     "ingest_router",
@@ -56,4 +59,7 @@ __all__ = [
     "contacts_router",
     "word_addin_router",
     "graphics_router",
+    "scim_router",
+    "secrets_router",
+    "budget_intel_router",
 ]

@@ -34,3 +34,21 @@ class TestAudit:
         summary = response.json()
         assert summary["total_events"] >= 1
         assert any(item["action"] == "integration.created" for item in summary["by_action"])
+
+        response = await client.get(
+            "/api/v1/audit/export",
+            headers=auth_headers,
+            params={"format": "json"},
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert "signature" in payload
+        assert "payload" in payload
+
+        response = await client.get(
+            "/api/v1/audit/export",
+            headers=auth_headers,
+            params={"format": "csv"},
+        )
+        assert response.status_code == 200
+        assert response.headers.get("X-Audit-Signature")

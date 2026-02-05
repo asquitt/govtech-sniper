@@ -49,6 +49,9 @@ from app.api.routes import (
     contacts_router,
     word_addin_router,
     graphics_router,
+    scim_router,
+    secrets_router,
+    budget_intel_router,
 )
 
 # Configure structured logging
@@ -250,6 +253,9 @@ app.include_router(awards_router, prefix=api_prefix)
 app.include_router(contacts_router, prefix=api_prefix)
 app.include_router(word_addin_router, prefix=api_prefix)
 app.include_router(graphics_router, prefix=api_prefix)
+app.include_router(scim_router, prefix=api_prefix)
+app.include_router(secrets_router, prefix=api_prefix)
+app.include_router(budget_intel_router, prefix=api_prefix)
 
 
 # =============================================================================

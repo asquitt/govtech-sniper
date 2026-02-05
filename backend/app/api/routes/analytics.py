@@ -19,6 +19,9 @@ from app.models.proposal import Proposal, ProposalSection, SectionStatus, Propos
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.audit import AuditEvent
 from app.models.integration import IntegrationConfig, IntegrationSyncRun, IntegrationSyncStatus, IntegrationWebhookEvent
+from app.observability.metrics import get_metrics
+from app.config import settings
+from app.services.alert_service import get_alert_counts
 from app.api.deps import get_current_user, UserAuth
 
 logger = structlog.get_logger(__name__)
@@ -551,4 +554,113 @@ async def get_observability_metrics(
             "total": webhook_total,
             "by_provider": webhook_by_provider,
         },
+    }
+
+
+# =============================================================================
+# SLO & Alerting
+# =============================================================================
+
+@router.get("/slo")
+async def get_slo_metrics(
+    days: int = Query(7, ge=1, le=90),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    _ = current_user
+    metrics = get_metrics().get_all()
+    counters = metrics.get("counters", {})
+    histograms = metrics.get("histograms", {})
+
+    request_total = sum(
+        value for key, value in counters.items() if key.startswith("http.requests")
+    )
+    error_total = sum(
+        value for key, value in counters.items() if key.startswith("http.5xx_errors")
+    )
+    error_rate = (error_total / request_total) if request_total else 0.0
+
+    latency_p95_values = [
+        histogram.get("p95", 0)
+        for key, histogram in histograms.items()
+        if key.startswith("http.request_duration_ms")
+    ]
+    latency_p95 = max(latency_p95_values) if latency_p95_values else 0
+
+    start_date = datetime.utcnow() - timedelta(days=days)
+    sync_counts = await session.execute(
+        select(
+            IntegrationSyncRun.status,
+            func.count(IntegrationSyncRun.id).label("count"),
+        )
+        .join(IntegrationConfig, IntegrationConfig.id == IntegrationSyncRun.integration_id)
+        .where(IntegrationSyncRun.started_at >= start_date)
+        .group_by(IntegrationSyncRun.status)
+    )
+    sync_totals = {"total": 0, "failed": 0}
+    for row in sync_counts.all():
+        sync_totals["total"] += row.count
+        if row.status == IntegrationSyncStatus.FAILED:
+            sync_totals["failed"] += row.count
+
+    sync_failure_rate = (
+        sync_totals["failed"] / sync_totals["total"]
+        if sync_totals["total"]
+        else 0.0
+    )
+
+    return {
+        "targets": {
+            "latency_p95_ms": settings.slo_latency_p95_ms,
+            "error_rate": settings.slo_error_rate,
+        },
+        "observed": {
+            "request_total": request_total,
+            "error_rate": round(error_rate, 4),
+            "latency_p95_ms": round(latency_p95, 2),
+            "sync_failure_rate": round(sync_failure_rate, 4),
+        },
+        "within_slo": {
+            "latency_p95": latency_p95 <= settings.slo_latency_p95_ms,
+            "error_rate": error_rate <= settings.slo_error_rate,
+        },
+    }
+
+
+@router.get("/alerts")
+async def get_operational_alerts(
+    days: int = Query(7, ge=1, le=90),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    user_id = current_user.id
+    counts = await get_alert_counts(session, user_id=user_id, days=days)
+    sync_failed_count = counts["sync_failures"]
+    webhook_failed_count = counts["webhook_failures"]
+    auth_failed_count = counts["auth_failures"]
+
+    alerts = [
+        {
+            "type": "integration_sync_failures",
+            "count": sync_failed_count,
+            "threshold": settings.alert_sync_failures_threshold,
+            "status": "triggered" if sync_failed_count >= settings.alert_sync_failures_threshold else "ok",
+        },
+        {
+            "type": "webhook_failures",
+            "count": webhook_failed_count,
+            "threshold": settings.alert_webhook_failures_threshold,
+            "status": "triggered" if webhook_failed_count >= settings.alert_webhook_failures_threshold else "ok",
+        },
+        {
+            "type": "auth_failures",
+            "count": auth_failed_count,
+            "threshold": settings.alert_auth_failures_threshold,
+            "status": "triggered" if auth_failed_count >= settings.alert_auth_failures_threshold else "ok",
+        },
+    ]
+
+    return {
+        "period_days": days,
+        "alerts": alerts,
     }

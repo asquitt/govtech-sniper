@@ -4,7 +4,7 @@ RFP Sniper - Analysis Routes
 Endpoints for RFP analysis using Gemini AI.
 """
 
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
@@ -23,12 +23,20 @@ from app.schemas.rfp import (
     ComplianceRequirementCreate,
     ComplianceRequirementUpdate,
 )
+from pydantic import BaseModel
 from app.tasks.analysis_tasks import analyze_rfp, run_killer_filter
 from app.config import settings
 from app.services.audit_service import log_audit_event
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/analyze", tags=["Analysis"])
+
+
+class ComplianceGapSummary(BaseModel):
+    rfp_id: int
+    total_open: int
+    mandatory_open: int
+    gaps: List[ComplianceRequirementRead]
 
 
 @router.post("/{rfp_id}", response_model=AnalyzeResponse)
@@ -172,6 +180,40 @@ async def get_compliance_matrix(
         extraction_confidence=matrix.extraction_confidence,
         created_at=matrix.created_at,
         updated_at=matrix.updated_at,
+    )
+
+
+@router.get("/{rfp_id}/gaps", response_model=ComplianceGapSummary)
+async def get_compliance_gaps(
+    rfp_id: int = Path(..., description="RFP ID"),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceGapSummary:
+    result = await session.execute(
+        select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
+    )
+    matrix = result.scalar_one_or_none()
+    if not matrix:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        )
+
+    gaps = []
+    mandatory_open = 0
+    for req in matrix.requirements:
+        is_addressed = req.get("is_addressed")
+        status = req.get("status")
+        if is_addressed or status == "addressed":
+            continue
+        if req.get("importance") == "mandatory":
+            mandatory_open += 1
+        gaps.append(ComplianceRequirementRead(**req))
+
+    return ComplianceGapSummary(
+        rfp_id=rfp_id,
+        total_open=len(gaps),
+        mandatory_open=mandatory_open,
+        gaps=gaps,
     )
 
 

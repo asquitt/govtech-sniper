@@ -366,7 +366,22 @@ export default function ContractsPage() {
                       className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
                     >
                       <span>{deliverable.title}</span>
-                      <Badge variant="outline">{deliverable.status}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{deliverable.status}</Badge>
+                        {deliverable.risk_flag && (
+                          <Badge
+                            variant={
+                              deliverable.risk_flag === "overdue"
+                                ? "destructive"
+                                : deliverable.risk_flag === "due_soon"
+                                ? "warning"
+                                : "outline"
+                            }
+                          >
+                            {deliverable.risk_flag.replace("_", " ")}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}

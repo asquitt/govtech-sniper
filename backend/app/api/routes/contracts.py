@@ -7,7 +7,8 @@ Endpoints for post-award contract tracking.
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -753,6 +754,51 @@ async def list_status_reports(
     )
     reports = result.scalars().all()
     return [StatusReportRead.model_validate(r) for r in reports]
+
+
+@router.get("/{contract_id}/status-reports/{report_id}/export")
+async def export_status_report(
+    contract_id: int,
+    report_id: int,
+    format: str = Query("markdown", pattern="^(markdown|json)$"),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    report_result = await session.execute(
+        select(ContractStatusReport).where(
+            ContractStatusReport.id == report_id,
+            ContractStatusReport.contract_id == contract_id,
+        )
+    )
+    report = report_result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Status report not found")
+
+    report_payload = StatusReportRead.model_validate(report).model_dump()
+
+    if format == "json":
+        return JSONResponse(content=report_payload)
+
+    markdown = (
+        f"# Status Report\n\n"
+        f"**Period:** {report.period_start or 'TBD'} - {report.period_end or 'TBD'}\n\n"
+        f"## Summary\n{report.summary or 'No summary provided.'}\n\n"
+        f"## Accomplishments\n{report.accomplishments or 'No accomplishments provided.'}\n\n"
+        f"## Risks\n{report.risks or 'No risks provided.'}\n\n"
+        f"## Next Steps\n{report.next_steps or 'No next steps provided.'}\n"
+    )
+    response = PlainTextResponse(markdown)
+    response.headers["Content-Disposition"] = "attachment; filename=status_report.md"
+    return response
 
 
 @router.post("/{contract_id}/status-reports", response_model=StatusReportRead)

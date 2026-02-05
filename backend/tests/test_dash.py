@@ -83,3 +83,12 @@ class TestDash:
         assert response.status_code == 200
         data = response.json()
         assert "Award records" in data["answer"]
+
+        response = await client.post(
+            "/api/v1/dash/runbooks/rfp_summary",
+            headers=auth_headers,
+            json={"rfp_id": test_rfp.id},
+        )
+        assert response.status_code == 200
+        runbook = response.json()
+        assert runbook["runbook"] == "rfp_summary"

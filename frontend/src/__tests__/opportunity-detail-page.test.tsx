@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import OpportunityDetailPage from "@/app/(dashboard)/opportunities/[rfpId]/page";
-import { awardApi, contactApi, rfpApi } from "@/lib/api";
+import { awardApi, contactApi, rfpApi, budgetIntelApi } from "@/lib/api";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ rfpId: "1" }),
@@ -23,11 +23,16 @@ vi.mock("@/lib/api", () => ({
     list: vi.fn(),
     create: vi.fn(),
   },
+  budgetIntelApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+  },
 }));
 
 const mockedRfpApi = vi.mocked(rfpApi);
 const mockedAwardApi = vi.mocked(awardApi);
 const mockedContactApi = vi.mocked(contactApi);
+const mockedBudgetApi = vi.mocked(budgetIntelApi);
 
 describe("OpportunityDetailPage", () => {
   beforeEach(() => {
@@ -107,6 +112,7 @@ describe("OpportunityDetailPage", () => {
     });
     mockedAwardApi.list.mockResolvedValue([]);
     mockedContactApi.list.mockResolvedValue([]);
+    mockedBudgetApi.list.mockResolvedValue([]);
   });
 
   it("renders opportunity details and snapshot diff", async () => {

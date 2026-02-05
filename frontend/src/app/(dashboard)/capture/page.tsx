@@ -14,9 +14,12 @@ import type {
   TeamingPartner,
   TeamingPartnerLink,
   RFPListItem,
+  RFP,
   CaptureCustomField,
   CaptureFieldType,
   CaptureFieldValue,
+  CaptureCompetitor,
+  CaptureMatchInsight,
 } from "@/types";
 
 const stageOptions: { value: CaptureStage; label: string }[] = [
@@ -42,8 +45,16 @@ export default function CapturePage() {
   const [partnerLinks, setPartnerLinks] = useState<TeamingPartnerLink[]>([]);
   const [gateReviews, setGateReviews] = useState<GateReview[]>([]);
   const [selectedRfpId, setSelectedRfpId] = useState<number | null>(null);
+  const [selectedRfp, setSelectedRfp] = useState<RFP | null>(null);
   const [customFields, setCustomFields] = useState<CaptureCustomField[]>([]);
   const [planFieldValues, setPlanFieldValues] = useState<CaptureFieldValue[]>([]);
+  const [matchInsight, setMatchInsight] = useState<CaptureMatchInsight | null>(null);
+  const [competitors, setCompetitors] = useState<CaptureCompetitor[]>([]);
+  const [competitorName, setCompetitorName] = useState("");
+  const [competitorStrengths, setCompetitorStrengths] = useState("");
+  const [competitorWeaknesses, setCompetitorWeaknesses] = useState("");
+  const [competitorIncumbent, setCompetitorIncumbent] = useState(false);
+  const [competitorNotes, setCompetitorNotes] = useState("");
   const [customFieldName, setCustomFieldName] = useState("");
   const [customFieldType, setCustomFieldType] = useState<CaptureFieldType>("text");
   const [customFieldOptions, setCustomFieldOptions] = useState("");
@@ -117,17 +128,29 @@ export default function CapturePage() {
 
   useEffect(() => {
     const fetchRfpDetails = async () => {
-      if (!selectedRfpId) return;
+      if (!selectedRfpId) {
+        setSelectedRfp(null);
+        setMatchInsight(null);
+        setCompetitors([]);
+        return;
+      }
       try {
         const plan = planByRfp.get(selectedRfpId);
-        const [linksResult, reviewsResult, fieldsResult] = await Promise.all([
+        const [linksResult, reviewsResult, fieldsResult, rfpDetail, competitorList, insight] =
+          await Promise.all([
           captureApi.listPartnerLinks(selectedRfpId),
           captureApi.listGateReviews(selectedRfpId),
           plan ? captureApi.listPlanFields(plan.id) : Promise.resolve({ fields: [] }),
+          rfpApi.get(selectedRfpId),
+          captureApi.listCompetitors(selectedRfpId),
+          plan ? captureApi.getMatchInsight(plan.id) : Promise.resolve(null),
         ]);
         setPartnerLinks(linksResult.links);
         setGateReviews(reviewsResult);
         setPlanFieldValues(fieldsResult.fields ?? []);
+        setSelectedRfp(rfpDetail);
+        setCompetitors(competitorList);
+        setMatchInsight(insight);
       } catch (err) {
         console.error("Failed to load capture details", err);
       }
@@ -237,6 +260,39 @@ export default function CapturePage() {
     }
   };
 
+  const handleCreateCompetitor = async () => {
+    if (!selectedRfpId || !competitorName.trim()) return;
+    try {
+      const created = await captureApi.createCompetitor({
+        rfp_id: selectedRfpId,
+        name: competitorName.trim(),
+        incumbent: competitorIncumbent,
+        strengths: competitorStrengths || undefined,
+        weaknesses: competitorWeaknesses || undefined,
+        notes: competitorNotes || undefined,
+      });
+      setCompetitors((prev) => [created, ...prev]);
+      setCompetitorName("");
+      setCompetitorStrengths("");
+      setCompetitorWeaknesses("");
+      setCompetitorNotes("");
+      setCompetitorIncumbent(false);
+    } catch (err) {
+      console.error("Failed to create competitor", err);
+      setError("Failed to create competitor.");
+    }
+  };
+
+  const handleRemoveCompetitor = async (competitorId: number) => {
+    try {
+      await captureApi.removeCompetitor(competitorId);
+      setCompetitors((prev) => prev.filter((item) => item.id !== competitorId));
+    } catch (err) {
+      console.error("Failed to remove competitor", err);
+      setError("Failed to remove competitor.");
+    }
+  };
+
   const handleFieldValueChange = (fieldId: number, value: unknown) => {
     setPlanFieldValues((prev) =>
       prev.map((item) =>
@@ -320,6 +376,16 @@ export default function CapturePage() {
     partners.forEach((partner) => map.set(partner.id, partner));
     return map;
   }, [partners]);
+
+  const formatIntelValue = (value?: string | number | null) => {
+    if (value === null || value === undefined || value === "") return "—";
+    return String(value);
+  };
+
+  const formatBudget = (value?: number | null) => {
+    if (value === null || value === undefined) return "—";
+    return `$${value.toLocaleString()}`;
+  };
 
   if (error && !isLoading) {
     return (
@@ -695,6 +761,203 @@ export default function CapturePage() {
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-4 space-y-4 mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Competitive Intel</p>
+              <p className="text-xs text-muted-foreground">
+                Surface vehicles, incumbents, and buyer details for the selected opportunity.
+              </p>
+            </div>
+            <Badge variant="outline">
+              {selectedRfp?.source_type || "Source unknown"}
+            </Badge>
+          </div>
+
+          {selectedRfp ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Jurisdiction</p>
+                  <p className="text-foreground">
+                    {formatIntelValue(selectedRfp.jurisdiction)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Contract Vehicle</p>
+                  <p className="text-foreground">
+                    {formatIntelValue(selectedRfp.contract_vehicle)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Incumbent Vendor</p>
+                  <p className="text-foreground">
+                    {formatIntelValue(selectedRfp.incumbent_vendor)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Budget Estimate</p>
+                  <p className="text-foreground">
+                    {formatBudget(selectedRfp.budget_estimate)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Buyer Contact</p>
+                  <p className="text-foreground">
+                    {formatIntelValue(selectedRfp.buyer_contact_name)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Buyer Email / Phone</p>
+                  <p className="text-foreground">
+                    {formatIntelValue(selectedRfp.buyer_contact_email)}
+                    {selectedRfp.buyer_contact_phone
+                      ? ` · ${selectedRfp.buyer_contact_phone}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-md border border-border bg-background/40 p-3">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Competitive Landscape
+                  </p>
+                  <p className="text-sm text-foreground whitespace-pre-line">
+                    {formatIntelValue(selectedRfp.competitive_landscape)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-background/40 p-3">
+                  <p className="text-xs text-muted-foreground mb-2">Intel Notes</p>
+                  <p className="text-sm text-foreground whitespace-pre-line">
+                    {formatIntelValue(selectedRfp.intel_notes)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Select an opportunity to view competitive intel.
+            </p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 mt-6">
+          <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Bid Match Insight</p>
+              <p className="text-xs text-muted-foreground">
+                Summary of fit signals for the selected capture plan.
+              </p>
+            </div>
+            {matchInsight ? (
+              <div className="space-y-3 text-sm">
+                <p className="text-foreground">{matchInsight.summary}</p>
+                <div className="grid gap-2 md:grid-cols-2 text-xs text-muted-foreground">
+                  {matchInsight.factors.map((factor, index) => (
+                    <div key={`${factor.factor}-${index}`} className="rounded-md border border-border p-2">
+                      <p className="text-foreground font-medium">{factor.factor}</p>
+                      <p>{String(factor.value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Select a plan to view insight.</p>
+            )}
+          </div>
+
+          <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Competitor Comparisons</p>
+              <p className="text-xs text-muted-foreground">
+                Track incumbents and competitive positioning.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {competitors.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No competitors tracked yet.</p>
+              ) : (
+                competitors.map((competitor) => (
+                  <div
+                    key={competitor.id}
+                    className="rounded-md border border-border p-3 text-sm space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-foreground">
+                        {competitor.name}
+                        {competitor.incumbent ? " (Incumbent)" : ""}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveCompetitor(competitor.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    {competitor.strengths && (
+                      <p className="text-xs text-muted-foreground">
+                        Strengths: {competitor.strengths}
+                      </p>
+                    )}
+                    {competitor.weaknesses && (
+                      <p className="text-xs text-muted-foreground">
+                        Weaknesses: {competitor.weaknesses}
+                      </p>
+                    )}
+                    {competitor.notes && (
+                      <p className="text-xs text-muted-foreground">
+                        Notes: {competitor.notes}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <input
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Competitor name"
+                value={competitorName}
+                onChange={(e) => setCompetitorName(e.target.value)}
+              />
+              <textarea
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Strengths"
+                value={competitorStrengths}
+                onChange={(e) => setCompetitorStrengths(e.target.value)}
+                rows={2}
+              />
+              <textarea
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Weaknesses"
+                value={competitorWeaknesses}
+                onChange={(e) => setCompetitorWeaknesses(e.target.value)}
+                rows={2}
+              />
+              <textarea
+                className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                placeholder="Notes"
+                value={competitorNotes}
+                onChange={(e) => setCompetitorNotes(e.target.value)}
+                rows={2}
+              />
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={competitorIncumbent}
+                  onChange={(e) => setCompetitorIncumbent(e.target.checked)}
+                />
+                Incumbent
+              </label>
+              <Button onClick={handleCreateCompetitor}>Add Competitor</Button>
             </div>
           </div>
         </div>

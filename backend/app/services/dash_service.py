@@ -13,6 +13,8 @@ from app.config import settings
 from app.models.rfp import RFP, ComplianceMatrix
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.award import AwardRecord
+from app.models.budget_intel import BudgetIntelligence
+from app.models.contract import ContractAward
 from app.models.contact import OpportunityContact
 
 
@@ -128,6 +130,30 @@ def _summarize_contacts(contacts: List[OpportunityContact]) -> Tuple[str, List[d
     return "\n".join(lines), citations
 
 
+def _summarize_budgets(records: List[BudgetIntelligence]) -> Tuple[str, List[dict]]:
+    if not records:
+        return "No budget intelligence records found.", []
+    top = records[:3]
+    citations: List[dict] = []
+    lines = [f"Budget records found: {len(records)}."]
+    for record in top:
+        citations.append({"type": "budget_intel", "id": record.id})
+        amount = f"${record.amount:,.0f}" if record.amount else "Amount TBD"
+        lines.append(f"- {record.title} · FY{record.fiscal_year or 'TBD'} · {amount}")
+    return "\n".join(lines), citations
+
+
+def _summarize_contracts(contracts: List[ContractAward]) -> Tuple[str, List[dict]]:
+    if not contracts:
+        return "No related contracts found.", []
+    citations: List[dict] = []
+    lines = [f"Related contracts: {len(contracts)}."]
+    for contract in contracts[:3]:
+        citations.append({"type": "contract", "id": contract.id})
+        lines.append(f"- {contract.title} · {contract.contract_number}")
+    return "\n".join(lines), citations
+
+
 async def generate_dash_response(
     session: AsyncSession,
     *,
@@ -199,6 +225,8 @@ async def generate_dash_response(
     elif intent == "competitive_intel":
         awards: List[AwardRecord] = []
         contacts: List[OpportunityContact] = []
+        budgets: List[BudgetIntelligence] = []
+        contracts: List[ContractAward] = []
         if rfp:
             awards_result = await session.execute(
                 select(AwardRecord).where(
@@ -214,6 +242,20 @@ async def generate_dash_response(
                 )
             )
             contacts = contacts_result.scalars().all()
+            budgets_result = await session.execute(
+                select(BudgetIntelligence).where(
+                    BudgetIntelligence.user_id == user_id,
+                    BudgetIntelligence.rfp_id == rfp.id,
+                )
+            )
+            budgets = budgets_result.scalars().all()
+            contract_result = await session.execute(
+                select(ContractAward).where(
+                    ContractAward.user_id == user_id,
+                    ContractAward.rfp_id == rfp.id,
+                )
+            )
+            contracts = contract_result.scalars().all()
         else:
             awards_result = await session.execute(
                 select(AwardRecord)
@@ -225,11 +267,18 @@ async def generate_dash_response(
 
         award_summary, award_citations = _summarize_awards(awards)
         contact_summary, contact_citations = _summarize_contacts(contacts)
+        budget_summary, budget_citations = _summarize_budgets(budgets)
+        contract_summary, contract_citations = _summarize_contracts(contracts)
         citations.extend(award_citations)
         citations.extend(contact_citations)
+        citations.extend(budget_citations)
+        citations.extend(contract_citations)
 
         base_context = context if rfp else "Competitive intel summary (all awards)"
-        answer = f"{base_context}\n{award_summary}\n{contact_summary}"
+        answer = (
+            f"{base_context}\n{award_summary}\n{contact_summary}\n"
+            f"{budget_summary}\n{contract_summary}"
+        )
     else:
         answer = (
             f"{context}\nI can help with summaries, compliance gap analysis, or capability statements. "

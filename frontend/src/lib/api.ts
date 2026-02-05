@@ -20,6 +20,8 @@ import type {
   CaptureFieldValueList,
   CaptureFieldValue,
   CaptureFieldType,
+  CaptureCompetitor,
+  CaptureMatchInsight,
   ContractAward,
   ContractDeliverable,
   ContractStatus,
@@ -41,6 +43,7 @@ import type {
   SavedSearchRunResult,
   AwardRecord,
   OpportunityContact,
+  BudgetIntelligence,
   WordAddinSession,
   WordAddinSessionStatus,
   WordAddinEvent,
@@ -894,6 +897,11 @@ export const captureApi = {
     return data;
   },
 
+  getMatchInsight: async (planId: number): Promise<CaptureMatchInsight> => {
+    const { data } = await api.get(`/capture/plans/${planId}/match-insight`);
+    return data;
+  },
+
   savePlanFields: async (
     planId: number,
     payload: CaptureFieldValue[]
@@ -979,6 +987,84 @@ export const captureApi = {
       params: { rfp_id: rfpId },
     });
     return data;
+  },
+
+  listCompetitors: async (rfpId: number): Promise<CaptureCompetitor[]> => {
+    const { data } = await api.get("/capture/competitors", {
+      params: { rfp_id: rfpId },
+    });
+    return data;
+  },
+
+  createCompetitor: async (payload: {
+    rfp_id: number;
+    name: string;
+    incumbent?: boolean;
+    strengths?: string | null;
+    weaknesses?: string | null;
+    notes?: string | null;
+  }): Promise<CaptureCompetitor> => {
+    const { data } = await api.post("/capture/competitors", payload);
+    return data;
+  },
+
+  updateCompetitor: async (
+    competitorId: number,
+    payload: Partial<{
+      name: string;
+      incumbent: boolean;
+      strengths: string | null;
+      weaknesses: string | null;
+      notes: string | null;
+    }>
+  ): Promise<CaptureCompetitor> => {
+    const { data } = await api.patch(`/capture/competitors/${competitorId}`, payload);
+    return data;
+  },
+
+  removeCompetitor: async (competitorId: number): Promise<void> => {
+    await api.delete(`/capture/competitors/${competitorId}`);
+  },
+};
+
+// =============================================================================
+// Budget Intelligence Endpoints
+// =============================================================================
+
+export const budgetIntelApi = {
+  list: async (params?: { rfp_id?: number }): Promise<BudgetIntelligence[]> => {
+    const { data } = await api.get("/budget-intel", { params });
+    return data;
+  },
+
+  create: async (payload: {
+    rfp_id?: number;
+    title: string;
+    fiscal_year?: number;
+    amount?: number;
+    source_url?: string;
+    notes?: string;
+  }): Promise<BudgetIntelligence> => {
+    const { data } = await api.post("/budget-intel", payload);
+    return data;
+  },
+
+  update: async (
+    recordId: number,
+    payload: Partial<{
+      title: string;
+      fiscal_year: number;
+      amount: number;
+      source_url: string;
+      notes: string;
+    }>
+  ): Promise<BudgetIntelligence> => {
+    const { data } = await api.patch(`/budget-intel/${recordId}`, payload);
+    return data;
+  },
+
+  remove: async (recordId: number): Promise<void> => {
+    await api.delete(`/budget-intel/${recordId}`);
   },
 };
 

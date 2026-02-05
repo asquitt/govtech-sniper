@@ -7,6 +7,8 @@ Tests for integration configuration endpoints.
 import pytest
 from httpx import AsyncClient
 
+from app.config import settings
+
 
 class TestIntegrations:
     @pytest.mark.asyncio
@@ -53,6 +55,7 @@ class TestIntegrations:
 
     @pytest.mark.asyncio
     async def test_integration_providers_and_testing(self, client: AsyncClient, auth_headers: dict):
+        settings.mock_sso = True
         # Providers
         response = await client.get("/api/v1/integrations/providers", headers=auth_headers)
         assert response.status_code == 200

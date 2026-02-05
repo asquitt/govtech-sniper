@@ -51,6 +51,7 @@ export default function ProposalWorkspacePage() {
   const [wordEvents, setWordEvents] = useState<Record<number, WordAddinEvent[]>>({});
   const [wordDocName, setWordDocName] = useState("");
   const [isSyncingWord, setIsSyncingWord] = useState(false);
+  const [updatingWordSessionId, setUpdatingWordSessionId] = useState<number | null>(null);
   const [graphicsRequests, setGraphicsRequests] = useState<ProposalGraphicRequest[]>([]);
   const [graphicsTitle, setGraphicsTitle] = useState("");
   const [graphicsDescription, setGraphicsDescription] = useState("");
@@ -226,6 +227,24 @@ export default function ProposalWorkspacePage() {
       setError("Failed to sync Word add-in.");
     } finally {
       setIsSyncingWord(false);
+    }
+  };
+
+  const handleUpdateWordSessionStatus = async (
+    sessionId: number,
+    status: WordAddinSession["status"]
+  ) => {
+    try {
+      setUpdatingWordSessionId(sessionId);
+      const updated = await wordAddinApi.updateSession(sessionId, { status });
+      setWordSessions((prev) =>
+        prev.map((session) => (session.id === sessionId ? updated : session))
+      );
+    } catch (err) {
+      console.error("Failed to update Word add-in session", err);
+      setError("Failed to update Word add-in session.");
+    } finally {
+      setUpdatingWordSessionId(null);
     }
   };
 
@@ -553,6 +572,49 @@ export default function ProposalWorkspacePage() {
                             </Button>
                           </div>
                         </div>
+                        <div className="grid gap-2 text-xs">
+                          <label className="text-muted-foreground">
+                            Status
+                            <select
+                              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                              value={session.status}
+                              onChange={(e) =>
+                                handleUpdateWordSessionStatus(
+                                  session.id,
+                                  e.target.value as WordAddinSession["status"]
+                                )
+                              }
+                              disabled={updatingWordSessionId === session.id}
+                            >
+                              <option value="active">Active</option>
+                              <option value="paused">Paused</option>
+                              <option value="completed">Completed</option>
+                            </select>
+                          </label>
+                        </div>
+                        {wordEvents[session.id] && (
+                          <div className="rounded-md border border-border bg-background/40 p-2 space-y-1 text-xs">
+                            {wordEvents[session.id].length === 0 ? (
+                              <p className="text-muted-foreground">No events recorded yet.</p>
+                            ) : (
+                              wordEvents[session.id].map((event) => (
+                                <div key={event.id} className="flex items-start justify-between gap-2">
+                                  <div>
+                                    <p className="text-foreground">{event.event_type}</p>
+                                    {event.payload && Object.keys(event.payload).length > 0 && (
+                                      <p className="text-muted-foreground">
+                                        {JSON.stringify(event.payload)}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="text-muted-foreground">
+                                    {formatDate(event.created_at)}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}

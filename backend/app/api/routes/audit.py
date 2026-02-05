@@ -6,8 +6,14 @@ Advanced audit log views and summaries.
 
 from datetime import datetime, timedelta
 from typing import List, Optional
+import csv
+import io
+import json
+import hmac
+import hashlib
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func
 from sqlmodel import select
@@ -16,6 +22,8 @@ from pydantic import BaseModel
 from app.database import get_session
 from app.api.deps import get_current_user, UserAuth
 from app.models.audit import AuditEvent
+from app.config import settings
+from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/audit", tags=["Audit"])
 
@@ -116,4 +124,99 @@ async def get_audit_summary(
         total_events=total_events,
         by_action=by_action,
         by_entity_type=by_entity,
+    )
+
+
+@router.get("/export")
+async def export_audit_events(
+    format: str = Query("json", pattern="^(json|csv)$"),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    query = select(AuditEvent).where(AuditEvent.user_id == current_user.id)
+
+    if start_date:
+        query = query.where(AuditEvent.created_at >= start_date)
+    if end_date:
+        query = query.where(AuditEvent.created_at <= end_date)
+
+    query = query.order_by(AuditEvent.created_at.desc())
+    result = await session.execute(query)
+    events = result.scalars().all()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="audit_export",
+        entity_id=None,
+        action="audit.exported",
+        metadata={"format": format, "count": len(events)},
+    )
+    await session.commit()
+
+    export_records = [
+        {
+            "id": event.id,
+            "user_id": event.user_id,
+            "entity_type": event.entity_type,
+            "entity_id": event.entity_id,
+            "action": event.action,
+            "metadata": event.event_metadata,
+            "created_at": event.created_at.isoformat(),
+        }
+        for event in events
+    ]
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "id",
+                "user_id",
+                "entity_type",
+                "entity_id",
+                "action",
+                "metadata",
+                "created_at",
+            ],
+        )
+        writer.writeheader()
+        for record in export_records:
+            row = dict(record)
+            row["metadata"] = json.dumps(record["metadata"])
+            writer.writerow(row)
+
+        content = output.getvalue()
+        signature = hmac.new(
+            settings.audit_export_signing_key.encode("utf-8"),
+            content.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        response = StreamingResponse(
+            iter([content]),
+            media_type="text/csv",
+        )
+        response.headers["X-Audit-Signature"] = signature
+        response.headers["Content-Disposition"] = "attachment; filename=audit_export.csv"
+        return response
+
+    payload = {
+        "generated_at": datetime.utcnow().isoformat(),
+        "count": len(export_records),
+        "records": export_records,
+    }
+    serialized = json.dumps(payload, sort_keys=True).encode("utf-8")
+    signature = hmac.new(
+        settings.audit_export_signing_key.encode("utf-8"),
+        serialized,
+        hashlib.sha256,
+    ).hexdigest()
+
+    return JSONResponse(
+        content={"signature": signature, "payload": payload},
+        headers={"X-Audit-Signature": signature},
     )

@@ -1,0 +1,5 @@
+This folder contains Alembic migration configuration for the backend API.
+
+Run migrations from the backend/ directory:
+- alembic revision --autogenerate -m "description"
+- alembic upgrade head

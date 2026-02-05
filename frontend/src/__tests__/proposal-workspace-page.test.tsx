@@ -26,6 +26,10 @@ vi.mock("@/lib/api", () => ({
   },
   wordAddinApi: {
     listSessions: vi.fn(),
+    createSession: vi.fn(),
+    updateSession: vi.fn(),
+    createEvent: vi.fn(),
+    listEvents: vi.fn(),
   },
   graphicsApi: {
     listRequests: vi.fn(),

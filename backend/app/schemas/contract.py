@@ -7,7 +7,7 @@ Request/response models for contract tracking.
 from datetime import datetime, date
 from typing import Optional, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.contract import ContractStatus, DeliverableStatus
 
@@ -80,8 +80,28 @@ class DeliverableRead(BaseModel):
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime
+    risk_flag: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def compute_risk_flag(self):
+        if self.risk_flag:
+            return self
+        if self.status == DeliverableStatus.OVERDUE:
+            self.risk_flag = "overdue"
+            return self
+        if self.due_date:
+            days_left = (self.due_date - date.today()).days
+            if days_left < 0:
+                self.risk_flag = "overdue"
+            elif days_left <= 7:
+                self.risk_flag = "due_soon"
+            else:
+                self.risk_flag = "on_track"
+        else:
+            self.risk_flag = "on_track"
+        return self
 
 
 class TaskCreate(BaseModel):

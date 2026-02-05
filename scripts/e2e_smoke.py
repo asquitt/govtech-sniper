@@ -257,6 +257,32 @@ def main() -> int:
         return 1
     print("Draft generation complete.")
 
+    # Create Word add-in session + event
+    resp = client.post(
+        f"{base_url}/api/v1/word-addin/sessions",
+        json={"proposal_id": proposal_id, "document_name": "E2E Draft.docx"},
+    )
+    resp.raise_for_status()
+    word_session_id = resp.json()["id"]
+    resp = client.post(
+        f"{base_url}/api/v1/word-addin/sessions/{word_session_id}/events",
+        json={"event_type": "sync", "payload": {"sections": len(requirements)}},
+    )
+    resp.raise_for_status()
+    print("Word add-in session synced.")
+
+    # Create graphics request
+    resp = client.post(
+        f"{base_url}/api/v1/graphics",
+        json={
+            "proposal_id": proposal_id,
+            "title": "E2E Cover Graphic",
+            "description": "Cover page visual for E2E run.",
+        },
+    )
+    resp.raise_for_status()
+    print("Graphics request created.")
+
     # Export DOCX
     resp = client.get(f"{base_url}/api/v1/export/proposals/{proposal_id}/docx")
     if resp.status_code != 200:

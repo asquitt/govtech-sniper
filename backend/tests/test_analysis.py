@@ -83,6 +83,11 @@ async def test_compliance_matrix_editing(
     assert updated_req["assigned_to"] == "SME Team"
     assert "reviewed" in updated_req["tags"]
 
+    response = await client.get(f"/api/v1/analyze/{test_rfp.id}/gaps")
+    assert response.status_code == 200
+    gaps = response.json()
+    assert gaps["rfp_id"] == test_rfp.id
+
     # Delete requirement
     response = await client.delete(
         f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001"

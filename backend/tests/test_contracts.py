@@ -117,6 +117,7 @@ class TestContracts:
             },
         )
         assert response.status_code == 200
+        report = response.json()
 
         # List status reports
         response = await client.get(
@@ -125,3 +126,9 @@ class TestContracts:
         )
         assert response.status_code == 200
         assert len(response.json()) == 1
+
+        response = await client.get(
+            f"/api/v1/contracts/{contract['id']}/status-reports/{report['id']}/export",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200

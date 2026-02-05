@@ -51,3 +51,14 @@ class TestAnalytics:
         data = response.json()
         assert data["integration_syncs"]["total"] >= 1
         assert data["webhook_events"]["total"] >= 1
+
+        response = await client.get("/api/v1/analytics/slo", headers=auth_headers)
+        assert response.status_code == 200
+        slo = response.json()
+        assert "targets" in slo
+        assert "observed" in slo
+
+        response = await client.get("/api/v1/analytics/alerts", headers=auth_headers)
+        assert response.status_code == 200
+        alerts = response.json()
+        assert "alerts" in alerts

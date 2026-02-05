@@ -15,6 +15,13 @@ from sqlmodel import select
 from app.database import get_session
 from app.api.deps import get_current_user
 from app.services.auth_service import UserAuth
+from app.services.encryption_service import (
+    encrypt_secrets,
+    decrypt_secrets,
+    redact_secrets,
+    secret_placeholder,
+)
+from app.services.sso_service import exchange_sso_code
 from app.models.integration import (
     IntegrationConfig,
     IntegrationProvider,
@@ -213,6 +220,41 @@ def _missing_required_fields(definition: Dict[str, Any], config: dict) -> List[s
     return missing
 
 
+def _secret_field_keys(definition: Dict[str, Any]) -> List[str]:
+    fields = definition.get("required_fields", []) + definition.get("optional_fields", [])
+    return [field["key"] for field in fields if field.get("secret")]
+
+
+def _merge_integration_config(
+    existing: dict,
+    incoming: Optional[dict],
+    secret_fields: List[str],
+) -> dict:
+    if not incoming:
+        return existing
+    merged = dict(existing or {})
+    for key, value in (incoming or {}).items():
+        if key in secret_fields and value == secret_placeholder():
+            continue
+        merged[key] = value
+    return merged
+
+
+def _prepare_config_for_storage(config: dict, definition: Dict[str, Any]) -> dict:
+    secret_fields = _secret_field_keys(definition)
+    return encrypt_secrets(config or {}, secret_fields)
+
+
+def _prepare_config_for_response(config: dict, definition: Dict[str, Any]) -> dict:
+    secret_fields = _secret_field_keys(definition)
+    return redact_secrets(config or {}, secret_fields)
+
+
+def _prepare_config_for_internal_use(config: dict, definition: Dict[str, Any]) -> dict:
+    secret_fields = _secret_field_keys(definition)
+    return decrypt_secrets(config or {}, secret_fields)
+
+
 def _build_sso_authorize_url(provider: IntegrationProvider, config: dict, state: str) -> str:
     config = config or {}
     client_id = config.get("client_id", "")
@@ -286,7 +328,21 @@ async def list_integrations(
 
     result = await session.execute(query)
     integrations = result.scalars().all()
-    return [IntegrationResponse.model_validate(i) for i in integrations]
+    response = []
+    for integration in integrations:
+        definition = _get_provider_definition(integration.provider)
+        response.append(
+            IntegrationResponse(
+                id=integration.id,
+                provider=integration.provider,
+                name=integration.name,
+                is_enabled=integration.is_enabled,
+                config=_prepare_config_for_response(integration.config, definition),
+                created_at=integration.created_at,
+                updated_at=integration.updated_at,
+            )
+        )
+    return response
 
 
 @router.post("", response_model=IntegrationResponse)
@@ -295,12 +351,14 @@ async def create_integration(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> IntegrationResponse:
+    definition = _get_provider_definition(payload.provider)
+    config = _prepare_config_for_storage(payload.config or {}, definition)
     integration = IntegrationConfig(
         user_id=current_user.id,
         provider=payload.provider,
         name=payload.name,
         is_enabled=payload.is_enabled,
-        config=payload.config or {},
+        config=config,
     )
     session.add(integration)
     await session.flush()
@@ -315,7 +373,15 @@ async def create_integration(
     await session.commit()
     await session.refresh(integration)
 
-    return IntegrationResponse.model_validate(integration)
+    return IntegrationResponse(
+        id=integration.id,
+        provider=integration.provider,
+        name=integration.name,
+        is_enabled=integration.is_enabled,
+        config=_prepare_config_for_response(integration.config, definition),
+        created_at=integration.created_at,
+        updated_at=integration.updated_at,
+    )
 
 
 @router.patch("/{integration_id}", response_model=IntegrationResponse)
@@ -335,7 +401,16 @@ async def update_integration(
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
 
+    definition = _get_provider_definition(integration.provider)
+    secret_fields = _secret_field_keys(definition)
     update_data = payload.model_dump(exclude_unset=True)
+    if "config" in update_data:
+        merged = _merge_integration_config(
+            integration.config,
+            update_data.get("config"),
+            secret_fields,
+        )
+        update_data["config"] = _prepare_config_for_storage(merged, definition)
     for field, value in update_data.items():
         setattr(integration, field, value)
     integration.updated_at = datetime.utcnow()
@@ -351,7 +426,15 @@ async def update_integration(
     await session.commit()
     await session.refresh(integration)
 
-    return IntegrationResponse.model_validate(integration)
+    return IntegrationResponse(
+        id=integration.id,
+        provider=integration.provider,
+        name=integration.name,
+        is_enabled=integration.is_enabled,
+        config=_prepare_config_for_response(integration.config, definition),
+        created_at=integration.created_at,
+        updated_at=integration.updated_at,
+    )
 
 
 @router.post("/{integration_id}/test", response_model=IntegrationTestResult)
@@ -429,8 +512,9 @@ async def authorize_sso(
         )
 
     state = f"sso-{integration.id}-{int(datetime.utcnow().timestamp())}"
+    config = _prepare_config_for_internal_use(integration.config, definition)
     authorization_url = _build_sso_authorize_url(
-        integration.provider, integration.config, state
+        integration.provider, config, state
     )
 
     await log_audit_event(
@@ -471,6 +555,22 @@ async def sso_callback(
     if definition.get("category") != "sso":
         raise HTTPException(status_code=400, detail="SSO not supported for this provider")
 
+    config = _prepare_config_for_internal_use(integration.config, definition)
+
+    token_payload = None
+    exchange_status = "skipped"
+    if payload.code:
+        try:
+            token_payload = await exchange_sso_code(
+                integration.provider,
+                config,
+                payload.code,
+            )
+            exchange_status = "ok"
+        except Exception as exc:
+            exchange_status = "error"
+            token_payload = {"error": str(exc)}
+
     await log_audit_event(
         session,
         user_id=current_user.id,
@@ -480,11 +580,18 @@ async def sso_callback(
         metadata={
             "provider": integration.provider.value,
             "code_received": bool(payload.code),
+            "exchange_status": exchange_status,
         },
     )
     await session.commit()
 
-    return {"status": "ok", "message": "SSO callback received"}
+    return {
+        "status": "ok",
+        "message": "SSO callback received",
+        "provider": integration.provider.value,
+        "token_exchange": exchange_status,
+        "token_payload": token_payload,
+    }
 
 
 @router.post("/{integration_id}/sync", response_model=IntegrationSyncResponse)

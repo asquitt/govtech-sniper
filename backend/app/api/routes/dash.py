@@ -61,6 +61,24 @@ class DashAskResponse(BaseModel):
     citations: List[dict]
 
 
+class DashRunbookRequest(BaseModel):
+    rfp_id: Optional[int] = None
+
+
+class DashRunbookResponse(BaseModel):
+    runbook: str
+    answer: str
+    citations: List[dict]
+
+
+RUNBOOK_PROMPTS = {
+    "rfp_summary": "Summarize this opportunity with key details.",
+    "compliance_gap_plan": "Summarize compliance gaps and next steps.",
+    "proposal_kickoff": "Provide a proposal kickoff plan and stakeholder checklist.",
+    "competitive_intel": "Summarize competitive intelligence for this opportunity.",
+}
+
+
 @router.get("/sessions", response_model=List[DashSessionResponse])
 async def list_sessions(
     current_user: UserAuth = Depends(get_current_user),
@@ -167,3 +185,33 @@ async def ask_dash(
     await session.commit()
 
     return DashAskResponse(answer=answer, citations=citations)
+
+
+@router.post("/runbooks/{runbook}", response_model=DashRunbookResponse)
+async def run_dash_runbook(
+    runbook: str,
+    payload: DashRunbookRequest,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> DashRunbookResponse:
+    if runbook not in RUNBOOK_PROMPTS:
+        raise HTTPException(status_code=404, detail="Runbook not found")
+
+    answer, citations = await generate_dash_response(
+        session,
+        user_id=current_user.id,
+        question=RUNBOOK_PROMPTS[runbook],
+        rfp_id=payload.rfp_id,
+    )
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="dash_runbook",
+        entity_id=None,
+        action="dash.runbook_executed",
+        metadata={"runbook": runbook, "rfp_id": payload.rfp_id},
+    )
+    await session.commit()
+
+    return DashRunbookResponse(runbook=runbook, answer=answer, citations=citations)

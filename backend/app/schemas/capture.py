@@ -167,3 +167,47 @@ class CaptureFieldValueRead(BaseModel):
 
 class CaptureFieldValueList(BaseModel):
     fields: List[CaptureFieldValueRead]
+
+
+# -----------------------------------------------------------------------------
+# Competitor Intelligence
+# -----------------------------------------------------------------------------
+
+
+class CaptureCompetitorCreate(BaseModel):
+    rfp_id: int
+    name: str
+    incumbent: bool = False
+    strengths: Optional[str] = None
+    weaknesses: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CaptureCompetitorUpdate(BaseModel):
+    name: Optional[str] = None
+    incumbent: Optional[bool] = None
+    strengths: Optional[str] = None
+    weaknesses: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CaptureCompetitorRead(BaseModel):
+    id: int
+    rfp_id: int
+    user_id: int
+    name: str
+    incumbent: bool
+    strengths: Optional[str]
+    weaknesses: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CaptureMatchInsight(BaseModel):
+    plan_id: int
+    rfp_id: int
+    summary: str
+    factors: List[dict]

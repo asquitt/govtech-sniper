@@ -11,10 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 from pydantic import BaseModel, EmailStr, Field
+import pyotp
 import structlog
 
 from app.database import get_session
 from app.models.user import User, UserProfile, UserTier, ClearanceLevel
+from app.config import settings
 from app.services.auth_service import (
     hash_password,
     verify_password,
@@ -48,6 +50,7 @@ class LoginRequest(BaseModel):
     """User login request."""
     email: EmailStr
     password: str
+    mfa_code: Optional[str] = None
 
 
 class RefreshRequest(BaseModel):
@@ -71,7 +74,21 @@ class UserResponse(BaseModel):
     is_active: bool
     api_calls_today: int
     api_calls_limit: int
+    mfa_enabled: bool
     created_at: datetime
+
+
+class MfaEnrollResponse(BaseModel):
+    secret: str
+    otpauth_url: str
+
+
+class MfaVerifyRequest(BaseModel):
+    code: str
+
+
+class MfaDisableRequest(BaseModel):
+    code: str
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -177,6 +194,15 @@ async def login(
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(request.password, user.hashed_password):
+        await log_audit_event(
+            session,
+            user_id=user.id if user else None,
+            entity_type="user",
+            entity_id=user.id if user else None,
+            action="user.login_failed",
+            metadata={"email": request.email.lower()},
+        )
+        await session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -187,6 +213,19 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated",
         )
+
+    if user.mfa_enabled:
+        if not request.mfa_code:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="MFA code required",
+            )
+        totp = pyotp.TOTP(user.mfa_secret or "")
+        if not totp.verify(request.mfa_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid MFA code",
+            )
 
     logger.info("User logged in", user_id=user.id, email=user.email)
     await log_audit_event(
@@ -201,6 +240,106 @@ async def login(
 
     # Generate tokens
     return create_token_pair(user.id, user.email, user.tier.value)
+
+
+@router.post("/mfa/enroll", response_model=MfaEnrollResponse)
+async def enroll_mfa(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MfaEnrollResponse:
+    result = await session.execute(
+        select(User).where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if user.mfa_enabled and user.mfa_secret:
+        raise HTTPException(status_code=400, detail="MFA already enabled")
+
+    secret = pyotp.random_base32()
+    user.mfa_secret = secret
+    user.mfa_enabled = False
+    user.mfa_enabled_at = None
+
+    await log_audit_event(
+        session,
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action="user.mfa.enroll",
+        metadata={"email": user.email},
+    )
+    await session.commit()
+
+    otpauth_url = pyotp.totp.TOTP(secret).provisioning_uri(
+        name=user.email,
+        issuer_name=settings.mfa_issuer,
+    )
+    return MfaEnrollResponse(secret=secret, otpauth_url=otpauth_url)
+
+
+@router.post("/mfa/verify")
+async def verify_mfa(
+    payload: MfaVerifyRequest,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(User).where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    if not user or not user.mfa_secret:
+        raise HTTPException(status_code=404, detail="MFA not initialized")
+
+    totp = pyotp.TOTP(user.mfa_secret)
+    if not totp.verify(payload.code):
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
+
+    user.mfa_enabled = True
+    user.mfa_enabled_at = datetime.utcnow()
+    await log_audit_event(
+        session,
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action="user.mfa.enabled",
+        metadata={"email": user.email},
+    )
+    await session.commit()
+    return {"status": "ok", "message": "MFA enabled"}
+
+
+@router.post("/mfa/disable")
+async def disable_mfa(
+    payload: MfaDisableRequest,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(User).where(User.id == current_user.id)
+    )
+    user = result.scalar_one_or_none()
+    if not user or not user.mfa_secret:
+        raise HTTPException(status_code=404, detail="MFA not initialized")
+
+    totp = pyotp.TOTP(user.mfa_secret)
+    if not totp.verify(payload.code):
+        raise HTTPException(status_code=400, detail="Invalid MFA code")
+
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_enabled_at = None
+    await log_audit_event(
+        session,
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action="user.mfa.disabled",
+        metadata={"email": user.email},
+    )
+    await session.commit()
+    return {"status": "ok", "message": "MFA disabled"}
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -285,6 +424,7 @@ async def get_current_user_info(
         is_active=user.is_active,
         api_calls_today=user.api_calls_today,
         api_calls_limit=user.api_calls_limit,
+        mfa_enabled=user.mfa_enabled,
         created_at=user.created_at,
     )
 
@@ -325,6 +465,7 @@ async def update_current_user(
         is_active=user.is_active,
         api_calls_today=user.api_calls_today,
         api_calls_limit=user.api_calls_limit,
+        mfa_enabled=user.mfa_enabled,
         created_at=user.created_at,
     )
 
