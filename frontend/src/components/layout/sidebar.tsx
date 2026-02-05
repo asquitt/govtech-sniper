@@ -54,6 +54,11 @@ const navItems: NavItem[] = [
     icon: Target,
   },
   {
+    title: "Contracts",
+    href: "/contracts",
+    icon: FileSearch,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: Settings,

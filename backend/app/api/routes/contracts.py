@@ -1,0 +1,481 @@
+"""
+RFP Sniper - Contract Routes
+============================
+Endpoints for post-award contract tracking.
+"""
+
+from datetime import datetime
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from app.database import get_session
+from app.api.deps import get_current_user
+from app.services.auth_service import UserAuth
+from app.models.contract import (
+    ContractAward,
+    ContractDeliverable,
+    ContractTask,
+    CPARSReview,
+)
+from app.schemas.contract import (
+    ContractCreate,
+    ContractUpdate,
+    ContractRead,
+    ContractListResponse,
+    DeliverableCreate,
+    DeliverableUpdate,
+    DeliverableRead,
+    TaskCreate,
+    TaskUpdate,
+    TaskRead,
+    CPARSCreate,
+    CPARSRead,
+)
+from app.services.audit_service import log_audit_event
+from app.services.webhook_service import dispatch_webhook_event
+
+router = APIRouter(prefix="/contracts", tags=["Contracts"])
+
+
+@router.get("", response_model=ContractListResponse)
+async def list_contracts(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ContractListResponse:
+    result = await session.execute(
+        select(ContractAward).where(ContractAward.user_id == current_user.id)
+    )
+    contracts = result.scalars().all()
+    data = [ContractRead.model_validate(c) for c in contracts]
+    return ContractListResponse(contracts=data, total=len(data))
+
+
+@router.post("", response_model=ContractRead)
+async def create_contract(
+    payload: ContractCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ContractRead:
+    contract = ContractAward(
+        user_id=current_user.id,
+        rfp_id=payload.rfp_id,
+        contract_number=payload.contract_number,
+        title=payload.title,
+        agency=payload.agency,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        value=payload.value,
+        status=payload.status,
+        summary=payload.summary,
+    )
+    session.add(contract)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract",
+        entity_id=contract.id,
+        action="contract.created",
+        metadata={"contract_number": contract.contract_number},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=current_user.id,
+        event_type="contract.created",
+        payload={"contract_id": contract.id, "title": contract.title},
+    )
+    await session.commit()
+    await session.refresh(contract)
+
+    return ContractRead.model_validate(contract)
+
+
+@router.get("/{contract_id}", response_model=ContractRead)
+async def get_contract(
+    contract_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ContractRead:
+    result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    contract = result.scalar_one_or_none()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    return ContractRead.model_validate(contract)
+
+
+@router.patch("/{contract_id}", response_model=ContractRead)
+async def update_contract(
+    contract_id: int,
+    payload: ContractUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ContractRead:
+    result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    contract = result.scalar_one_or_none()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(contract, field, value)
+    contract.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract",
+        entity_id=contract.id,
+        action="contract.updated",
+        metadata={"updated_fields": list(update_data.keys())},
+    )
+    await session.commit()
+    await session.refresh(contract)
+
+    return ContractRead.model_validate(contract)
+
+
+@router.delete("/{contract_id}")
+async def delete_contract(
+    contract_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    contract = result.scalar_one_or_none()
+    if not contract:
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract",
+        entity_id=contract.id,
+        action="contract.deleted",
+        metadata={"contract_number": contract.contract_number},
+    )
+    await session.delete(contract)
+    await session.commit()
+
+    return {"message": "Contract deleted"}
+
+
+# -----------------------------------------------------------------------------
+# Deliverables
+# -----------------------------------------------------------------------------
+
+@router.get("/{contract_id}/deliverables", response_model=List[DeliverableRead])
+async def list_deliverables(
+    contract_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[DeliverableRead]:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    result = await session.execute(
+        select(ContractDeliverable).where(ContractDeliverable.contract_id == contract_id)
+    )
+    deliverables = result.scalars().all()
+    return [DeliverableRead.model_validate(d) for d in deliverables]
+
+
+@router.post("/{contract_id}/deliverables", response_model=DeliverableRead)
+async def create_deliverable(
+    contract_id: int,
+    payload: DeliverableCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> DeliverableRead:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    deliverable = ContractDeliverable(
+        contract_id=contract_id,
+        title=payload.title,
+        due_date=payload.due_date,
+        status=payload.status,
+        notes=payload.notes,
+    )
+    session.add(deliverable)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_deliverable",
+        entity_id=deliverable.id,
+        action="contract.deliverable_created",
+        metadata={"contract_id": contract_id},
+    )
+    await session.commit()
+    await session.refresh(deliverable)
+
+    return DeliverableRead.model_validate(deliverable)
+
+
+@router.patch("/deliverables/{deliverable_id}", response_model=DeliverableRead)
+async def update_deliverable(
+    deliverable_id: int,
+    payload: DeliverableUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> DeliverableRead:
+    result = await session.execute(
+        select(ContractDeliverable).where(ContractDeliverable.id == deliverable_id)
+    )
+    deliverable = result.scalar_one_or_none()
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Deliverable not found")
+
+    # Ensure ownership
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == deliverable.contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(deliverable, field, value)
+    deliverable.updated_at = datetime.utcnow()
+
+    await session.commit()
+    await session.refresh(deliverable)
+
+    return DeliverableRead.model_validate(deliverable)
+
+
+@router.delete("/deliverables/{deliverable_id}")
+async def delete_deliverable(
+    deliverable_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(ContractDeliverable).where(ContractDeliverable.id == deliverable_id)
+    )
+    deliverable = result.scalar_one_or_none()
+    if not deliverable:
+        raise HTTPException(status_code=404, detail="Deliverable not found")
+
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == deliverable.contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    await session.delete(deliverable)
+    await session.commit()
+
+    return {"message": "Deliverable deleted"}
+
+
+# -----------------------------------------------------------------------------
+# Tasks
+# -----------------------------------------------------------------------------
+
+@router.get("/{contract_id}/tasks", response_model=List[TaskRead])
+async def list_tasks(
+    contract_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[TaskRead]:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    result = await session.execute(
+        select(ContractTask).where(ContractTask.contract_id == contract_id)
+    )
+    tasks = result.scalars().all()
+    return [TaskRead.model_validate(t) for t in tasks]
+
+
+@router.post("/{contract_id}/tasks", response_model=TaskRead)
+async def create_task(
+    contract_id: int,
+    payload: TaskCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> TaskRead:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    task = ContractTask(
+        contract_id=contract_id,
+        title=payload.title,
+        due_date=payload.due_date,
+        notes=payload.notes,
+    )
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+
+    return TaskRead.model_validate(task)
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskRead)
+async def update_task(
+    task_id: int,
+    payload: TaskUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> TaskRead:
+    result = await session.execute(
+        select(ContractTask).where(ContractTask.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == task.contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(task, field, value)
+    task.updated_at = datetime.utcnow()
+
+    await session.commit()
+    await session.refresh(task)
+
+    return TaskRead.model_validate(task)
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(
+    task_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(ContractTask).where(ContractTask.id == task_id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == task.contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    await session.delete(task)
+    await session.commit()
+
+    return {"message": "Task deleted"}
+
+
+# -----------------------------------------------------------------------------
+# CPARS
+# -----------------------------------------------------------------------------
+
+@router.get("/{contract_id}/cpars", response_model=List[CPARSRead])
+async def list_cpars(
+    contract_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[CPARSRead]:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    result = await session.execute(
+        select(CPARSReview).where(CPARSReview.contract_id == contract_id)
+    )
+    reviews = result.scalars().all()
+    return [CPARSRead.model_validate(r) for r in reviews]
+
+
+@router.post("/{contract_id}/cpars", response_model=CPARSRead)
+async def create_cpars(
+    contract_id: int,
+    payload: CPARSCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CPARSRead:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    review = CPARSReview(
+        contract_id=contract_id,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        overall_rating=payload.overall_rating,
+        notes=payload.notes,
+    )
+    session.add(review)
+    await session.commit()
+    await session.refresh(review)
+
+    return CPARSRead.model_validate(review)

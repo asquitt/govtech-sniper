@@ -126,6 +126,46 @@ export interface TeamingPartnerLink {
 }
 
 // -----------------------------------------------------------------------------
+// Contract Types
+// -----------------------------------------------------------------------------
+
+export type ContractStatus = "active" | "at_risk" | "completed" | "on_hold";
+
+export type DeliverableStatus =
+  | "pending"
+  | "in_progress"
+  | "submitted"
+  | "approved"
+  | "overdue";
+
+export interface ContractAward {
+  id: number;
+  user_id: number;
+  rfp_id?: number | null;
+  contract_number: string;
+  title: string;
+  agency?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  value?: number | null;
+  status: ContractStatus;
+  summary?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractDeliverable {
+  id: number;
+  contract_id: number;
+  title: string;
+  due_date?: string | null;
+  status: DeliverableStatus;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------------
 // Capture Types
 // -----------------------------------------------------------------------------
 

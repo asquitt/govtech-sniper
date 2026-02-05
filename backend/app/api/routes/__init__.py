@@ -22,6 +22,7 @@ from app.api.routes.integrations import router as integrations_router
 from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.dash import router as dash_router
 from app.api.routes.capture import router as capture_router
+from app.api.routes.contracts import router as contracts_router
 
 __all__ = [
     "ingest_router",
@@ -42,4 +43,5 @@ __all__ = [
     "webhooks_router",
     "dash_router",
     "capture_router",
+    "contracts_router",
 ]

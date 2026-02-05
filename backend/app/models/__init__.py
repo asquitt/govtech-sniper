@@ -21,6 +21,14 @@ from app.models.capture import (
     TeamingPartner,
     RFPTeamingPartner,
 )
+from app.models.contract import (
+    ContractAward,
+    ContractStatus,
+    ContractDeliverable,
+    DeliverableStatus,
+    ContractTask,
+    CPARSReview,
+)
 
 __all__ = [
     "User",
@@ -48,4 +56,10 @@ __all__ = [
     "GateReview",
     "TeamingPartner",
     "RFPTeamingPartner",
+    "ContractAward",
+    "ContractStatus",
+    "ContractDeliverable",
+    "DeliverableStatus",
+    "ContractTask",
+    "CPARSReview",
 ]

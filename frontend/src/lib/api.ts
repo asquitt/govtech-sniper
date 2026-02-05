@@ -13,6 +13,10 @@ import type {
   GateReview,
   TeamingPartner,
   TeamingPartnerLink,
+  ContractAward,
+  ContractDeliverable,
+  ContractStatus,
+  DeliverableStatus,
   TaskResponse,
   TaskStatus,
   SAMSearchParams,
@@ -531,6 +535,54 @@ export const captureApi = {
     const { data } = await api.get("/capture/partners/links", {
       params: { rfp_id: rfpId },
     });
+    return data;
+  },
+};
+
+// =============================================================================
+// Contract Endpoints
+// =============================================================================
+
+export const contractApi = {
+  list: async (): Promise<{ contracts: ContractAward[]; total: number }> => {
+    const { data } = await api.get("/contracts");
+    return data;
+  },
+
+  create: async (payload: {
+    contract_number: string;
+    title: string;
+    agency?: string | null;
+    status?: ContractStatus;
+    value?: number | null;
+  }): Promise<ContractAward> => {
+    const { data } = await api.post("/contracts", payload);
+    return data;
+  },
+
+  update: async (
+    contractId: number,
+    payload: Partial<{
+      title: string;
+      agency: string | null;
+      status: ContractStatus;
+      value: number | null;
+    }>
+  ): Promise<ContractAward> => {
+    const { data } = await api.patch(`/contracts/${contractId}`, payload);
+    return data;
+  },
+
+  listDeliverables: async (contractId: number): Promise<ContractDeliverable[]> => {
+    const { data } = await api.get(`/contracts/${contractId}/deliverables`);
+    return data;
+  },
+
+  createDeliverable: async (
+    contractId: number,
+    payload: { title: string; status?: DeliverableStatus }
+  ): Promise<ContractDeliverable> => {
+    const { data } = await api.post(`/contracts/${contractId}/deliverables`, payload);
     return data;
   },
 };
