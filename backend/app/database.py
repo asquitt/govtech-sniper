@@ -59,6 +59,7 @@ async def init_db() -> None:
             integration,
             webhook,
             dash,
+            capture,
         )
         
         # Create all tables (dev only - use Alembic in production)

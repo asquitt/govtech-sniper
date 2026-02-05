@@ -21,6 +21,7 @@ from app.api.routes.versions import router as versions_router
 from app.api.routes.integrations import router as integrations_router
 from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.dash import router as dash_router
+from app.api.routes.capture import router as capture_router
 
 __all__ = [
     "ingest_router",
@@ -40,4 +41,5 @@ __all__ = [
     "integrations_router",
     "webhooks_router",
     "dash_router",
+    "capture_router",
 ]

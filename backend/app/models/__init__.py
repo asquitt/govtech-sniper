@@ -13,6 +13,14 @@ from app.models.audit import AuditEvent
 from app.models.integration import IntegrationConfig, IntegrationProvider
 from app.models.webhook import WebhookSubscription, WebhookDelivery, WebhookDeliveryStatus
 from app.models.dash import DashSession, DashMessage, DashRole
+from app.models.capture import (
+    CapturePlan,
+    CaptureStage,
+    BidDecision,
+    GateReview,
+    TeamingPartner,
+    RFPTeamingPartner,
+)
 
 __all__ = [
     "User",
@@ -34,4 +42,10 @@ __all__ = [
     "DashSession",
     "DashMessage",
     "DashRole",
+    "CapturePlan",
+    "CaptureStage",
+    "BidDecision",
+    "GateReview",
+    "TeamingPartner",
+    "RFPTeamingPartner",
 ]
