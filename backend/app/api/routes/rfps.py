@@ -25,6 +25,8 @@ from app.schemas.rfp import (
     SAMOpportunitySnapshotDiff,
 )
 from app.services.snapshot_service import build_snapshot_summary, diff_snapshot_summaries
+from app.services.audit_service import log_audit_event
+from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/rfps", tags=["RFPs"])
 
@@ -216,6 +218,27 @@ async def create_rfp(
         **rfp_data.model_dump(),
     )
     session.add(rfp)
+    await session.flush()
+    await log_audit_event(
+        session,
+        user_id=resolved_user_id,
+        entity_type="rfp",
+        entity_id=rfp.id,
+        action="rfp.created",
+        metadata={"title": rfp.title, "solicitation_number": rfp.solicitation_number},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=resolved_user_id,
+        event_type="rfp.created",
+        payload={
+            "rfp_id": rfp.id,
+            "title": rfp.title,
+            "solicitation_number": rfp.solicitation_number,
+            "agency": rfp.agency,
+            "status": rfp.status,
+        },
+    )
     await session.commit()
     await session.refresh(rfp)
     
@@ -247,6 +270,23 @@ async def update_rfp(
     from datetime import datetime
     rfp.updated_at = datetime.utcnow()
     
+    await log_audit_event(
+        session,
+        user_id=rfp.user_id,
+        entity_type="rfp",
+        entity_id=rfp.id,
+        action="rfp.updated",
+        metadata={"updated_fields": list(update_dict.keys())},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=rfp.user_id,
+        event_type="rfp.updated",
+        payload={
+            "rfp_id": rfp.id,
+            "updated_fields": list(update_dict.keys()),
+        },
+    )
     await session.commit()
     await session.refresh(rfp)
     
@@ -269,6 +309,24 @@ async def delete_rfp(
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
     
+    await log_audit_event(
+        session,
+        user_id=rfp.user_id,
+        entity_type="rfp",
+        entity_id=rfp.id,
+        action="rfp.deleted",
+        metadata={"title": rfp.title, "solicitation_number": rfp.solicitation_number},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=rfp.user_id,
+        event_type="rfp.deleted",
+        payload={
+            "rfp_id": rfp.id,
+            "title": rfp.title,
+            "solicitation_number": rfp.solicitation_number,
+        },
+    )
     await session.delete(rfp)
     await session.commit()
     

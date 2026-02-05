@@ -18,6 +18,9 @@ from app.api.routes.export import router as export_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.teams import router as teams_router
 from app.api.routes.versions import router as versions_router
+from app.api.routes.integrations import router as integrations_router
+from app.api.routes.webhooks import router as webhooks_router
+from app.api.routes.dash import router as dash_router
 
 __all__ = [
     "ingest_router",
@@ -34,5 +37,7 @@ __all__ = [
     "notifications_router",
     "teams_router",
     "versions_router",
+    "integrations_router",
+    "webhooks_router",
+    "dash_router",
 ]
-

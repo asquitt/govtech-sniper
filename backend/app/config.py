@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = Field(default=0.1)
     log_level: str = Field(default="INFO")
     enable_metrics: bool = Field(default=True)
+    webhook_delivery_enabled: bool = Field(default=False)
 
     @field_validator("sam_gov_api_key", "gemini_api_key", mode="before")
     @classmethod

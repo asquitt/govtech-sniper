@@ -38,6 +38,9 @@ from app.api.routes import (
     notifications_router,
     teams_router,
     versions_router,
+    integrations_router,
+    webhooks_router,
+    dash_router,
 )
 
 # Configure structured logging
@@ -225,6 +228,9 @@ app.include_router(analytics_router, prefix=api_prefix)
 app.include_router(notifications_router, prefix=api_prefix)
 app.include_router(teams_router, prefix=api_prefix)
 app.include_router(versions_router, prefix=api_prefix)
+app.include_router(integrations_router, prefix=api_prefix)
+app.include_router(webhooks_router, prefix=api_prefix)
+app.include_router(dash_router, prefix=api_prefix)
 
 
 # =============================================================================
@@ -281,4 +287,3 @@ if __name__ == "__main__":
         reload=settings.debug,
         log_level="debug" if settings.debug else "info",
     )
-

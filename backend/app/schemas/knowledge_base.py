@@ -7,7 +7,7 @@ Request/Response models for document uploads.
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.models.knowledge_base import DocumentType, ProcessingStatus
 
@@ -102,10 +102,22 @@ class DocumentListItem(BaseModel):
     id: int
     title: str
     document_type: DocumentType
+    description: Optional[str] = None
     original_filename: str
     processing_status: ProcessingStatus
+    file_size_bytes: int
     times_cited: int
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
+    @computed_field
+    @property
+    def is_ready(self) -> bool:
+        return self.processing_status == ProcessingStatus.READY
+
+
+class DocumentListResponse(BaseModel):
+    """Response for document list endpoints."""
+    documents: List[DocumentListItem]
+    total: int

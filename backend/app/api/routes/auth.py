@@ -25,6 +25,7 @@ from app.services.auth_service import (
     UserAuth,
 )
 from app.api.deps import get_current_user
+from app.services.audit_service import log_audit_event
 
 logger = structlog.get_logger(__name__)
 
@@ -141,6 +142,14 @@ async def register(
         preferred_states=[],
     )
     session.add(profile)
+    await log_audit_event(
+        session,
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action="user.registered",
+        metadata={"email": user.email},
+    )
 
     await session.commit()
     await session.refresh(user)
@@ -180,6 +189,15 @@ async def login(
         )
 
     logger.info("User logged in", user_id=user.id, email=user.email)
+    await log_audit_event(
+        session,
+        user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        action="user.login",
+        metadata={"email": user.email},
+    )
+    await session.commit()
 
     # Generate tokens
     return create_token_pair(user.id, user.email, user.tier.value)
