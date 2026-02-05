@@ -55,6 +55,14 @@ As of February 5, 2026.
 - Automation: AI summaries, predictions, and workflow agents.
 - Integrations: Word Assistant, SharePoint, Salesforce/CRM, Okta/SSO, webhooks.
 
+## Repo Parity Snapshot (as of February 5, 2026)
+- Capture pipeline, gate reviews, custom fields, and competitor comparisons shipped.
+- Market intelligence fields, award records, and budget intel records shipped.
+- Word add-in sessions, graphics requests, and proposal workspace updates shipped.
+- CPARS evidence mapping, deliverable risk flags, and status report exports shipped.
+- Dash runbooks for summary, compliance gaps, and competitive intel shipped.
+- Validation: backend `pytest -q`, frontend `npm run test:run` green on February 5, 2026.
+
 ## Sources
 - https://support.govdash.com/docs/from-gut-feelings-to-game-plans
 - https://support.govdash.com/docs/compliance-matrix-and-shreds
