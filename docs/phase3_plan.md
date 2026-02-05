@@ -18,5 +18,5 @@
   - CPARS prep UI.
 
 ## Status
-- In progress.
-- Added status report model, endpoints, and UI.
+- Phase 3 complete.
+- Added status report model, endpoints, UI, and CPARS evidence linking.

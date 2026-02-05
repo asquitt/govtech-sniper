@@ -19,8 +19,10 @@ from app.models.contract import (
     ContractDeliverable,
     ContractTask,
     CPARSReview,
+    CPARSEvidence,
     ContractStatusReport,
 )
+from app.models.knowledge_base import KnowledgeBaseDocument
 from app.schemas.contract import (
     ContractCreate,
     ContractUpdate,
@@ -34,6 +36,8 @@ from app.schemas.contract import (
     TaskRead,
     CPARSCreate,
     CPARSRead,
+    CPARSEvidenceCreate,
+    CPARSEvidenceRead,
     StatusReportCreate,
     StatusReportUpdate,
     StatusReportRead,
@@ -541,6 +545,186 @@ async def create_cpars(
     await session.refresh(review)
 
     return CPARSRead.model_validate(review)
+
+
+@router.get(
+    "/{contract_id}/cpars/{cpars_id}/evidence",
+    response_model=List[CPARSEvidenceRead],
+)
+async def list_cpars_evidence(
+    contract_id: int,
+    cpars_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[CPARSEvidenceRead]:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    review_result = await session.execute(
+        select(CPARSReview).where(
+            CPARSReview.id == cpars_id,
+            CPARSReview.contract_id == contract_id,
+        )
+    )
+    if not review_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="CPARS review not found")
+
+    result = await session.execute(
+        select(CPARSEvidence, KnowledgeBaseDocument)
+        .join(KnowledgeBaseDocument, KnowledgeBaseDocument.id == CPARSEvidence.document_id)
+        .where(CPARSEvidence.cpars_id == cpars_id)
+    )
+    rows = result.all()
+    response: List[CPARSEvidenceRead] = []
+    for evidence, document in rows:
+        response.append(
+            CPARSEvidenceRead(
+                id=evidence.id,
+                cpars_id=evidence.cpars_id,
+                document_id=evidence.document_id,
+                citation=evidence.citation,
+                notes=evidence.notes,
+                created_at=evidence.created_at,
+                document_title=document.title if document else None,
+                document_type=document.document_type if document else None,
+            )
+        )
+    return response
+
+
+@router.post(
+    "/{contract_id}/cpars/{cpars_id}/evidence",
+    response_model=CPARSEvidenceRead,
+)
+async def add_cpars_evidence(
+    contract_id: int,
+    cpars_id: int,
+    payload: CPARSEvidenceCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CPARSEvidenceRead:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    review_result = await session.execute(
+        select(CPARSReview).where(
+            CPARSReview.id == cpars_id,
+            CPARSReview.contract_id == contract_id,
+        )
+    )
+    review = review_result.scalar_one_or_none()
+    if not review:
+        raise HTTPException(status_code=404, detail="CPARS review not found")
+
+    doc_result = await session.execute(
+        select(KnowledgeBaseDocument).where(
+            KnowledgeBaseDocument.id == payload.document_id,
+            KnowledgeBaseDocument.user_id == current_user.id,
+        )
+    )
+    document = doc_result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    evidence = CPARSEvidence(
+        cpars_id=review.id,
+        document_id=payload.document_id,
+        citation=payload.citation,
+        notes=payload.notes,
+    )
+    session.add(evidence)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_cpars_evidence",
+        entity_id=evidence.id,
+        action="contract.cpars_evidence.added",
+        metadata={"contract_id": contract_id, "cpars_id": cpars_id},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=current_user.id,
+        event_type="contract.cpars_evidence.added",
+        payload={"contract_id": contract_id, "cpars_id": cpars_id, "evidence_id": evidence.id},
+    )
+
+    await session.commit()
+    await session.refresh(evidence)
+
+    return CPARSEvidenceRead(
+        id=evidence.id,
+        cpars_id=evidence.cpars_id,
+        document_id=evidence.document_id,
+        citation=evidence.citation,
+        notes=evidence.notes,
+        created_at=evidence.created_at,
+        document_title=document.title,
+        document_type=document.document_type,
+    )
+
+
+@router.delete("/{contract_id}/cpars/{cpars_id}/evidence/{evidence_id}")
+async def delete_cpars_evidence(
+    contract_id: int,
+    cpars_id: int,
+    evidence_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    review_result = await session.execute(
+        select(CPARSReview).where(
+            CPARSReview.id == cpars_id,
+            CPARSReview.contract_id == contract_id,
+        )
+    )
+    if not review_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="CPARS review not found")
+
+    evidence_result = await session.execute(
+        select(CPARSEvidence).where(
+            CPARSEvidence.id == evidence_id,
+            CPARSEvidence.cpars_id == cpars_id,
+        )
+    )
+    evidence = evidence_result.scalar_one_or_none()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence link not found")
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_cpars_evidence",
+        entity_id=evidence.id,
+        action="contract.cpars_evidence.deleted",
+        metadata={"contract_id": contract_id, "cpars_id": cpars_id},
+    )
+    await session.delete(evidence)
+    await session.commit()
+
+    return {"message": "Evidence deleted", "evidence_id": evidence_id}
 
 
 # -----------------------------------------------------------------------------

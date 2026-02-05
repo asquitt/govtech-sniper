@@ -104,6 +104,22 @@ class CPARSReview(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class CPARSEvidence(SQLModel, table=True):
+    """
+    Evidence links for CPARS preparation.
+    """
+    __tablename__ = "cpars_evidence_links"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    cpars_id: int = Field(foreign_key="cpars_reviews.id", index=True)
+    document_id: int = Field(foreign_key="knowledge_base_documents.id", index=True)
+
+    citation: Optional[str] = Field(default=None, max_length=500)
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class ContractStatusReport(SQLModel, table=True):
     """
     Monthly status report for a contract.

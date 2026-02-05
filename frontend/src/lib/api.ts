@@ -22,6 +22,7 @@ import type {
   DeliverableStatus,
   ContractTask,
   CPARSReview,
+  CPARSEvidence,
   ContractStatusReport,
   DashSession,
   DashMessage,
@@ -801,6 +802,38 @@ export const contractApi = {
   ): Promise<CPARSReview> => {
     const { data } = await api.post(`/contracts/${contractId}/cpars`, payload);
     return data;
+  },
+
+  listCPARSEvidence: async (
+    contractId: number,
+    cparsId: number
+  ): Promise<CPARSEvidence[]> => {
+    const { data } = await api.get(
+      `/contracts/${contractId}/cpars/${cparsId}/evidence`
+    );
+    return data;
+  },
+
+  addCPARSEvidence: async (
+    contractId: number,
+    cparsId: number,
+    payload: { document_id: number; citation?: string; notes?: string }
+  ): Promise<CPARSEvidence> => {
+    const { data } = await api.post(
+      `/contracts/${contractId}/cpars/${cparsId}/evidence`,
+      payload
+    );
+    return data;
+  },
+
+  deleteCPARSEvidence: async (
+    contractId: number,
+    cparsId: number,
+    evidenceId: number
+  ): Promise<void> => {
+    await api.delete(
+      `/contracts/${contractId}/cpars/${cparsId}/evidence/${evidenceId}`
+    );
   },
 
   listStatusReports: async (

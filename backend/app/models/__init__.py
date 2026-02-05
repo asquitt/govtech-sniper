@@ -34,6 +34,7 @@ from app.models.contract import (
     DeliverableStatus,
     ContractTask,
     CPARSReview,
+    CPARSEvidence,
     ContractStatusReport,
 )
 
@@ -72,5 +73,6 @@ __all__ = [
     "DeliverableStatus",
     "ContractTask",
     "CPARSReview",
+    "CPARSEvidence",
     "ContractStatusReport",
 ]

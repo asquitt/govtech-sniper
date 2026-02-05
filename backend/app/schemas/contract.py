@@ -129,6 +129,23 @@ class CPARSRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CPARSEvidenceCreate(BaseModel):
+    document_id: int
+    citation: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class CPARSEvidenceRead(BaseModel):
+    id: int
+    cpars_id: int
+    document_id: int
+    citation: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    document_title: Optional[str] = None
+    document_type: Optional[str] = None
+
+
 class StatusReportCreate(BaseModel):
     period_start: Optional[date] = None
     period_end: Optional[date] = None

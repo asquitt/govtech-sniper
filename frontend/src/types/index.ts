@@ -186,6 +186,17 @@ export interface CPARSReview {
   created_at: string;
 }
 
+export interface CPARSEvidence {
+  id: number;
+  cpars_id: number;
+  document_id: number;
+  citation?: string | null;
+  notes?: string | null;
+  created_at: string;
+  document_title?: string | null;
+  document_type?: string | null;
+}
+
 export interface ContractStatusReport {
   id: number;
   contract_id: number;

@@ -5,7 +5,8 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { contractApi } from "@/lib/api";
+import { contractApi, documentApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import type {
   ContractAward,
   ContractDeliverable,
@@ -13,6 +14,8 @@ import type {
   ContractTask,
   CPARSReview,
   ContractStatusReport,
+  CPARSEvidence,
+  KnowledgeBaseDocument,
 } from "@/types";
 
 const statusOptions: { value: ContractStatus; label: string }[] = [
@@ -28,6 +31,9 @@ export default function ContractsPage() {
   const [tasks, setTasks] = useState<ContractTask[]>([]);
   const [cpars, setCpars] = useState<CPARSReview[]>([]);
   const [statusReports, setStatusReports] = useState<ContractStatusReport[]>([]);
+  const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
+  const [selectedCparsId, setSelectedCparsId] = useState<number | null>(null);
+  const [cparsEvidence, setCparsEvidence] = useState<CPARSEvidence[]>([]);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [number, setNumber] = useState("");
@@ -37,6 +43,9 @@ export default function ContractsPage() {
   const [taskTitle, setTaskTitle] = useState("");
   const [cparsRating, setCparsRating] = useState("");
   const [cparsNotes, setCparsNotes] = useState("");
+  const [evidenceDocumentId, setEvidenceDocumentId] = useState<number | null>(null);
+  const [evidenceCitation, setEvidenceCitation] = useState("");
+  const [evidenceNotes, setEvidenceNotes] = useState("");
   const [reportSummary, setReportSummary] = useState("");
   const [reportRisks, setReportRisks] = useState("");
   const [reportNextSteps, setReportNextSteps] = useState("");
@@ -46,8 +55,12 @@ export default function ContractsPage() {
 
   const fetchContracts = useCallback(async () => {
     try {
-      const { contracts: list } = await contractApi.list();
+      const [{ contracts: list }, docs] = await Promise.all([
+        contractApi.list(),
+        documentApi.list({ ready_only: true }),
+      ]);
       setContracts(list);
+      setDocuments(docs);
       if (!selectedContractId && list.length > 0) {
         setSelectedContractId(list[0].id);
       }
@@ -71,6 +84,12 @@ export default function ContractsPage() {
         setTasks(taskList);
         const cparsList = await contractApi.listCPARS(selectedContractId);
         setCpars(cparsList);
+        if (cparsList.length === 0) {
+          setSelectedCparsId(null);
+          setCparsEvidence([]);
+        } else if (!selectedCparsId || !cparsList.some((item) => item.id === selectedCparsId)) {
+          setSelectedCparsId(cparsList[0].id);
+        }
         const reportList = await contractApi.listStatusReports(selectedContractId);
         setStatusReports(reportList);
       } catch (err) {
@@ -78,7 +97,23 @@ export default function ContractsPage() {
       }
     };
     fetchDeliverables();
-  }, [selectedContractId]);
+  }, [selectedContractId, selectedCparsId]);
+
+  useEffect(() => {
+    const fetchEvidence = async () => {
+      if (!selectedContractId || !selectedCparsId) return;
+      try {
+        const list = await contractApi.listCPARSEvidence(
+          selectedContractId,
+          selectedCparsId
+        );
+        setCparsEvidence(list);
+      } catch (err) {
+        console.error("Failed to load CPARS evidence", err);
+      }
+    };
+    fetchEvidence();
+  }, [selectedContractId, selectedCparsId]);
 
   const handleCreateContract = async () => {
     if (!title.trim() || !number.trim()) return;
@@ -130,7 +165,7 @@ export default function ContractsPage() {
   const handleCreateCPARS = async () => {
     if (!selectedContractId) return;
     try {
-      await contractApi.createCPARS(selectedContractId, {
+      const created = await contractApi.createCPARS(selectedContractId, {
         overall_rating: cparsRating.trim() || undefined,
         notes: cparsNotes.trim() || undefined,
       });
@@ -138,9 +173,51 @@ export default function ContractsPage() {
       setCparsNotes("");
       const list = await contractApi.listCPARS(selectedContractId);
       setCpars(list);
+      setSelectedCparsId(created.id);
     } catch (err) {
       console.error("Failed to create CPARS review", err);
       setError("Failed to create CPARS review.");
+    }
+  };
+
+  const handleAddEvidence = async () => {
+    if (!selectedContractId || !selectedCparsId || !evidenceDocumentId) return;
+    try {
+      await contractApi.addCPARSEvidence(selectedContractId, selectedCparsId, {
+        document_id: evidenceDocumentId,
+        citation: evidenceCitation.trim() || undefined,
+        notes: evidenceNotes.trim() || undefined,
+      });
+      setEvidenceDocumentId(null);
+      setEvidenceCitation("");
+      setEvidenceNotes("");
+      const list = await contractApi.listCPARSEvidence(
+        selectedContractId,
+        selectedCparsId
+      );
+      setCparsEvidence(list);
+    } catch (err) {
+      console.error("Failed to add CPARS evidence", err);
+      setError("Failed to add CPARS evidence.");
+    }
+  };
+
+  const handleDeleteEvidence = async (evidenceId: number) => {
+    if (!selectedContractId || !selectedCparsId) return;
+    try {
+      await contractApi.deleteCPARSEvidence(
+        selectedContractId,
+        selectedCparsId,
+        evidenceId
+      );
+      const list = await contractApi.listCPARSEvidence(
+        selectedContractId,
+        selectedCparsId
+      );
+      setCparsEvidence(list);
+    } catch (err) {
+      console.error("Failed to delete CPARS evidence", err);
+      setError("Failed to delete CPARS evidence.");
     }
   };
 
@@ -350,17 +427,101 @@ export default function ContractsPage() {
                       No CPARS reviews yet.
                     </p>
                   ) : (
-                    cpars.map((review) => (
-                      <div
-                        key={review.id}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                      >
-                        <span>{review.overall_rating || "Unrated"}</span>
-                        <Badge variant="outline">{review.created_at.slice(0, 10)}</Badge>
-                      </div>
-                    ))
+                    cpars.map((review) => {
+                      const isSelected = review.id === selectedCparsId;
+                      return (
+                        <div
+                          key={review.id}
+                          className={cn(
+                            "flex items-center justify-between rounded-md border px-3 py-2 text-sm cursor-pointer",
+                            isSelected
+                              ? "border-primary/50 bg-primary/10"
+                              : "border-border hover:border-primary/30"
+                          )}
+                          onClick={() => setSelectedCparsId(review.id)}
+                        >
+                          <span>{review.overall_rating || "Unrated"}</span>
+                          <Badge variant="outline">{review.created_at.slice(0, 10)}</Badge>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <p className="text-sm font-medium">CPARS Evidence</p>
+                {!selectedCparsId ? (
+                  <p className="text-sm text-muted-foreground">
+                    Select a CPARS review to link evidence.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <select
+                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                        value={evidenceDocumentId ?? ""}
+                        onChange={(e) =>
+                          setEvidenceDocumentId(
+                            e.target.value ? Number(e.target.value) : null
+                          )
+                        }
+                      >
+                        <option value="">Select document</option>
+                        {documents.map((doc) => (
+                          <option key={doc.id} value={doc.id}>
+                            {doc.title}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                        placeholder="Citation"
+                        value={evidenceCitation}
+                        onChange={(e) => setEvidenceCitation(e.target.value)}
+                      />
+                      <input
+                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                        placeholder="Notes"
+                        value={evidenceNotes}
+                        onChange={(e) => setEvidenceNotes(e.target.value)}
+                      />
+                    </div>
+                    <Button onClick={handleAddEvidence}>Add Evidence</Button>
+                    <div className="space-y-2">
+                      {cparsEvidence.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No evidence linked yet.
+                        </p>
+                      ) : (
+                        cparsEvidence.map((evidence) => (
+                          <div
+                            key={evidence.id}
+                            className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                          >
+                            <div>
+                              <p className="font-medium">
+                                {evidence.document_title || `Document ${evidence.document_id}`}
+                              </p>
+                              {evidence.citation && (
+                                <p className="text-xs text-muted-foreground">
+                                  {evidence.citation}
+                                </p>
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteEvidence(evidence.id)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="mt-6 space-y-3">

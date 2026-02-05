@@ -10,7 +10,12 @@ from httpx import AsyncClient
 
 class TestContracts:
     @pytest.mark.asyncio
-    async def test_contract_lifecycle(self, client: AsyncClient, auth_headers: dict):
+    async def test_contract_lifecycle(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_document,
+    ):
         # Create contract
         response = await client.post(
             "/api/v1/contracts",
@@ -69,6 +74,33 @@ class TestContracts:
             f"/api/v1/contracts/{contract['id']}/cpars",
             headers=auth_headers,
             json={"overall_rating": "Excellent", "notes": "On track"},
+        )
+        assert response.status_code == 200
+        review = response.json()
+
+        response = await client.post(
+            f"/api/v1/contracts/{contract['id']}/cpars/{review['id']}/evidence",
+            headers=auth_headers,
+            json={
+                "document_id": test_document.id,
+                "citation": "CPARS supporting evidence",
+                "notes": "Strong delivery record",
+            },
+        )
+        assert response.status_code == 200
+        evidence = response.json()
+        assert evidence["document_id"] == test_document.id
+
+        response = await client.get(
+            f"/api/v1/contracts/{contract['id']}/cpars/{review['id']}/evidence",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+        response = await client.delete(
+            f"/api/v1/contracts/{contract['id']}/cpars/{review['id']}/evidence/{evidence['id']}",
+            headers=auth_headers,
         )
         assert response.status_code == 200
 
