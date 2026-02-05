@@ -20,7 +20,7 @@
   - Submission tracker UI.
 
 ## Status
-- In progress.
+- Phase 2 complete.
 - Compliance matrix editor endpoints + UI editor added (tags, assignment, status).
 - Proposal workspace with section editing, evidence linking, and submission packages added.
 - Version history UI for proposals added.
