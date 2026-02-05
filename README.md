@@ -1,14 +1,14 @@
-# Orbitr
+# GovTech Sniper
 
 **AI-Powered Government Contract Proposal Automation**
 
-Orbitr is a B2B SaaS platform that automates the process of finding, analyzing, and writing proposals for US Government contracts. It leverages Google Gemini 1.5 Pro's massive context window to generate compliant proposal responses with strict citation tracking.
+GovTech Sniper is a B2B SaaS platform that automates the process of finding, analyzing, and writing proposals for US Government contracts. It leverages Google Gemini 1.5 Pro's massive context window to generate compliant proposal responses with strict citation tracking.
 
 ---
 
 ## Overview
 
-Government contractors spend weeks responding to a single RFP. Orbitr reduces that to hours. The platform ingests opportunities from SAM.gov, qualifies them against your company profile, extracts compliance requirements, and generates citation-backed proposal sections using your knowledge base.
+Government contractors spend weeks responding to a single RFP. GovTech Sniper reduces that to hours. The platform ingests opportunities from SAM.gov, qualifies them against your company profile, extracts compliance requirements, and generates citation-backed proposal sections using your knowledge base.
 
 ---
 
@@ -78,7 +78,7 @@ Government contractors spend weeks responding to a single RFP. Orbitr reduces th
 ## Project Structure
 
 ```
-orbitr/
+govtech-sniper/
 ├── docker-compose.yml
 ├── backend/
 │   ├── app/
@@ -233,7 +233,7 @@ Full interactive documentation available at `/docs` when the API is running.
 
 ### Context Caching
 
-Instead of traditional vector search, Orbitr uses Gemini's 1M token context window with the Context Caching API:
+Instead of traditional vector search, GovTech Sniper uses Gemini's 1M token context window with the Context Caching API:
 
 ```
 Knowledge Base Documents
