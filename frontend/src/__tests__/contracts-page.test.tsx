@@ -9,10 +9,12 @@ vi.mock("@/lib/api", () => ({
     listDeliverables: vi.fn(),
     listTasks: vi.fn(),
     listCPARS: vi.fn(),
+    listStatusReports: vi.fn(),
     create: vi.fn(),
     createDeliverable: vi.fn(),
     createTask: vi.fn(),
     createCPARS: vi.fn(),
+    createStatusReport: vi.fn(),
   },
 }));
 
@@ -24,6 +26,7 @@ describe("ContractsPage", () => {
     mockedContractApi.listDeliverables.mockResolvedValue([]);
     mockedContractApi.listTasks.mockResolvedValue([]);
     mockedContractApi.listCPARS.mockResolvedValue([]);
+    mockedContractApi.listStatusReports.mockResolvedValue([]);
   });
 
   it("renders contracts header", async () => {

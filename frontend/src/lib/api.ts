@@ -22,6 +22,7 @@ import type {
   DeliverableStatus,
   ContractTask,
   CPARSReview,
+  ContractStatusReport,
   DashSession,
   DashMessage,
   IntegrationConfig,
@@ -787,6 +788,46 @@ export const contractApi = {
   ): Promise<CPARSReview> => {
     const { data } = await api.post(`/contracts/${contractId}/cpars`, payload);
     return data;
+  },
+
+  listStatusReports: async (
+    contractId: number
+  ): Promise<ContractStatusReport[]> => {
+    const { data } = await api.get(`/contracts/${contractId}/status-reports`);
+    return data;
+  },
+
+  createStatusReport: async (
+    contractId: number,
+    payload: {
+      period_start?: string;
+      period_end?: string;
+      summary?: string;
+      accomplishments?: string;
+      risks?: string;
+      next_steps?: string;
+    }
+  ): Promise<ContractStatusReport> => {
+    const { data } = await api.post(
+      `/contracts/${contractId}/status-reports`,
+      payload
+    );
+    return data;
+  },
+
+  updateStatusReport: async (
+    reportId: number,
+    payload: Partial<ContractStatusReport>
+  ): Promise<ContractStatusReport> => {
+    const { data } = await api.patch(
+      `/contracts/status-reports/${reportId}`,
+      payload
+    );
+    return data;
+  },
+
+  deleteStatusReport: async (reportId: number): Promise<void> => {
+    await api.delete(`/contracts/status-reports/${reportId}`);
   },
 };
 

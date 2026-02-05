@@ -19,6 +19,7 @@ from app.models.contract import (
     ContractDeliverable,
     ContractTask,
     CPARSReview,
+    ContractStatusReport,
 )
 from app.schemas.contract import (
     ContractCreate,
@@ -33,6 +34,9 @@ from app.schemas.contract import (
     TaskRead,
     CPARSCreate,
     CPARSRead,
+    StatusReportCreate,
+    StatusReportUpdate,
+    StatusReportRead,
 )
 from app.services.audit_service import log_audit_event
 from app.services.webhook_service import dispatch_webhook_event
@@ -537,3 +541,159 @@ async def create_cpars(
     await session.refresh(review)
 
     return CPARSRead.model_validate(review)
+
+
+# -----------------------------------------------------------------------------
+# Status Reports
+# -----------------------------------------------------------------------------
+
+@router.get("/{contract_id}/status-reports", response_model=List[StatusReportRead])
+async def list_status_reports(
+    contract_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> List[StatusReportRead]:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    result = await session.execute(
+        select(ContractStatusReport).where(
+            ContractStatusReport.contract_id == contract_id
+        )
+    )
+    reports = result.scalars().all()
+    return [StatusReportRead.model_validate(r) for r in reports]
+
+
+@router.post("/{contract_id}/status-reports", response_model=StatusReportRead)
+async def create_status_report(
+    contract_id: int,
+    payload: StatusReportCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> StatusReportRead:
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    report = ContractStatusReport(
+        contract_id=contract_id,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        summary=payload.summary,
+        accomplishments=payload.accomplishments,
+        risks=payload.risks,
+        next_steps=payload.next_steps,
+    )
+    session.add(report)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_status_report",
+        entity_id=report.id,
+        action="contract.status_report_created",
+        metadata={"contract_id": contract_id},
+    )
+    await dispatch_webhook_event(
+        session,
+        user_id=current_user.id,
+        event_type="contract.status_report_created",
+        payload={"contract_id": contract_id, "report_id": report.id},
+    )
+
+    await session.commit()
+    await session.refresh(report)
+
+    return StatusReportRead.model_validate(report)
+
+
+@router.patch("/status-reports/{report_id}", response_model=StatusReportRead)
+async def update_status_report(
+    report_id: int,
+    payload: StatusReportUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> StatusReportRead:
+    report_result = await session.execute(
+        select(ContractStatusReport).where(ContractStatusReport.id == report_id)
+    )
+    report = report_result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Status report not found")
+
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == report.contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(report, field, value)
+    report.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_status_report",
+        entity_id=report.id,
+        action="contract.status_report_updated",
+        metadata={"updated_fields": list(update_data.keys())},
+    )
+
+    await session.commit()
+    await session.refresh(report)
+
+    return StatusReportRead.model_validate(report)
+
+
+@router.delete("/status-reports/{report_id}")
+async def delete_status_report(
+    report_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    report_result = await session.execute(
+        select(ContractStatusReport).where(ContractStatusReport.id == report_id)
+    )
+    report = report_result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Status report not found")
+
+    contract_result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == report.contract_id,
+            ContractAward.user_id == current_user.id,
+        )
+    )
+    if not contract_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Contract not found")
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_status_report",
+        entity_id=report.id,
+        action="contract.status_report_deleted",
+        metadata={"contract_id": report.contract_id},
+    )
+    await session.delete(report)
+    await session.commit()
+
+    return {"message": "Status report deleted"}

@@ -127,3 +127,36 @@ class CPARSRead(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class StatusReportCreate(BaseModel):
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    summary: Optional[str] = None
+    accomplishments: Optional[str] = None
+    risks: Optional[str] = None
+    next_steps: Optional[str] = None
+
+
+class StatusReportUpdate(BaseModel):
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    summary: Optional[str] = None
+    accomplishments: Optional[str] = None
+    risks: Optional[str] = None
+    next_steps: Optional[str] = None
+
+
+class StatusReportRead(BaseModel):
+    id: int
+    contract_id: int
+    period_start: Optional[date]
+    period_end: Optional[date]
+    summary: Optional[str]
+    accomplishments: Optional[str]
+    risks: Optional[str]
+    next_steps: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}

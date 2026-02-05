@@ -186,6 +186,19 @@ export interface CPARSReview {
   created_at: string;
 }
 
+export interface ContractStatusReport {
+  id: number;
+  contract_id: number;
+  period_start?: string | null;
+  period_end?: string | null;
+  summary?: string | null;
+  accomplishments?: string | null;
+  risks?: string | null;
+  next_steps?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // -----------------------------------------------------------------------------
 // Dash Types
 // -----------------------------------------------------------------------------

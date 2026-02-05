@@ -18,4 +18,5 @@
   - CPARS prep UI.
 
 ## Status
-- Planned.
+- In progress.
+- Added status report model, endpoints, and UI.

@@ -8,7 +8,7 @@ from datetime import datetime, date
 from typing import Optional
 from enum import Enum
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, SQLModel, Column, Text
 
 
 class ContractStatus(str, Enum):
@@ -102,3 +102,24 @@ class CPARSReview(SQLModel, table=True):
     notes: Optional[str] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ContractStatusReport(SQLModel, table=True):
+    """
+    Monthly status report for a contract.
+    """
+    __tablename__ = "contract_status_reports"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    contract_id: int = Field(foreign_key="contract_awards.id", index=True)
+
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+
+    summary: Optional[str] = Field(default=None, sa_column=Column(Text))
+    accomplishments: Optional[str] = Field(default=None, sa_column=Column(Text))
+    risks: Optional[str] = Field(default=None, sa_column=Column(Text))
+    next_steps: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
