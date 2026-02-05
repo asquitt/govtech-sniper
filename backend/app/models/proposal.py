@@ -14,6 +14,7 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.rfp import RFP
+    from app.models.knowledge_base import KnowledgeBaseDocument, DocumentChunk
 
 
 class ProposalStatus(str, Enum):
@@ -32,6 +33,14 @@ class SectionStatus(str, Enum):
     GENERATED = "generated"
     EDITING = "editing"
     APPROVED = "approved"
+
+
+class SubmissionPackageStatus(str, Enum):
+    """Status of a submission package."""
+    DRAFT = "draft"
+    IN_REVIEW = "in_review"
+    READY = "ready"
+    SUBMITTED = "submitted"
 
 
 # =============================================================================
@@ -112,6 +121,9 @@ class Proposal(ProposalBase, table=True):
     user: Optional["User"] = Relationship(back_populates="proposals")
     rfp: Optional["RFP"] = Relationship(back_populates="proposals")
     sections: List["ProposalSection"] = Relationship(back_populates="proposal")
+    submission_packages: List["SubmissionPackage"] = Relationship(
+        back_populates="proposal"
+    )
 
     def calculate_completion(self) -> float:
         """Calculate percentage of sections completed."""
@@ -165,6 +177,7 @@ class ProposalSection(ProposalSectionBase, table=True):
     
     # Relationship
     proposal: Optional[Proposal] = Relationship(back_populates="sections")
+    evidence_links: List["SectionEvidence"] = Relationship(back_populates="section")
 
     def get_generated_content(self) -> Optional[GeneratedContent]:
         """Parse stored JSON into GeneratedContent object."""
@@ -250,3 +263,60 @@ class SectionVersion(SQLModel, table=True):
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
+# =============================================================================
+# Submission Packages
+# =============================================================================
+
+class SubmissionPackage(SQLModel, table=True):
+    """
+    Submission package tracking for a proposal.
+
+    Tracks export artifacts, due dates, and checklist completion.
+    """
+    __tablename__ = "submission_packages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    proposal_id: int = Field(foreign_key="proposals.id", index=True)
+    owner_id: Optional[int] = Field(default=None, foreign_key="users.id")
+
+    title: str = Field(max_length=255)
+    status: SubmissionPackageStatus = Field(default=SubmissionPackageStatus.DRAFT)
+    due_date: Optional[datetime] = None
+    submitted_at: Optional[datetime] = None
+
+    checklist: List[dict] = Field(default=[], sa_column=Column(JSON))
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    docx_export_path: Optional[str] = Field(default=None, max_length=500)
+    pdf_export_path: Optional[str] = Field(default=None, max_length=500)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    proposal: Optional[Proposal] = Relationship(back_populates="submission_packages")
+
+
+# =============================================================================
+# Evidence Links (Proposal Sections <-> Knowledge Base)
+# =============================================================================
+
+class SectionEvidence(SQLModel, table=True):
+    """
+    Evidence links that connect proposal sections to knowledge base documents.
+    """
+    __tablename__ = "section_evidence"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    section_id: int = Field(foreign_key="proposal_sections.id", index=True)
+    document_id: int = Field(foreign_key="knowledge_base_documents.id", index=True)
+    chunk_id: Optional[int] = Field(default=None, foreign_key="document_chunks.id")
+
+    citation: Optional[str] = Field(default=None, sa_column=Column(Text))
+    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    section: Optional[ProposalSection] = Relationship(back_populates="evidence_links")
+    document: Optional["KnowledgeBaseDocument"] = Relationship(back_populates="evidence_links")
+    chunk: Optional["DocumentChunk"] = Relationship(back_populates="evidence_links")

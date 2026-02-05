@@ -20,4 +20,6 @@
   - Submission tracker UI.
 
 ## Status
-- Planned.
+- In progress.
+- Compliance matrix editor endpoints + UI editor added.
+- Proposal workspace with section editing, evidence linking, and submission packages added.

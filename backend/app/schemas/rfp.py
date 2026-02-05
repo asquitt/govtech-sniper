@@ -213,6 +213,31 @@ class ComplianceRequirementRead(BaseModel):
     notes: Optional[str]
 
 
+class ComplianceRequirementCreate(BaseModel):
+    """Create a new compliance requirement."""
+    id: Optional[str] = None
+    section: str
+    requirement_text: str
+    importance: ImportanceLevel
+    category: Optional[str] = None
+    page_reference: Optional[int] = None
+    keywords: List[str] = []
+    is_addressed: bool = False
+    notes: Optional[str] = None
+
+
+class ComplianceRequirementUpdate(BaseModel):
+    """Update fields on a compliance requirement."""
+    section: Optional[str] = None
+    requirement_text: Optional[str] = None
+    importance: Optional[ImportanceLevel] = None
+    category: Optional[str] = None
+    page_reference: Optional[int] = None
+    keywords: Optional[List[str]] = None
+    is_addressed: Optional[bool] = None
+    notes: Optional[str] = None
+
+
 class ComplianceMatrixRead(BaseModel):
     """Schema for reading compliance matrix."""
     id: int

@@ -3,8 +3,11 @@ import type {
   RFP,
   RFPListItem,
   ComplianceMatrix,
+  ComplianceRequirement,
   Proposal,
   ProposalSection,
+  SectionEvidence,
+  SubmissionPackage,
   KnowledgeBaseDocument,
   CapturePlan,
   CapturePlanListItem,
@@ -224,6 +227,42 @@ export const rfpApi = {
     return data;
   },
 
+  getSnapshots: async (
+    rfpId: number,
+    params?: { include_raw?: boolean; limit?: number }
+  ): Promise<
+    {
+      id: number;
+      notice_id: string;
+      solicitation_number?: string | null;
+      rfp_id: number;
+      user_id?: number | null;
+      fetched_at: string;
+      posted_date?: string | null;
+      response_deadline?: string | null;
+      raw_hash: string;
+      summary: Record<string, unknown>;
+      raw_payload?: Record<string, unknown> | null;
+    }[]
+  > => {
+    const { data } = await api.get(`/rfps/${rfpId}/snapshots`, { params });
+    return data;
+  },
+
+  getSnapshotDiff: async (
+    rfpId: number,
+    params?: { from_snapshot_id?: number; to_snapshot_id?: number }
+  ): Promise<{
+    from_snapshot_id: number;
+    to_snapshot_id: number;
+    changes: { field: string; before?: string | null; after?: string | null }[];
+    summary_from: Record<string, unknown>;
+    summary_to: Record<string, unknown>;
+  }> => {
+    const { data } = await api.get(`/rfps/${rfpId}/snapshots/diff`, { params });
+    return data;
+  },
+
   create: async (rfp: Partial<RFP>): Promise<RFP> => {
     const { data } = await api.post("/rfps", rfp);
     return data;
@@ -306,6 +345,36 @@ export const analysisApi = {
     return data;
   },
 
+  addRequirement: async (
+    rfpId: number,
+    payload: Partial<ComplianceRequirement>
+  ): Promise<ComplianceMatrix> => {
+    const { data } = await api.post(`/analyze/${rfpId}/matrix`, payload);
+    return data;
+  },
+
+  updateRequirement: async (
+    rfpId: number,
+    requirementId: string,
+    payload: Partial<ComplianceRequirement>
+  ): Promise<ComplianceMatrix> => {
+    const { data } = await api.patch(
+      `/analyze/${rfpId}/matrix/${requirementId}`,
+      payload
+    );
+    return data;
+  },
+
+  deleteRequirement: async (
+    rfpId: number,
+    requirementId: string
+  ): Promise<{ message: string; requirement_id: string }> => {
+    const { data } = await api.delete(
+      `/analyze/${rfpId}/matrix/${requirementId}`
+    );
+    return data;
+  },
+
   triggerKillerFilter: async (rfpId: number): Promise<TaskResponse> => {
     const { data } = await api.post(`/analyze/${rfpId}/filter`);
     return data;
@@ -332,6 +401,98 @@ export const draftApi = {
     title: string
   ): Promise<Proposal> => {
     const { data } = await api.post("/draft/proposals", { rfp_id: rfpId, title });
+    return data;
+  },
+
+  listSections: async (
+    proposalId: number,
+    params?: { status?: string }
+  ): Promise<ProposalSection[]> => {
+    const { data } = await api.get(`/draft/proposals/${proposalId}/sections`, {
+      params,
+    });
+    return data;
+  },
+
+  getSection: async (sectionId: number): Promise<ProposalSection> => {
+    const { data } = await api.get(`/draft/sections/${sectionId}`);
+    return data;
+  },
+
+  updateSection: async (
+    sectionId: number,
+    payload: Partial<ProposalSection>
+  ): Promise<ProposalSection> => {
+    const { data } = await api.patch(`/draft/sections/${sectionId}`, payload);
+    return data;
+  },
+
+  listSectionEvidence: async (sectionId: number): Promise<SectionEvidence[]> => {
+    const { data } = await api.get(`/draft/sections/${sectionId}/evidence`);
+    return data;
+  },
+
+  addSectionEvidence: async (
+    sectionId: number,
+    payload: { document_id: number; chunk_id?: number; citation?: string; notes?: string }
+  ): Promise<SectionEvidence> => {
+    const { data } = await api.post(`/draft/sections/${sectionId}/evidence`, payload);
+    return data;
+  },
+
+  deleteSectionEvidence: async (
+    sectionId: number,
+    evidenceId: number
+  ): Promise<{ message: string; evidence_id: number }> => {
+    const { data } = await api.delete(
+      `/draft/sections/${sectionId}/evidence/${evidenceId}`
+    );
+    return data;
+  },
+
+  listSubmissionPackages: async (
+    proposalId: number
+  ): Promise<SubmissionPackage[]> => {
+    const { data } = await api.get(
+      `/draft/proposals/${proposalId}/submission-packages`
+    );
+    return data;
+  },
+
+  createSubmissionPackage: async (
+    proposalId: number,
+    payload: {
+      title: string;
+      due_date?: string;
+      owner_id?: number;
+      checklist?: Record<string, unknown>[];
+      notes?: string;
+    }
+  ): Promise<SubmissionPackage> => {
+    const { data } = await api.post(
+      `/draft/proposals/${proposalId}/submission-packages`,
+      payload
+    );
+    return data;
+  },
+
+  updateSubmissionPackage: async (
+    packageId: number,
+    payload: Partial<SubmissionPackage>
+  ): Promise<SubmissionPackage> => {
+    const { data } = await api.patch(
+      `/draft/submission-packages/${packageId}`,
+      payload
+    );
+    return data;
+  },
+
+  submitSubmissionPackage: async (
+    packageId: number
+  ): Promise<SubmissionPackage> => {
+    const { data } = await api.post(
+      `/draft/submission-packages/${packageId}/submit`
+    );
     return data;
   },
 

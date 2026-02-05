@@ -360,6 +360,40 @@ export interface ProposalSection {
   generated_at?: string;
 }
 
+export interface SectionEvidence {
+  id: number;
+  section_id: number;
+  document_id: number;
+  chunk_id?: number | null;
+  citation?: string | null;
+  notes?: string | null;
+  created_at: string;
+  document_title?: string | null;
+  document_filename?: string | null;
+}
+
+export type SubmissionPackageStatus =
+  | "draft"
+  | "in_review"
+  | "ready"
+  | "submitted";
+
+export interface SubmissionPackage {
+  id: number;
+  proposal_id: number;
+  owner_id?: number | null;
+  title: string;
+  status: SubmissionPackageStatus;
+  due_date?: string | null;
+  submitted_at?: string | null;
+  checklist: Record<string, unknown>[];
+  notes?: string | null;
+  docx_export_path?: string | null;
+  pdf_export_path?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Proposal {
   id: number;
   user_id: number;

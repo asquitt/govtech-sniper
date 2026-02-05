@@ -9,7 +9,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.models.proposal import ProposalStatus, SectionStatus, Citation
+from app.models.proposal import ProposalStatus, SectionStatus, SubmissionPackageStatus, Citation
 
 
 # =============================================================================
@@ -120,8 +120,81 @@ class ProposalSectionRead(BaseModel):
 class ProposalSectionUpdate(BaseModel):
     """Schema for updating proposal section."""
     title: Optional[str] = Field(default=None, max_length=255)
+    section_number: Optional[str] = Field(default=None, max_length=50)
+    requirement_id: Optional[str] = None
+    requirement_text: Optional[str] = None
     final_content: Optional[str] = None
     status: Optional[SectionStatus] = None
+    display_order: Optional[int] = None
+
+
+# =============================================================================
+# Evidence Schemas
+# =============================================================================
+
+class SectionEvidenceCreate(BaseModel):
+    """Schema for linking evidence to a section."""
+    document_id: int
+    chunk_id: Optional[int] = None
+    citation: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class SectionEvidenceRead(BaseModel):
+    """Schema for reading evidence links."""
+    id: int
+    section_id: int
+    document_id: int
+    chunk_id: Optional[int]
+    citation: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    document_title: Optional[str] = None
+    document_filename: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+# =============================================================================
+# Submission Package Schemas
+# =============================================================================
+
+class SubmissionPackageCreate(BaseModel):
+    """Schema for creating a submission package."""
+    title: str = Field(max_length=255)
+    due_date: Optional[datetime] = None
+    owner_id: Optional[int] = None
+    checklist: Optional[List[dict]] = None
+    notes: Optional[str] = None
+
+
+class SubmissionPackageUpdate(BaseModel):
+    """Schema for updating a submission package."""
+    title: Optional[str] = Field(default=None, max_length=255)
+    due_date: Optional[datetime] = None
+    owner_id: Optional[int] = None
+    status: Optional[SubmissionPackageStatus] = None
+    checklist: Optional[List[dict]] = None
+    notes: Optional[str] = None
+
+
+class SubmissionPackageRead(BaseModel):
+    """Schema for reading a submission package."""
+    id: int
+    proposal_id: int
+    owner_id: Optional[int]
+    title: str
+    status: SubmissionPackageStatus
+    due_date: Optional[datetime]
+    submitted_at: Optional[datetime]
+    checklist: List[dict]
+    notes: Optional[str]
+    docx_export_path: Optional[str]
+    pdf_export_path: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 # =============================================================================
@@ -158,4 +231,3 @@ class DraftResult(BaseModel):
     tokens_used: int
     generation_time_seconds: float
     status: str = "completed"
-

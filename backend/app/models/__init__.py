@@ -6,7 +6,13 @@ Export all models for easy importing.
 
 from app.models.user import User, UserProfile
 from app.models.rfp import RFP, ComplianceRequirement, ComplianceMatrix
-from app.models.proposal import Proposal, ProposalSection
+from app.models.proposal import (
+    Proposal,
+    ProposalSection,
+    SubmissionPackage,
+    SubmissionPackageStatus,
+    SectionEvidence,
+)
 from app.models.knowledge_base import KnowledgeBaseDocument, DocumentChunk
 from app.models.opportunity_snapshot import SAMOpportunitySnapshot
 from app.models.audit import AuditEvent
@@ -38,6 +44,9 @@ __all__ = [
     "ComplianceMatrix",
     "Proposal",
     "ProposalSection",
+    "SubmissionPackage",
+    "SubmissionPackageStatus",
+    "SectionEvidence",
     "KnowledgeBaseDocument",
     "DocumentChunk",
     "SAMOpportunitySnapshot",

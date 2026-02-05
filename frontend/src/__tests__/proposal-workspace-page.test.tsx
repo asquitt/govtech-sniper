@@ -1,0 +1,79 @@
+import { render, screen } from "@testing-library/react";
+import { vi } from "vitest";
+import ProposalWorkspacePage from "@/app/(dashboard)/proposals/[proposalId]/page";
+import { draftApi, documentApi } from "@/lib/api";
+
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ proposalId: "1" }),
+}));
+
+vi.mock("@/lib/api", () => ({
+  draftApi: {
+    getProposal: vi.fn(),
+    listSections: vi.fn(),
+    listSubmissionPackages: vi.fn(),
+    listSectionEvidence: vi.fn(),
+    updateSection: vi.fn(),
+    addSectionEvidence: vi.fn(),
+    createSubmissionPackage: vi.fn(),
+  },
+  documentApi: {
+    list: vi.fn(),
+  },
+  exportApi: {
+    exportProposalDocx: vi.fn(),
+    exportProposalPdf: vi.fn(),
+  },
+}));
+
+const mockedDraftApi = vi.mocked(draftApi);
+const mockedDocumentApi = vi.mocked(documentApi);
+
+describe("ProposalWorkspacePage", () => {
+  beforeEach(() => {
+    mockedDraftApi.getProposal.mockResolvedValue({
+      id: 1,
+      user_id: 1,
+      rfp_id: 1,
+      title: "Test Proposal",
+      version: 1,
+      status: "draft",
+      executive_summary: null,
+      total_sections: 1,
+      completed_sections: 0,
+      compliance_score: null,
+      docx_export_path: null,
+      pdf_export_path: null,
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: "2025-01-02T00:00:00Z",
+      submitted_at: null,
+      completion_percentage: 0,
+    });
+    mockedDraftApi.listSections.mockResolvedValue([
+      {
+        id: 1,
+        proposal_id: 1,
+        title: "Section One",
+        section_number: "1.0",
+        status: "pending",
+        display_order: 0,
+        requirement_id: null,
+        requirement_text: null,
+        generated_content: null,
+        final_content: null,
+        word_count: null,
+        created_at: "2025-01-01T00:00:00Z",
+        updated_at: "2025-01-01T00:00:00Z",
+      },
+    ]);
+    mockedDraftApi.listSubmissionPackages.mockResolvedValue([]);
+    mockedDraftApi.listSectionEvidence.mockResolvedValue([]);
+    mockedDocumentApi.list.mockResolvedValue([]);
+  });
+
+  it("renders proposal workspace header", async () => {
+    render(<ProposalWorkspacePage />);
+    expect(await screen.findByText("Test Proposal")).toBeInTheDocument();
+    expect(await screen.findByText("Sections")).toBeInTheDocument();
+  });
+});

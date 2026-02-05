@@ -54,10 +54,10 @@ export default function ProposalsPage() {
                       {Math.round(proposal.completion_percentage)}% complete
                     </Badge>
                     <Link
-                      href={`/analysis/${proposal.rfp_id}`}
+                      href={`/proposals/${proposal.id}`}
                       className="text-sm text-primary"
                     >
-                      Open
+                      Open Workspace
                     </Link>
                   </div>
                 </CardContent>

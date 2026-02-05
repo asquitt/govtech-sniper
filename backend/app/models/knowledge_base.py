@@ -12,6 +12,7 @@ from sqlmodel import Field, Relationship, SQLModel, Column, JSON, Text
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.proposal import SectionEvidence
 
 
 class DocumentType(str, Enum):
@@ -94,6 +95,7 @@ class KnowledgeBaseDocument(KnowledgeBaseDocumentBase, table=True):
     # Relationship
     user: Optional["User"] = Relationship(back_populates="documents")
     chunks: List["DocumentChunk"] = Relationship(back_populates="document")
+    evidence_links: List["SectionEvidence"] = Relationship(back_populates="document")
 
 
 # =============================================================================
@@ -133,4 +135,4 @@ class DocumentChunk(SQLModel, table=True):
     
     # Relationship
     document: Optional[KnowledgeBaseDocument] = Relationship(back_populates="chunks")
-
+    evidence_links: List["SectionEvidence"] = Relationship(back_populates="chunk")

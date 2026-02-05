@@ -79,17 +79,23 @@ export function DraftPreview({
               {requirement.section} • {requirement.category || "General"}
             </p>
           </div>
-          {generatedContent && (
+          {(generatedContent || onEdit) && (
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={copyToClipboard}>
-                <Copy className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onRegenerate}>
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" onClick={onEdit}>
-                <Edit3 className="w-4 h-4" />
-              </Button>
+              {generatedContent && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={copyToClipboard}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={onRegenerate}>
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                </>
+              )}
+              {onEdit && (
+                <Button variant="ghost" size="sm" onClick={onEdit}>
+                  <Edit3 className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -195,4 +201,3 @@ export function DraftPreview({
     </div>
   );
 }
-
