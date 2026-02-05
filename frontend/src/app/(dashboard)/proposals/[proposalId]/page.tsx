@@ -241,6 +241,11 @@ export default function ProposalWorkspacePage() {
                 Back
               </Link>
             </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/proposals/${proposal.id}/versions`}>
+                Versions
+              </Link>
+            </Button>
             <Button variant="outline" onClick={() => handleExport("docx")}>
               Export DOCX
             </Button>
