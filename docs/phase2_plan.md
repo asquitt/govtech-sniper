@@ -21,5 +21,5 @@
 
 ## Status
 - In progress.
-- Compliance matrix editor endpoints + UI editor added.
+- Compliance matrix editor endpoints + UI editor added (tags, assignment, status).
 - Proposal workspace with section editing, evidence linking, and submission packages added.

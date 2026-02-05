@@ -7,9 +7,9 @@ Request/Response models for RFP endpoints.
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field, HttpUrl, computed_field
+from pydantic import BaseModel, Field, HttpUrl, computed_field, model_validator
 
-from app.models.rfp import ImportanceLevel, RFPStatus, RFPType
+from app.models.rfp import ImportanceLevel, RequirementStatus, RFPStatus, RFPType
 
 
 # =============================================================================
@@ -216,6 +216,20 @@ class ComplianceRequirementRead(BaseModel):
     keywords: List[str]
     is_addressed: bool
     notes: Optional[str]
+    status: RequirementStatus = RequirementStatus.OPEN
+    assigned_to: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_status(cls, values: dict) -> dict:
+        if isinstance(values, dict) and not values.get("status"):
+            values["status"] = (
+                RequirementStatus.ADDRESSED
+                if values.get("is_addressed")
+                else RequirementStatus.OPEN
+            )
+        return values
 
 
 class ComplianceRequirementCreate(BaseModel):
@@ -226,9 +240,12 @@ class ComplianceRequirementCreate(BaseModel):
     importance: ImportanceLevel
     category: Optional[str] = None
     page_reference: Optional[int] = None
-    keywords: List[str] = []
+    keywords: List[str] = Field(default_factory=list)
     is_addressed: bool = False
     notes: Optional[str] = None
+    status: RequirementStatus = RequirementStatus.OPEN
+    assigned_to: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
 
 
 class ComplianceRequirementUpdate(BaseModel):
@@ -241,6 +258,9 @@ class ComplianceRequirementUpdate(BaseModel):
     keywords: Optional[List[str]] = None
     is_addressed: Optional[bool] = None
     notes: Optional[str] = None
+    status: Optional[RequirementStatus] = None
+    assigned_to: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class ComplianceMatrixRead(BaseModel):

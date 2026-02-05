@@ -297,6 +297,12 @@ export type RequirementType =
   | "Quality"
   | "Security";
 
+export type RequirementStatus =
+  | "open"
+  | "in_progress"
+  | "blocked"
+  | "addressed";
+
 export interface ComplianceRequirement {
   id: string;
   section: string;
@@ -307,6 +313,9 @@ export interface ComplianceRequirement {
   keywords: string[];
   is_addressed: boolean;
   notes?: string;
+  status?: RequirementStatus;
+  assigned_to?: string;
+  tags?: string[];
 }
 
 export interface ComplianceMatrix {

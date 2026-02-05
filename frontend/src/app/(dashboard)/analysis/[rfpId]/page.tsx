@@ -53,6 +53,9 @@ export default function AnalysisPage() {
     is_addressed: false,
     page_reference: "",
     keywords: "",
+    status: "open",
+    assigned_to: "",
+    tags: "",
   });
   const [newRequirement, setNewRequirement] = useState({
     section: "",
@@ -62,6 +65,9 @@ export default function AnalysisPage() {
     notes: "",
     page_reference: "",
     keywords: "",
+    status: "open",
+    assigned_to: "",
+    tags: "",
   });
   const [snapshotDiff, setSnapshotDiff] = useState<{
     from_snapshot_id: number;
@@ -117,6 +123,9 @@ export default function AnalysisPage() {
       is_addressed: requirement.is_addressed,
       page_reference: requirement.page_reference ? String(requirement.page_reference) : "",
       keywords: requirement.keywords?.join(", ") || "",
+      status: requirement.status || (requirement.is_addressed ? "addressed" : "open"),
+      assigned_to: requirement.assigned_to || "",
+      tags: requirement.tags?.join(", ") || "",
     });
     // If already addressed, fetch the generated content
     if (requirement.is_addressed && requirement.generated_content) {
@@ -178,6 +187,7 @@ export default function AnalysisPage() {
     try {
       const updated = await analysisApi.updateRequirement(rfpId, selectedRequirement.id, {
         is_addressed: true,
+        status: "addressed",
       });
       setRequirements(updated.requirements);
     } catch (err) {
@@ -207,6 +217,11 @@ export default function AnalysisPage() {
           : undefined,
         keywords: editForm.keywords
           ? editForm.keywords.split(",").map((k) => k.trim()).filter(Boolean)
+          : [],
+        status: editForm.status,
+        assigned_to: editForm.assigned_to || null,
+        tags: editForm.tags
+          ? editForm.tags.split(",").map((k) => k.trim()).filter(Boolean)
           : [],
       };
       const updated = await analysisApi.updateRequirement(
@@ -260,6 +275,11 @@ export default function AnalysisPage() {
         keywords: newRequirement.keywords
           ? newRequirement.keywords.split(",").map((k) => k.trim()).filter(Boolean)
           : [],
+        status: newRequirement.status,
+        assigned_to: newRequirement.assigned_to || null,
+        tags: newRequirement.tags
+          ? newRequirement.tags.split(",").map((k) => k.trim()).filter(Boolean)
+          : [],
       };
       const updated = await analysisApi.addRequirement(rfpId, payload);
       setRequirements(updated.requirements);
@@ -272,6 +292,9 @@ export default function AnalysisPage() {
         notes: "",
         page_reference: "",
         keywords: "",
+        status: "open",
+        assigned_to: "",
+        tags: "",
       });
     } catch (err) {
       console.error("Failed to create requirement", err);
@@ -554,6 +577,31 @@ export default function AnalysisPage() {
                   />
                 </div>
                 <div>
+                  <label className="text-xs text-muted-foreground">Status</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, status: e.target.value }))
+                    }
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="addressed">Addressed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Assigned To</label>
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={editForm.assigned_to}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, assigned_to: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
                   <label className="text-xs text-muted-foreground">Page Reference</label>
                   <input
                     className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -590,6 +638,16 @@ export default function AnalysisPage() {
                   />
                 </div>
                 <div>
+                  <label className="text-xs text-muted-foreground">Tags (comma separated)</label>
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={editForm.tags}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({ ...prev, tags: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
                   <label className="text-xs text-muted-foreground">Notes</label>
                   <input
                     className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -607,6 +665,11 @@ export default function AnalysisPage() {
                       setEditForm((prev) => ({
                         ...prev,
                         is_addressed: e.target.checked,
+                        status: e.target.checked
+                          ? "addressed"
+                          : prev.status === "addressed"
+                          ? "open"
+                          : prev.status,
                       }))
                     }
                   />
@@ -684,6 +747,31 @@ export default function AnalysisPage() {
                   />
                 </div>
                 <div>
+                  <label className="text-xs text-muted-foreground">Status</label>
+                  <select
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={newRequirement.status}
+                    onChange={(e) =>
+                      setNewRequirement((prev) => ({ ...prev, status: e.target.value }))
+                    }
+                  >
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="addressed">Addressed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Assigned To</label>
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={newRequirement.assigned_to}
+                    onChange={(e) =>
+                      setNewRequirement((prev) => ({ ...prev, assigned_to: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
                   <label className="text-xs text-muted-foreground">Page Reference</label>
                   <input
                     className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
@@ -716,6 +804,16 @@ export default function AnalysisPage() {
                     value={newRequirement.keywords}
                     onChange={(e) =>
                       setNewRequirement((prev) => ({ ...prev, keywords: e.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Tags (comma separated)</label>
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={newRequirement.tags}
+                    onChange={(e) =>
+                      setNewRequirement((prev) => ({ ...prev, tags: e.target.value }))
                     }
                   />
                 </div>

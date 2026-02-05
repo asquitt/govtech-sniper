@@ -32,6 +32,9 @@ async def test_compliance_matrix_editing(
                 "keywords": ["approach"],
                 "is_addressed": False,
                 "notes": None,
+                "status": "open",
+                "assigned_to": "Capture Lead",
+                "tags": ["technical"],
             }
         ],
         total_requirements=1,
@@ -52,6 +55,9 @@ async def test_compliance_matrix_editing(
             "page_reference": 7,
             "keywords": ["past", "performance"],
             "is_addressed": False,
+            "status": "in_progress",
+            "assigned_to": "Proposal Lead",
+            "tags": ["past-performance"],
         },
     )
     assert response.status_code == 200
@@ -61,11 +67,21 @@ async def test_compliance_matrix_editing(
     # Update requirement
     response = await client.patch(
         f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001",
-        json={"notes": "Need SME input", "is_addressed": True},
+        json={
+            "notes": "Need SME input",
+            "is_addressed": True,
+            "status": "addressed",
+            "assigned_to": "SME Team",
+            "tags": ["reviewed"],
+        },
     )
     assert response.status_code == 200
     updated = response.json()
     assert updated["addressed_count"] == 1
+    updated_req = next(req for req in updated["requirements"] if req["id"] == "REQ-001")
+    assert updated_req["status"] == "addressed"
+    assert updated_req["assigned_to"] == "SME Team"
+    assert "reviewed" in updated_req["tags"]
 
     # Delete requirement
     response = await client.delete(

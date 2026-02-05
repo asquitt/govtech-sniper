@@ -45,6 +45,14 @@ class ImportanceLevel(str, Enum):
     INFORMATIONAL = "informational"
 
 
+class RequirementStatus(str, Enum):
+    """Status for compliance requirement tracking."""
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    BLOCKED = "blocked"
+    ADDRESSED = "addressed"
+
+
 # =============================================================================
 # Compliance Requirement (Pydantic model for JSON storage)
 # =============================================================================
@@ -63,6 +71,9 @@ class ComplianceRequirement(BaseModel):
     keywords: List[str] = []         # Key terms for matching
     is_addressed: bool = False       # Has user addressed this?
     notes: Optional[str] = None      # User annotations
+    status: RequirementStatus = RequirementStatus.OPEN
+    assigned_to: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -180,4 +191,3 @@ class ComplianceMatrix(SQLModel, table=True):
         self.total_requirements = len(self.requirements)
         if requirement.importance == ImportanceLevel.MANDATORY:
             self.mandatory_count += 1
-

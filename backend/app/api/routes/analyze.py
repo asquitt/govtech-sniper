@@ -9,6 +9,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 
 from app.database import get_session
@@ -198,6 +199,18 @@ def _generate_requirement_id(existing: list[dict]) -> str:
         index += 1
 
 
+def _normalize_requirement_status(data: dict) -> dict:
+    if data.get("is_addressed"):
+        data["status"] = "addressed"
+    elif data.get("status") == "addressed":
+        data["is_addressed"] = True
+    elif "is_addressed" in data and not data["is_addressed"] and data.get("status") == "addressed":
+        data["status"] = "open"
+    if data.get("status") is None:
+        data.pop("status", None)
+    return data
+
+
 @router.post("/{rfp_id}/matrix", response_model=ComplianceMatrixRead)
 async def add_compliance_requirement(
     rfp_id: int,
@@ -218,6 +231,7 @@ async def add_compliance_requirement(
         )
 
     req_dict = requirement.model_dump()
+    req_dict = _normalize_requirement_status(req_dict)
     if not req_dict.get("id"):
         req_dict["id"] = _generate_requirement_id(matrix.requirements)
     else:
@@ -229,6 +243,7 @@ async def add_compliance_requirement(
             )
 
     matrix.requirements.append(req_dict)
+    flag_modified(matrix, "requirements")
     _recalculate_matrix_counts(matrix)
     matrix.updated_at = datetime.utcnow()
 
@@ -285,12 +300,15 @@ async def update_compliance_requirement(
         )
 
     update_data = update.model_dump(exclude_unset=True)
+    update_data = _normalize_requirement_status(update_data)
     found = False
     for req in matrix.requirements:
         if req.get("id") == requirement_id:
             req.update(update_data)
             found = True
             break
+
+    flag_modified(matrix, "requirements")
 
     if not found:
         raise HTTPException(status_code=404, detail="Requirement not found")
@@ -353,6 +371,7 @@ async def delete_compliance_requirement(
     matrix.requirements = [
         req for req in matrix.requirements if req.get("id") != requirement_id
     ]
+    flag_modified(matrix, "requirements")
 
     if len(matrix.requirements) == original_len:
         raise HTTPException(status_code=404, detail="Requirement not found")
