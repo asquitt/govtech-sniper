@@ -49,6 +49,11 @@ const navItems: NavItem[] = [
     icon: FolderOpen,
   },
   {
+    title: "Dash",
+    href: "/dash",
+    icon: Sparkles,
+  },
+  {
     title: "Capture",
     href: "/capture",
     icon: Target,
