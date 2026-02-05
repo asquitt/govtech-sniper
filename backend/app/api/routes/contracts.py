@@ -239,6 +239,12 @@ async def create_deliverable(
         action="contract.deliverable_created",
         metadata={"contract_id": contract_id},
     )
+    await dispatch_webhook_event(
+        session,
+        user_id=current_user.id,
+        event_type="contract.deliverable_created",
+        payload={"contract_id": contract_id, "deliverable_id": deliverable.id},
+    )
     await session.commit()
     await session.refresh(deliverable)
 
@@ -274,6 +280,14 @@ async def update_deliverable(
         setattr(deliverable, field, value)
     deliverable.updated_at = datetime.utcnow()
 
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_deliverable",
+        entity_id=deliverable.id,
+        action="contract.deliverable_updated",
+        metadata={"updated_fields": list(update_data.keys())},
+    )
     await session.commit()
     await session.refresh(deliverable)
 
@@ -302,6 +316,14 @@ async def delete_deliverable(
     if not contract_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Contract not found")
 
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_deliverable",
+        entity_id=deliverable.id,
+        action="contract.deliverable_deleted",
+        metadata={"contract_id": deliverable.contract_id},
+    )
     await session.delete(deliverable)
     await session.commit()
 
@@ -357,6 +379,16 @@ async def create_task(
         notes=payload.notes,
     )
     session.add(task)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_task",
+        entity_id=task.id,
+        action="contract.task_created",
+        metadata={"contract_id": contract_id},
+    )
     await session.commit()
     await session.refresh(task)
 
@@ -391,6 +423,14 @@ async def update_task(
         setattr(task, field, value)
     task.updated_at = datetime.utcnow()
 
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_task",
+        entity_id=task.id,
+        action="contract.task_updated",
+        metadata={"updated_fields": list(update_data.keys())},
+    )
     await session.commit()
     await session.refresh(task)
 
@@ -419,6 +459,14 @@ async def delete_task(
     if not contract_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Contract not found")
 
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_task",
+        entity_id=task.id,
+        action="contract.task_deleted",
+        metadata={"contract_id": task.contract_id},
+    )
     await session.delete(task)
     await session.commit()
 
@@ -475,6 +523,16 @@ async def create_cpars(
         notes=payload.notes,
     )
     session.add(review)
+    await session.flush()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="contract_cpars",
+        entity_id=review.id,
+        action="contract.cpars_created",
+        metadata={"contract_id": contract_id},
+    )
     await session.commit()
     await session.refresh(review)
 

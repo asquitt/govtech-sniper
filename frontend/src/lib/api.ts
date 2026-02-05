@@ -17,6 +17,8 @@ import type {
   ContractDeliverable,
   ContractStatus,
   DeliverableStatus,
+  ContractTask,
+  CPARSReview,
   DashSession,
   DashMessage,
   TaskResponse,
@@ -585,6 +587,32 @@ export const contractApi = {
     payload: { title: string; status?: DeliverableStatus }
   ): Promise<ContractDeliverable> => {
     const { data } = await api.post(`/contracts/${contractId}/deliverables`, payload);
+    return data;
+  },
+
+  listTasks: async (contractId: number): Promise<ContractTask[]> => {
+    const { data } = await api.get(`/contracts/${contractId}/tasks`);
+    return data;
+  },
+
+  createTask: async (
+    contractId: number,
+    payload: { title: string }
+  ): Promise<ContractTask> => {
+    const { data } = await api.post(`/contracts/${contractId}/tasks`, payload);
+    return data;
+  },
+
+  listCPARS: async (contractId: number): Promise<CPARSReview[]> => {
+    const { data } = await api.get(`/contracts/${contractId}/cpars`);
+    return data;
+  },
+
+  createCPARS: async (
+    contractId: number,
+    payload: { overall_rating?: string; notes?: string }
+  ): Promise<CPARSReview> => {
+    const { data } = await api.post(`/contracts/${contractId}/cpars`, payload);
     return data;
   },
 };

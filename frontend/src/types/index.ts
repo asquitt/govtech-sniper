@@ -165,6 +165,27 @@ export interface ContractDeliverable {
   updated_at: string;
 }
 
+export interface ContractTask {
+  id: number;
+  contract_id: number;
+  title: string;
+  due_date?: string | null;
+  is_complete: boolean;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CPARSReview {
+  id: number;
+  contract_id: number;
+  period_start?: string | null;
+  period_end?: string | null;
+  overall_rating?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
 // -----------------------------------------------------------------------------
 // Dash Types
 // -----------------------------------------------------------------------------

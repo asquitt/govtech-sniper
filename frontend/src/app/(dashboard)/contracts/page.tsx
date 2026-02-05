@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { contractApi } from "@/lib/api";
-import type { ContractAward, ContractDeliverable, ContractStatus } from "@/types";
+import type {
+  ContractAward,
+  ContractDeliverable,
+  ContractStatus,
+  ContractTask,
+  CPARSReview,
+} from "@/types";
 
 const statusOptions: { value: ContractStatus; label: string }[] = [
   { value: "active", label: "Active" },
@@ -18,12 +24,17 @@ const statusOptions: { value: ContractStatus; label: string }[] = [
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<ContractAward[]>([]);
   const [deliverables, setDeliverables] = useState<ContractDeliverable[]>([]);
+  const [tasks, setTasks] = useState<ContractTask[]>([]);
+  const [cpars, setCpars] = useState<CPARSReview[]>([]);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [number, setNumber] = useState("");
   const [agency, setAgency] = useState("");
   const [status, setStatus] = useState<ContractStatus>("active");
   const [deliverableTitle, setDeliverableTitle] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [cparsRating, setCparsRating] = useState("");
+  const [cparsNotes, setCparsNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const fetchContracts = useCallback(async () => {
@@ -49,6 +60,10 @@ export default function ContractsPage() {
       try {
         const list = await contractApi.listDeliverables(selectedContractId);
         setDeliverables(list);
+        const taskList = await contractApi.listTasks(selectedContractId);
+        setTasks(taskList);
+        const cparsList = await contractApi.listCPARS(selectedContractId);
+        setCpars(cparsList);
       } catch (err) {
         console.error("Failed to load deliverables", err);
       }
@@ -87,6 +102,36 @@ export default function ContractsPage() {
     } catch (err) {
       console.error("Failed to create deliverable", err);
       setError("Failed to create deliverable.");
+    }
+  };
+
+  const handleCreateTask = async () => {
+    if (!selectedContractId || !taskTitle.trim()) return;
+    try {
+      await contractApi.createTask(selectedContractId, { title: taskTitle.trim() });
+      setTaskTitle("");
+      const list = await contractApi.listTasks(selectedContractId);
+      setTasks(list);
+    } catch (err) {
+      console.error("Failed to create task", err);
+      setError("Failed to create task.");
+    }
+  };
+
+  const handleCreateCPARS = async () => {
+    if (!selectedContractId) return;
+    try {
+      await contractApi.createCPARS(selectedContractId, {
+        overall_rating: cparsRating.trim() || undefined,
+        notes: cparsNotes.trim() || undefined,
+      });
+      setCparsRating("");
+      setCparsNotes("");
+      const list = await contractApi.listCPARS(selectedContractId);
+      setCpars(list);
+    } catch (err) {
+      console.error("Failed to create CPARS review", err);
+      setError("Failed to create CPARS review.");
     }
   };
 
@@ -216,6 +261,74 @@ export default function ContractsPage() {
                     </div>
                   ))
                 )}
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Tasks</p>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Task title"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                  />
+                  <Button onClick={handleCreateTask}>Add Task</Button>
+                </div>
+                <div className="space-y-2">
+                  {tasks.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No tasks yet.</p>
+                  ) : (
+                    tasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <span>{task.title}</span>
+                        <Badge variant="outline">
+                          {task.is_complete ? "Complete" : "Open"}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <p className="text-sm font-medium">CPARS Reviews</p>
+                <div className="flex gap-2">
+                  <input
+                    className="w-40 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Rating"
+                    value={cparsRating}
+                    onChange={(e) => setCparsRating(e.target.value)}
+                  />
+                  <input
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Notes"
+                    value={cparsNotes}
+                    onChange={(e) => setCparsNotes(e.target.value)}
+                  />
+                  <Button onClick={handleCreateCPARS}>Add Review</Button>
+                </div>
+                <div className="space-y-2">
+                  {cpars.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No CPARS reviews yet.
+                    </p>
+                  ) : (
+                    cpars.map((review) => (
+                      <div
+                        key={review.id}
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <span>{review.overall_rating || "Unrated"}</span>
+                        <Badge variant="outline">{review.created_at.slice(0, 10)}</Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

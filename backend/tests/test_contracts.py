@@ -55,3 +55,19 @@ class TestContracts:
         )
         assert response.status_code == 200
         assert len(response.json()) == 1
+
+        # Create task
+        response = await client.post(
+            f"/api/v1/contracts/{contract['id']}/tasks",
+            headers=auth_headers,
+            json={\"title\": \"Kickoff meeting\"},
+        )
+        assert response.status_code == 200
+
+        # Create CPARS review
+        response = await client.post(
+            f"/api/v1/contracts/{contract['id']}/cpars",
+            headers=auth_headers,
+            json={\"overall_rating\": \"Excellent\", \"notes\": \"On track\"},
+        )
+        assert response.status_code == 200
