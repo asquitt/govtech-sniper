@@ -10,4 +10,5 @@
 4. Tests for tool invocation and mock responses.
 
 ## Status
-- Planned.
+- In progress.
+- Added tool dispatch in Dash service, context selection, and citation rendering.

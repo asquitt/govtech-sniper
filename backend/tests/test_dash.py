@@ -58,5 +58,7 @@ class TestDash:
         )
         assert response.status_code == 200
         data = response.json()
-        assert "What is the deadline?" in data["answer"]
+        assert test_rfp.title in data["answer"]
+        assert "Deadline" in data["answer"]
         assert isinstance(data["citations"], list)
+        assert any(citation.get("type") == "document" for citation in data["citations"])
