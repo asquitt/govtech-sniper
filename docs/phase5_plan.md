@@ -10,4 +10,5 @@
 4. Advanced observability and audit reports.
 
 ## Status
-- Planned.
+- In progress.
+- Added team role management endpoints and settings UI.

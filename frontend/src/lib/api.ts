@@ -1226,6 +1226,17 @@ export const teamApi = {
     await api.delete(`/teams/${teamId}/members/${userId}`);
   },
 
+  updateMemberRole: async (
+    teamId: number,
+    userId: number,
+    role: TeamRole
+  ): Promise<{ message: string; user_id: number; role: TeamRole }> => {
+    const { data } = await api.patch(`/teams/${teamId}/members/${userId}`, {
+      role,
+    });
+    return data;
+  },
+
   // Comments
   getComments: async (
     proposalId: number,

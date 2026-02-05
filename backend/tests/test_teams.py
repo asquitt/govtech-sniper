@@ -253,6 +253,47 @@ class TestTeamMemberManagement:
         assert "removed" in response.json()["message"]
 
     @pytest.mark.asyncio
+    async def test_update_member_role(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+    ):
+        from app.services.auth_service import hash_password
+
+        member_user = User(
+            email="rolemember@example.com",
+            hashed_password=hash_password("TestPass123!"),
+            full_name="Role Member",
+            tier="free",
+            is_active=True,
+        )
+        db_session.add(member_user)
+        await db_session.commit()
+        await db_session.refresh(member_user)
+
+        team_response = await client.post(
+            "/api/v1/teams/",
+            headers=auth_headers,
+            json={"name": "Role Update Team"},
+        )
+        team_id = team_response.json()["id"]
+
+        await client.post(
+            f"/api/v1/teams/{team_id}/invite",
+            headers=auth_headers,
+            json={"email": "rolemember@example.com", "role": "member"},
+        )
+
+        response = await client.patch(
+            f"/api/v1/teams/{team_id}/members/{member_user.id}",
+            headers=auth_headers,
+            json={"role": "admin"},
+        )
+        assert response.status_code == 200
+        assert response.json()["role"] == "admin"
+
+    @pytest.mark.asyncio
     async def test_cannot_remove_owner(
         self,
         client: AsyncClient,
