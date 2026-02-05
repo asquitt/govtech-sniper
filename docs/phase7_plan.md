@@ -8,17 +8,18 @@
    - Saved searches and alerting for opportunities (implemented).
    - SLED tagging + jurisdiction data (implemented fields).
    - Market intel fields: contract vehicles, incumbents, buyer contacts, budget notes (implemented fields).
-   - Award and budget intelligence records (planned).
+   - Award intelligence records + competitive intel summaries (implemented).
+   - Budget intelligence records (planned).
 
 2. Capture & Pipeline
-   - Custom fields per pipeline stage (planned).
-   - Kanban-style capture pipeline view (planned).
+   - Custom fields per pipeline stage (implemented).
+   - Kanban-style capture pipeline view (implemented).
    - Bid match score explanation + competitor comparisons (planned).
 
 3. Proposal & Writing
-   - Word add-in workflow (draft sync, redlines, approvals) (planned).
+   - Word add-in workflow (draft sync + session history) (implemented).
    - Annotated outlines + compliance gap highlights (existing/expand).
-   - Graphics request workflow + asset library (planned).
+   - Graphics request workflow + asset tracking (implemented).
 
 4. Contract & Post-Award
    - Expanded CPARS evidence mapping + deliverable risk flags (planned).
@@ -33,3 +34,4 @@
 - Saved searches + market intelligence fields shipped.
 - Award intelligence and contact enrichment shipped.
 - Capture custom fields + Kanban pipeline shipped.
+- Word add-in sessions + graphics requests shipped.

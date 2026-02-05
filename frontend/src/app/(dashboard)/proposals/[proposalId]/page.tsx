@@ -11,13 +11,17 @@ import {
   Link2,
   Package,
   ArrowLeft,
+  FileText,
+  RefreshCw,
+  Palette,
+  Trash2,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { draftApi, documentApi, exportApi } from "@/lib/api";
+import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import type {
   Proposal,
@@ -25,6 +29,9 @@ import type {
   SectionEvidence,
   SubmissionPackage,
   KnowledgeBaseDocument,
+  WordAddinSession,
+  WordAddinEvent,
+  ProposalGraphicRequest,
 } from "@/types";
 
 export default function ProposalWorkspacePage() {
@@ -40,6 +47,15 @@ export default function ProposalWorkspacePage() {
   const [submissionPackages, setSubmissionPackages] = useState<SubmissionPackage[]>([]);
   const [newPackageTitle, setNewPackageTitle] = useState("");
   const [newPackageDueDate, setNewPackageDueDate] = useState("");
+  const [wordSessions, setWordSessions] = useState<WordAddinSession[]>([]);
+  const [wordEvents, setWordEvents] = useState<Record<number, WordAddinEvent[]>>({});
+  const [wordDocName, setWordDocName] = useState("");
+  const [isSyncingWord, setIsSyncingWord] = useState(false);
+  const [graphicsRequests, setGraphicsRequests] = useState<ProposalGraphicRequest[]>([]);
+  const [graphicsTitle, setGraphicsTitle] = useState("");
+  const [graphicsDescription, setGraphicsDescription] = useState("");
+  const [graphicsSectionId, setGraphicsSectionId] = useState<number | null>(null);
+  const [graphicsDueDate, setGraphicsDueDate] = useState("");
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
   const [citationText, setCitationText] = useState("");
   const [notesText, setNotesText] = useState("");
@@ -56,17 +72,21 @@ export default function ProposalWorkspacePage() {
     try {
       setIsLoading(true);
       setError(null);
-      const [proposalData, sectionData, packageData, docs] = await Promise.all([
+      const [proposalData, sectionData, packageData, docs, sessions, graphics] = await Promise.all([
         draftApi.getProposal(proposalId),
         draftApi.listSections(proposalId),
         draftApi.listSubmissionPackages(proposalId),
         documentApi.list({ ready_only: true }),
+        wordAddinApi.listSessions({ proposal_id: proposalId }),
+        graphicsApi.listRequests({ proposal_id: proposalId }),
       ]);
 
       setProposal(proposalData);
       setSections(sectionData);
       setSubmissionPackages(packageData);
       setDocuments(docs);
+      setWordSessions(sessions);
+      setGraphicsRequests(graphics);
 
       setSelectedSectionId((current) =>
         current ?? (sectionData.length > 0 ? sectionData[0].id : null)
@@ -174,6 +194,94 @@ export default function ProposalWorkspacePage() {
     } catch (err) {
       console.error("Failed to create submission package", err);
       setError("Failed to create submission package.");
+    }
+  };
+
+  const handleCreateWordSession = async () => {
+    if (!wordDocName.trim()) return;
+    try {
+      const created = await wordAddinApi.createSession({
+        proposal_id: proposalId,
+        document_name: wordDocName.trim(),
+      });
+      setWordSessions((prev) => [created, ...prev]);
+      setWordDocName("");
+    } catch (err) {
+      console.error("Failed to create Word add-in session", err);
+      setError("Failed to create Word add-in session.");
+    }
+  };
+
+  const handleSyncWordSession = async (sessionId: number) => {
+    try {
+      setIsSyncingWord(true);
+      await wordAddinApi.createEvent(sessionId, {
+        event_type: "sync",
+        payload: { proposal_id: proposalId, section_count: sections.length },
+      });
+      const events = await wordAddinApi.listEvents(sessionId);
+      setWordEvents((prev) => ({ ...prev, [sessionId]: events }));
+    } catch (err) {
+      console.error("Failed to sync Word add-in", err);
+      setError("Failed to sync Word add-in.");
+    } finally {
+      setIsSyncingWord(false);
+    }
+  };
+
+  const handleLoadWordEvents = async (sessionId: number) => {
+    try {
+      const events = await wordAddinApi.listEvents(sessionId);
+      setWordEvents((prev) => ({ ...prev, [sessionId]: events }));
+    } catch (err) {
+      console.error("Failed to load Word add-in events", err);
+      setError("Failed to load Word add-in events.");
+    }
+  };
+
+  const handleCreateGraphicsRequest = async () => {
+    if (!graphicsTitle.trim()) return;
+    try {
+      const created = await graphicsApi.createRequest({
+        proposal_id: proposalId,
+        title: graphicsTitle.trim(),
+        description: graphicsDescription || undefined,
+        section_id: graphicsSectionId || undefined,
+        due_date: graphicsDueDate || undefined,
+      });
+      setGraphicsRequests((prev) => [created, ...prev]);
+      setGraphicsTitle("");
+      setGraphicsDescription("");
+      setGraphicsSectionId(null);
+      setGraphicsDueDate("");
+    } catch (err) {
+      console.error("Failed to create graphics request", err);
+      setError("Failed to create graphics request.");
+    }
+  };
+
+  const handleUpdateGraphicsStatus = async (
+    requestId: number,
+    status: ProposalGraphicRequest["status"]
+  ) => {
+    try {
+      const updated = await graphicsApi.updateRequest(requestId, { status });
+      setGraphicsRequests((prev) =>
+        prev.map((request) => (request.id === requestId ? updated : request))
+      );
+    } catch (err) {
+      console.error("Failed to update graphics request", err);
+      setError("Failed to update graphics request.");
+    }
+  };
+
+  const handleRemoveGraphicsRequest = async (requestId: number) => {
+    try {
+      await graphicsApi.removeRequest(requestId);
+      setGraphicsRequests((prev) => prev.filter((request) => request.id !== requestId));
+    } catch (err) {
+      console.error("Failed to remove graphics request", err);
+      setError("Failed to remove graphics request.");
     }
   };
 
@@ -395,6 +503,174 @@ export default function ProposalWorkspacePage() {
                   >
                     <Plus className="w-4 h-4" />
                     Add Evidence
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-semibold">Word Assistant</p>
+                </div>
+                <div className="space-y-2">
+                  {wordSessions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No Word sessions yet.</p>
+                  ) : (
+                    wordSessions.map((session) => (
+                      <div key={session.id} className="border border-border rounded-md p-2 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm text-foreground">{session.document_name}</p>
+                            <p className="text-xs text-muted-foreground">Status: {session.status}</p>
+                            {session.last_synced_at && (
+                              <p className="text-xs text-muted-foreground">
+                                Last synced {formatDate(session.last_synced_at)}
+                              </p>
+                            )}
+                            {wordEvents[session.id] && (
+                              <p className="text-xs text-muted-foreground">
+                                Events: {wordEvents[session.id].length}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleLoadWordEvents(session.id)}
+                            >
+                              History
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSyncWordSession(session.id)}
+                              disabled={isSyncingWord}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              Sync
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Document name"
+                    value={wordDocName}
+                    onChange={(e) => setWordDocName(e.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleCreateWordSession}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Word Session
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-primary" />
+                  <p className="text-sm font-semibold">Graphics Requests</p>
+                </div>
+                <div className="space-y-2">
+                  {graphicsRequests.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No graphics requests yet.</p>
+                  ) : (
+                    graphicsRequests.map((request) => (
+                      <div key={request.id} className="border border-border rounded-md p-2 space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm text-foreground">{request.title}</p>
+                            {request.section_id && (
+                              <p className="text-xs text-muted-foreground">
+                                Section {request.section_id}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              Status: {request.status}
+                            </p>
+                            {request.due_date && (
+                              <p className="text-xs text-muted-foreground">
+                                Due {formatDate(request.due_date)}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveGraphicsRequest(request.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <select
+                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
+                          value={request.status}
+                          onChange={(e) =>
+                            handleUpdateGraphicsStatus(
+                              request.id,
+                              e.target.value as ProposalGraphicRequest["status"]
+                            )
+                          }
+                        >
+                          <option value="requested">Requested</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="delivered">Delivered</option>
+                          <option value="rejected">Rejected</option>
+                        </select>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Graphic title"
+                    value={graphicsTitle}
+                    onChange={(e) => setGraphicsTitle(e.target.value)}
+                  />
+                  <textarea
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Description or layout guidance"
+                    value={graphicsDescription}
+                    onChange={(e) => setGraphicsDescription(e.target.value)}
+                    rows={3}
+                  />
+                  <select
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    value={graphicsSectionId ?? ""}
+                    onChange={(e) => setGraphicsSectionId(Number(e.target.value) || null)}
+                  >
+                    <option value="">Link to section (optional)</option>
+                    {sections.map((section) => (
+                      <option key={section.id} value={section.id}>
+                        {section.section_number} {section.title}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Due date (YYYY-MM-DD)"
+                    value={graphicsDueDate}
+                    onChange={(e) => setGraphicsDueDate(e.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleCreateGraphicsRequest}
+                  >
+                    <Plus className="w-4 h-4" />
+                    Create Request
                   </Button>
                 </div>
               </CardContent>

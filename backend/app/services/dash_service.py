@@ -12,6 +12,8 @@ from sqlmodel import select
 from app.config import settings
 from app.models.rfp import RFP, ComplianceMatrix
 from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.award import AwardRecord
+from app.models.contact import OpportunityContact
 
 
 def _detect_intent(question: str) -> str:
@@ -22,6 +24,8 @@ def _detect_intent(question: str) -> str:
         return "compliance_gap"
     if any(keyword in text for keyword in ["capability", "capabilities", "capability statement"]):
         return "capability_statement"
+    if any(keyword in text for keyword in ["competitor", "competition", "award", "awardee", "incumbent", "competitive"]):
+        return "competitive_intel"
     return "general"
 
 
@@ -81,6 +85,47 @@ def _summarize_compliance(matrix: ComplianceMatrix) -> Tuple[str, List[dict]]:
     for req in top_items:
         summary_lines.append(f"- {req.get('id')}: {req.get('requirement_text')}")
     return "\n".join(summary_lines), citations
+
+
+def _summarize_awards(awards: List[AwardRecord]) -> Tuple[str, List[dict]]:
+    if not awards:
+        return "No award intelligence records found yet.", []
+
+    top_awards = sorted(
+        awards,
+        key=lambda award: award.award_amount or 0,
+        reverse=True,
+    )[:3]
+    citations: List[dict] = []
+    lines = [f"Award records found: {len(awards)}."]
+    for award in top_awards:
+        citations.append({
+            "type": "award",
+            "award_id": award.id,
+            "awardee": award.awardee_name,
+        })
+        amount = f"${award.award_amount:,}" if award.award_amount else "Amount TBD"
+        vehicle = award.contract_vehicle or "Vehicle unknown"
+        lines.append(f"- {award.awardee_name} · {amount} · {vehicle}")
+    return "\n".join(lines), citations
+
+
+def _summarize_contacts(contacts: List[OpportunityContact]) -> Tuple[str, List[dict]]:
+    if not contacts:
+        return "No opportunity contacts recorded.", []
+    top_contacts = contacts[:3]
+    citations: List[dict] = []
+    lines = [f"Contacts recorded: {len(contacts)}."]
+    for contact in top_contacts:
+        citations.append({
+            "type": "contact",
+            "contact_id": contact.id,
+            "name": contact.name,
+        })
+        role = contact.role or "Role unknown"
+        org = contact.organization or "Org unknown"
+        lines.append(f"- {contact.name} · {role} · {org}")
+    return "\n".join(lines), citations
 
 
 async def generate_dash_response(
@@ -151,6 +196,40 @@ async def generate_dash_response(
                 f"Our team delivers mission-ready solutions backed by {doc_titles}. "
                 "We have proven experience supporting federal programs with secure, compliant delivery."
             )
+    elif intent == "competitive_intel":
+        awards: List[AwardRecord] = []
+        contacts: List[OpportunityContact] = []
+        if rfp:
+            awards_result = await session.execute(
+                select(AwardRecord).where(
+                    AwardRecord.user_id == user_id,
+                    AwardRecord.rfp_id == rfp.id,
+                )
+            )
+            awards = awards_result.scalars().all()
+            contacts_result = await session.execute(
+                select(OpportunityContact).where(
+                    OpportunityContact.user_id == user_id,
+                    OpportunityContact.rfp_id == rfp.id,
+                )
+            )
+            contacts = contacts_result.scalars().all()
+        else:
+            awards_result = await session.execute(
+                select(AwardRecord)
+                .where(AwardRecord.user_id == user_id)
+                .order_by(AwardRecord.created_at.desc())
+                .limit(5)
+            )
+            awards = awards_result.scalars().all()
+
+        award_summary, award_citations = _summarize_awards(awards)
+        contact_summary, contact_citations = _summarize_contacts(contacts)
+        citations.extend(award_citations)
+        citations.extend(contact_citations)
+
+        base_context = context if rfp else "Competitive intel summary (all awards)"
+        answer = f"{base_context}\n{award_summary}\n{contact_summary}"
     else:
         answer = (
             f"{context}\nI can help with summaries, compliance gap analysis, or capability statements. "

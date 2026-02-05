@@ -62,3 +62,24 @@ class TestDash:
         assert "Deadline" in data["answer"]
         assert isinstance(data["citations"], list)
         assert any(citation.get("type") == "document" for citation in data["citations"])
+
+        # Competitive intel intent
+        response = await client.post(
+            "/api/v1/awards",
+            headers=auth_headers,
+            json={
+                "rfp_id": test_rfp.id,
+                "awardee_name": "Test Winner",
+                "award_amount": 100000,
+            },
+        )
+        assert response.status_code == 200
+
+        response = await client.post(
+            "/api/v1/dash/ask",
+            headers=auth_headers,
+            json={"question": "Who are the competitors?", "rfp_id": test_rfp.id},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "Award records" in data["answer"]

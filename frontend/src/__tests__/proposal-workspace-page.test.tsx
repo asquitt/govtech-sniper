@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import ProposalWorkspacePage from "@/app/(dashboard)/proposals/[proposalId]/page";
-import { draftApi, documentApi } from "@/lib/api";
+import { draftApi, documentApi, wordAddinApi, graphicsApi } from "@/lib/api";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ proposalId: "1" }),
@@ -24,10 +24,18 @@ vi.mock("@/lib/api", () => ({
     exportProposalDocx: vi.fn(),
     exportProposalPdf: vi.fn(),
   },
+  wordAddinApi: {
+    listSessions: vi.fn(),
+  },
+  graphicsApi: {
+    listRequests: vi.fn(),
+  },
 }));
 
 const mockedDraftApi = vi.mocked(draftApi);
 const mockedDocumentApi = vi.mocked(documentApi);
+const mockedWordAddinApi = vi.mocked(wordAddinApi);
+const mockedGraphicsApi = vi.mocked(graphicsApi);
 
 describe("ProposalWorkspacePage", () => {
   beforeEach(() => {
@@ -69,6 +77,8 @@ describe("ProposalWorkspacePage", () => {
     mockedDraftApi.listSubmissionPackages.mockResolvedValue([]);
     mockedDraftApi.listSectionEvidence.mockResolvedValue([]);
     mockedDocumentApi.list.mockResolvedValue([]);
+    mockedWordAddinApi.listSessions.mockResolvedValue([]);
+    mockedGraphicsApi.listRequests.mockResolvedValue([]);
   });
 
   it("renders proposal workspace header", async () => {

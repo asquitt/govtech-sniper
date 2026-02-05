@@ -41,6 +41,11 @@ import type {
   SavedSearchRunResult,
   AwardRecord,
   OpportunityContact,
+  WordAddinSession,
+  WordAddinSessionStatus,
+  WordAddinEvent,
+  ProposalGraphicRequest,
+  GraphicsRequestStatus,
   AuditEvent,
   AuditSummary,
   ObservabilityMetrics,
@@ -410,6 +415,93 @@ export const contactApi = {
 
   remove: async (contactId: number): Promise<void> => {
     await api.delete(`/contacts/${contactId}`);
+  },
+};
+
+// =============================================================================
+// Word Add-in Endpoints
+// =============================================================================
+
+export const wordAddinApi = {
+  listSessions: async (params?: { proposal_id?: number }): Promise<WordAddinSession[]> => {
+    const { data } = await api.get("/word-addin/sessions", { params });
+    return data;
+  },
+
+  createSession: async (payload: {
+    proposal_id: number;
+    document_name: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<WordAddinSession> => {
+    const { data } = await api.post("/word-addin/sessions", payload);
+    return data;
+  },
+
+  updateSession: async (
+    sessionId: number,
+    payload: Partial<{
+      document_name: string;
+      status: WordAddinSessionStatus;
+      metadata: Record<string, unknown>;
+    }>
+  ): Promise<WordAddinSession> => {
+    const { data } = await api.patch(`/word-addin/sessions/${sessionId}`, payload);
+    return data;
+  },
+
+  createEvent: async (
+    sessionId: number,
+    payload: { event_type: string; payload?: Record<string, unknown> }
+  ): Promise<WordAddinEvent> => {
+    const { data } = await api.post(`/word-addin/sessions/${sessionId}/events`, payload);
+    return data;
+  },
+
+  listEvents: async (sessionId: number): Promise<WordAddinEvent[]> => {
+    const { data } = await api.get(`/word-addin/sessions/${sessionId}/events`);
+    return data;
+  },
+};
+
+// =============================================================================
+// Graphics Requests Endpoints
+// =============================================================================
+
+export const graphicsApi = {
+  listRequests: async (params?: { proposal_id?: number }): Promise<ProposalGraphicRequest[]> => {
+    const { data } = await api.get("/graphics", { params });
+    return data;
+  },
+
+  createRequest: async (payload: {
+    proposal_id: number;
+    title: string;
+    description?: string;
+    section_id?: number;
+    due_date?: string;
+  }): Promise<ProposalGraphicRequest> => {
+    const { data } = await api.post("/graphics", payload);
+    return data;
+  },
+
+  updateRequest: async (
+    requestId: number,
+    payload: Partial<{
+      title: string;
+      description: string;
+      section_id: number | null;
+      due_date: string | null;
+      status: GraphicsRequestStatus;
+      asset_url: string | null;
+      notes: string | null;
+    }>
+  ): Promise<ProposalGraphicRequest> => {
+    const { data } = await api.patch(`/graphics/${requestId}`, payload);
+    return data;
+  },
+
+  removeRequest: async (requestId: number): Promise<void> => {
+    await api.delete(`/graphics/${requestId}`);
   },
 };
 

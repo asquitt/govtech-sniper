@@ -13,6 +13,7 @@ Build a GovDash-style platform with a single Opportunity record that powers Disc
 5. Dash (AI Agent)
 6. Data Library (Shared)
 7. Integrations & Admin (Shared)
+8. Market Intelligence (Govly)
 
 ## Core Data Model (Single Opportunity Record)
 Create a canonical `opportunity` entity and attach all workflow objects to it. This reduces data duplication and unlocks cross-module analytics.
@@ -66,6 +67,7 @@ Scope:
 - Opportunity normalization into a single schema.
 - Deduping, versioning, and snapshot diffs.
 - Qualification scoring and recommended opportunities list.
+- Budget documents and competitor win context (Govly parity).
 
 Key Screens:
 - Discover list view with filters (agency, NAICS, set-aside, deadline, score).
@@ -81,6 +83,7 @@ Acceptance Criteria:
 - New opportunities appear within ingestion window.
 - Diffs available for opportunities with updated snapshots.
 - Scoring explains why an opportunity is recommended.
+- Budget and award context can be linked to an opportunity.
 
 
 ### 2) Capture CRM
@@ -178,6 +181,30 @@ Acceptance Criteria:
 - Dash can generate a capability statement tied to a selected opportunity.
 
 
+### 8) Market Intelligence (Govly)
+Purpose: Enrich opportunities with budgets, awards, contacts, and AI-driven insights.
+
+Scope:
+- Award intelligence and competitor win tracking.
+- Budget documents linked to agencies and opportunities.
+- Buyer contact discovery and CRM sync hooks.
+- AI predictions for award timing and win probability.
+
+Key Screens:
+- Market intel panel on opportunity detail.
+- Award and budget drill-down tabs.
+- AI predictions summary card.
+
+Backend Work:
+- Create budget and prediction models linked to opportunities.
+- Add award/contacts enrichment workflows.
+- Build integrations for CRM sync and email ingestion.
+
+Acceptance Criteria:
+- Opportunity detail surfaces awards, budgets, and contacts.
+- Predictions and summaries are saved with audit trails.
+
+
 ### 6) Data Library (Shared)
 Purpose: Central repository for reusable content and evidence.
 
@@ -259,4 +286,3 @@ Acceptance Criteria:
 - The existing RFP ingestion, compliance matrix, and draft generation map directly to Discover and Proposal Cloud.
 - Expand the current `rfps` model into a unified `opportunities` model to become the platform spine.
 - Reuse `documents` endpoints as the base of Data Library.
-

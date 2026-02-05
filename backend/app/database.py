@@ -64,6 +64,8 @@ async def init_db() -> None:
             saved_search,
             award,
             contact,
+            word_addin,
+            graphics,
         )
         
         # Create all tables (dev only - use Alembic in production)

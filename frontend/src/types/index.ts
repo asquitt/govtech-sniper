@@ -133,6 +133,56 @@ export interface OpportunityContact {
 }
 
 // -----------------------------------------------------------------------------
+// Word Add-in Types
+// -----------------------------------------------------------------------------
+
+export type WordAddinSessionStatus = "active" | "paused" | "completed";
+
+export interface WordAddinSession {
+  id: number;
+  proposal_id: number;
+  document_name: string;
+  status: WordAddinSessionStatus;
+  metadata: Record<string, unknown>;
+  last_synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WordAddinEvent {
+  id: number;
+  session_id: number;
+  event_type: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+// -----------------------------------------------------------------------------
+// Graphics Requests
+// -----------------------------------------------------------------------------
+
+export type GraphicsRequestStatus =
+  | "requested"
+  | "in_progress"
+  | "delivered"
+  | "rejected";
+
+export interface ProposalGraphicRequest {
+  id: number;
+  proposal_id: number;
+  section_id?: number | null;
+  user_id: number;
+  title: string;
+  description?: string | null;
+  status: GraphicsRequestStatus;
+  due_date?: string | null;
+  asset_url?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// -----------------------------------------------------------------------------
 // Capture Types
 // -----------------------------------------------------------------------------
 

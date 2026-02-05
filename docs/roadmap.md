@@ -61,3 +61,18 @@ This roadmap is the end-to-end plan from foundation through full GovDash-equival
 - Pipeline customization and Kanban capture views.
 - Word add-in workflows and graphics request pipeline.
 - Competitive intel summaries and contract intelligence.
+
+## Phase 8 - Proposal Governance (GovDash Parity)
+- Compliance shreds + document classification for RFP content.
+- Proposal outline editor with volumes, page limits, and reviewer assignments.
+- Review mode and redline workflows.
+- Compliance package export bundle.
+- Labor category + key personnel mapping with adjudication.
+
+## Phase 9 - Govly Intelligence + Automation
+- Budget document ingestion + tagging.
+- Award summaries + competitor win tracking.
+- AI predictions and industry analysis reports.
+- Collaboration workspace: tasks, comments, and team workflows.
+- Email ingestion pipeline + procurement portal automation hooks.
+- CRM sync (Salesforce/Unanet) scaffolding.

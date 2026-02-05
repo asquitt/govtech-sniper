@@ -39,6 +39,8 @@ from app.models.capture import (
 )
 from app.models.award import AwardRecord
 from app.models.contact import OpportunityContact
+from app.models.word_addin import WordAddinSession, WordAddinEvent, WordAddinSessionStatus
+from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
 from app.models.contract import (
     ContractAward,
     ContractStatus,
@@ -88,6 +90,11 @@ __all__ = [
     "CaptureFieldType",
     "AwardRecord",
     "OpportunityContact",
+    "WordAddinSession",
+    "WordAddinEvent",
+    "WordAddinSessionStatus",
+    "ProposalGraphicRequest",
+    "GraphicsRequestStatus",
     "ContractAward",
     "ContractStatus",
     "ContractDeliverable",
