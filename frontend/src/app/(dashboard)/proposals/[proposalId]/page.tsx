@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -52,7 +52,7 @@ export default function ProposalWorkspacePage() {
     [sections, selectedSectionId]
   );
 
-  const refreshWorkspace = async () => {
+  const refreshWorkspace = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -68,20 +68,20 @@ export default function ProposalWorkspacePage() {
       setSubmissionPackages(packageData);
       setDocuments(docs);
 
-      if (!selectedSectionId && sectionData.length > 0) {
-        setSelectedSectionId(sectionData[0].id);
-      }
+      setSelectedSectionId((current) =>
+        current ?? (sectionData.length > 0 ? sectionData[0].id : null)
+      );
     } catch (err) {
       console.error("Failed to load proposal workspace", err);
       setError("Failed to load proposal workspace.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [proposalId]);
 
   useEffect(() => {
     refreshWorkspace();
-  }, [proposalId]);
+  }, [refreshWorkspace]);
 
   useEffect(() => {
     const fetchEvidence = async () => {

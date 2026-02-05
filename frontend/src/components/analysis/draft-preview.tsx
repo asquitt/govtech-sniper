@@ -192,7 +192,7 @@ export function DraftPreview({
                 <Sparkles className="w-6 h-6 text-accent" />
               </div>
               <p className="text-sm text-muted-foreground">
-                Click "Generate" to create an AI response with citations
+                Click &ldquo;Generate&rdquo; to create an AI response with citations
               </p>
             </div>
           )}
