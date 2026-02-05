@@ -103,6 +103,7 @@ export default function OpportunitiesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showRecommended, setShowRecommended] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     total: 0,
@@ -177,6 +178,21 @@ export default function OpportunitiesPage() {
       rfp.agency?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const recommendedRfps = showRecommended
+    ? filteredRfps.filter(
+        (rfp) =>
+          (rfp.recommendation_score ?? 0) >= 70 &&
+          (rfp.is_qualified ?? false)
+      )
+    : filteredRfps;
+
+  const sortedRfps = [...recommendedRfps].sort((a, b) => {
+    const aScore = a.recommendation_score ?? 0;
+    const bScore = b.recommendation_score ?? 0;
+    if (aScore !== bScore) return bScore - aScore;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
   if (error && !isLoading) {
     return (
       <div className="flex flex-col h-full">
@@ -201,14 +217,22 @@ export default function OpportunitiesPage() {
         title="Opportunities"
         description="Track and manage government contract opportunities"
         actions={
-          <Button onClick={handleSync} disabled={isSyncing}>
-            {isSyncing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
-            Sync SAM.gov
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showRecommended ? "default" : "outline"}
+              onClick={() => setShowRecommended((prev) => !prev)}
+            >
+              Recommended
+            </Button>
+            <Button onClick={handleSync} disabled={isSyncing}>
+              {isSyncing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              Sync SAM.gov
+            </Button>
+          </div>
         }
       />
 
@@ -300,7 +324,7 @@ export default function OpportunitiesPage() {
             <div className="flex items-center justify-center h-64">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : filteredRfps.length === 0 ? (
+          ) : sortedRfps.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64">
               <Target className="w-12 h-12 text-muted-foreground mb-4" />
               <p className="text-muted-foreground mb-4">
@@ -329,7 +353,7 @@ export default function OpportunitiesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRfps.map((rfp) => (
+                  {sortedRfps.map((rfp) => (
                     <tr
                       key={rfp.id}
                       className="border-b border-border hover:bg-secondary/50 transition-colors"
@@ -362,10 +386,17 @@ export default function OpportunitiesPage() {
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <QualificationBadge
-                          isQualified={rfp.is_qualified}
-                          score={rfp.qualification_score}
-                        />
+                        <div className="flex flex-col gap-1">
+                          <QualificationBadge
+                            isQualified={rfp.is_qualified}
+                            score={rfp.qualification_score}
+                          />
+                          {rfp.recommendation_score !== undefined && (
+                            <Badge variant="outline" className="w-fit">
+                              Rec {Math.round(rfp.recommendation_score)}%
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-0.5">
