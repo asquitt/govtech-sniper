@@ -33,3 +33,5 @@ export { pastPerformanceApi } from "./past-performance";
 export { searchApi } from "./search";
 export { eventApi } from "./events";
 export { signalApi } from "./signals";
+export { workflowApi } from "./workflows";
+export { emailIngestApi } from "./email-ingest";

@@ -19,3 +19,5 @@ export * from "./past-performance";
 export * from "./search";
 export * from "./events";
 export * from "./signals";
+export * from "./workflow";
+export * from "./email-ingest";

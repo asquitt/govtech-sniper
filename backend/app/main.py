@@ -66,6 +66,9 @@ from app.api.routes import (
     search_router,
     events_router,
     signals_router,
+    email_ingest_router,
+    workflows_router,
+    compliance_router,
 )
 
 # Configure structured logging
@@ -284,6 +287,9 @@ app.include_router(subscription_router, prefix=api_prefix)
 app.include_router(search_router, prefix=api_prefix)
 app.include_router(events_router, prefix=api_prefix)
 app.include_router(signals_router, prefix=api_prefix)
+app.include_router(email_ingest_router, prefix=api_prefix)
+app.include_router(workflows_router, prefix=api_prefix)
+app.include_router(compliance_router, prefix=api_prefix)
 
 
 # =============================================================================

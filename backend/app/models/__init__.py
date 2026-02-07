@@ -78,6 +78,8 @@ from app.models.salesforce_mapping import SalesforceFieldMapping
 from app.models.embedding import DocumentEmbedding
 from app.models.event import IndustryEvent, EventType
 from app.models.market_signal import MarketSignal, SignalSubscription, SignalType, DigestFrequency
+from app.models.email_ingest import EmailIngestConfig, IngestedEmail, ProcessingStatus as EmailProcessingStatus
+from app.models.workflow import WorkflowRule, WorkflowExecution, TriggerType, ExecutionStatus
 from app.models.review import (
     ProposalReview,
     ReviewAssignment,
@@ -182,4 +184,11 @@ __all__ = [
     "SignalSubscription",
     "SignalType",
     "DigestFrequency",
+    "EmailIngestConfig",
+    "IngestedEmail",
+    "EmailProcessingStatus",
+    "WorkflowRule",
+    "WorkflowExecution",
+    "TriggerType",
+    "ExecutionStatus",
 ]

@@ -46,6 +46,9 @@ from app.api.routes.subscription import router as subscription_router
 from app.api.routes.search import router as search_router
 from app.api.routes.events import router as events_router
 from app.api.routes.signals import router as signals_router
+from app.api.routes.email_ingest import router as email_ingest_router
+from app.api.routes.workflows import router as workflows_router
+from app.api.routes.compliance_dashboard import router as compliance_router
 
 __all__ = [
     "ingest_router",
@@ -90,4 +93,7 @@ __all__ = [
     "search_router",
     "events_router",
     "signals_router",
+    "email_ingest_router",
+    "workflows_router",
+    "compliance_router",
 ]
