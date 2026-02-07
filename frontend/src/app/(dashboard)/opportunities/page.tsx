@@ -77,6 +77,20 @@ function QualificationBadge({
   );
 }
 
+function MatchScoreBadge({ score }: { score?: number | null }) {
+  if (score === undefined || score === null) {
+    return <span className="text-muted-foreground text-xs">—</span>;
+  }
+
+  const variant =
+    score >= 70 ? "success" : score >= 40 ? "warning" : "destructive";
+  return (
+    <Badge variant={variant} className="font-mono">
+      {Math.round(score)}%
+    </Badge>
+  );
+}
+
 function DeadlineBadge({ deadline }: { deadline?: string }) {
   const days = daysUntilDeadline(deadline);
   const urgency = getDeadlineUrgency(deadline);
@@ -567,6 +581,7 @@ export default function OpportunitiesPage() {
                     <th className="p-4 font-medium">Agency</th>
                     <th className="p-4 font-medium">Status</th>
                     <th className="p-4 font-medium">Qualification</th>
+                    <th className="p-4 font-medium">Match</th>
                     <th className="p-4 font-medium">Deadline</th>
                     <th className="p-4 font-medium w-10"></th>
                   </tr>
@@ -616,6 +631,9 @@ export default function OpportunitiesPage() {
                             </Badge>
                           )}
                         </div>
+                      </td>
+                      <td className="p-4">
+                        <MatchScoreBadge score={rfp.match_score} />
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-0.5">

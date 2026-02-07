@@ -94,6 +94,18 @@ export const rfpApi = {
     await api.delete(`/rfps/${rfpId}`);
   },
 
+  computeMatchScore: async (rfpId: number): Promise<{
+    rfp_id: number;
+    match_score: number;
+    category_scores: Record<string, number>;
+    strengths: string[];
+    gaps: string[];
+    reasoning: string;
+  }> => {
+    const { data } = await api.post(`/rfps/${rfpId}/match-score`);
+    return data;
+  },
+
   getStats: async (): Promise<{
     total: number;
     by_status: Record<string, number>;

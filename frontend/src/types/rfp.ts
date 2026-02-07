@@ -65,6 +65,7 @@ export interface RFPListItem {
   status: RFPStatus;
   is_qualified?: boolean;
   qualification_score?: number;
+  match_score?: number | null;
   recommendation_score?: number;
   response_deadline?: string;
   requirements_count?: number;

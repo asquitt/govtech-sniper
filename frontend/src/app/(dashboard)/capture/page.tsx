@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { captureApi, rfpApi } from "@/lib/api";
+import BidScorecardPanel from "./_components/bid-scorecard-panel";
 import type {
   CapturePlanListItem,
   CaptureStage,
@@ -961,6 +962,12 @@ export default function CapturePage() {
             </div>
           </div>
         </div>
+
+        {selectedRfpId && (
+          <div className="bg-card border border-border rounded-lg p-4 mt-6">
+            <BidScorecardPanel rfpId={selectedRfpId} />
+          </div>
+        )}
 
         <div className="bg-card border border-border rounded-lg p-4 space-y-4 mt-6">
           <div className="flex items-center justify-between">

@@ -168,3 +168,42 @@ export interface GanttPlanRow {
   response_deadline?: string | null;
   activities: CaptureActivity[];
 }
+
+// -----------------------------------------------------------------------------
+// Bid Scorecard Types
+// -----------------------------------------------------------------------------
+
+export type BidScorecardRecommendation = "bid" | "no_bid" | "conditional";
+export type ScorerType = "ai" | "human";
+
+export interface CriteriaScore {
+  name: string;
+  weight: number;
+  score: number;
+  reasoning?: string;
+}
+
+export interface BidScorecard {
+  id: number;
+  rfp_id: number;
+  user_id: number;
+  criteria_scores: CriteriaScore[];
+  overall_score: number | null;
+  recommendation: BidScorecardRecommendation | null;
+  confidence: number | null;
+  reasoning: string | null;
+  scorer_type: ScorerType;
+  scorer_id: number | null;
+  created_at: string;
+}
+
+export interface BidDecisionSummary {
+  rfp_id: number;
+  total_votes: number;
+  ai_score: number | null;
+  human_avg: number | null;
+  overall_recommendation: string | null;
+  bid_count: number;
+  no_bid_count: number;
+  conditional_count: number;
+}

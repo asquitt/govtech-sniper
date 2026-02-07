@@ -17,6 +17,47 @@ import type {
 } from "@/types";
 
 // =============================================================================
+// Bid Decision Response Types
+// =============================================================================
+
+interface BidScorecardResponse {
+  id: number;
+  rfp_id: number;
+  overall_score: number | null;
+  recommendation: string | null;
+  confidence?: number | null;
+  criteria_scores?: { name: string; weight: number; score: number; reasoning?: string }[];
+  reasoning?: string | null;
+  scorer_type?: string;
+  scorer_id?: number | null;
+  win_probability?: number | null;
+}
+
+interface BidScorecardListItem {
+  id: number;
+  rfp_id: number;
+  overall_score: number | null;
+  recommendation: string | null;
+  confidence: number | null;
+  reasoning: string | null;
+  scorer_type: string;
+  scorer_id: number | null;
+  criteria_scores: { name: string; weight: number; score: number; reasoning?: string }[];
+  created_at: string;
+}
+
+interface BidDecisionSummaryResponse {
+  rfp_id: number;
+  total_votes: number;
+  ai_score: number | null;
+  human_avg: number | null;
+  overall_recommendation: string | null;
+  bid_count: number;
+  no_bid_count: number;
+  conditional_count: number;
+}
+
+// =============================================================================
 // Capture Endpoints
 // =============================================================================
 
@@ -192,6 +233,35 @@ export const captureApi = {
 
   removeCompetitor: async (competitorId: number): Promise<void> => {
     await api.delete(`/capture/competitors/${competitorId}`);
+  },
+
+  // Bid Decision
+  aiEvaluateBid: async (rfpId: number): Promise<BidScorecardResponse> => {
+    const { data } = await api.post(`/capture/scorecards/${rfpId}/ai-evaluate`);
+    return data;
+  },
+
+  submitHumanVote: async (
+    rfpId: number,
+    payload: {
+      criteria_scores: { name: string; weight: number; score: number; reasoning?: string }[];
+      overall_score: number;
+      recommendation: "bid" | "no_bid" | "conditional";
+      reasoning?: string;
+    }
+  ): Promise<BidScorecardResponse> => {
+    const { data } = await api.post(`/capture/scorecards/${rfpId}/vote`, payload);
+    return data;
+  },
+
+  listScorecards: async (rfpId: number): Promise<BidScorecardListItem[]> => {
+    const { data } = await api.get(`/capture/scorecards/${rfpId}`);
+    return data;
+  },
+
+  getBidSummary: async (rfpId: number): Promise<BidDecisionSummaryResponse> => {
+    const { data } = await api.get(`/capture/scorecards/${rfpId}/summary`);
+    return data;
   },
 };
 
