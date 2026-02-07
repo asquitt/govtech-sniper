@@ -212,10 +212,17 @@ async def upload_document(
     await session.commit()
     await session.refresh(document)
 
-    # Queue processing task
-    from app.tasks.document_tasks import process_document
+    # Queue processing task (non-fatal if broker unavailable)
+    try:
+        from app.tasks.document_tasks import process_document
 
-    process_document.delay(document.id)
+        process_document.delay(document.id)
+    except Exception:
+        import structlog
+
+        structlog.get_logger().warning(
+            "Failed to queue document processing", document_id=document.id
+        )
 
     return DocumentUploadResponse(
         id=document.id,

@@ -67,6 +67,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare upload directory
+        run: mkdir -p uploads && chmod 777 uploads
+
       - name: Start stack (mocked)
         env:
           MOCK_AI: "true"
@@ -84,7 +87,9 @@ jobs:
             fi
             sleep 2
           done
-          echo "API did not become ready in time" && exit 1
+          echo "API did not become ready in time"
+          docker compose logs api --tail 50
+          exit 1
 
       - name: Run E2E smoke test
         env:
@@ -92,6 +97,10 @@ jobs:
           MOCK_SAM_GOV: "true"
           RFP_SKIP_SAM_INGEST: "true"
         run: ./scripts/run_e2e.sh
+
+      - name: Dump API logs on failure
+        if: failure()
+        run: docker compose logs api --tail 100
 
       - name: Tear down
         if: always()
