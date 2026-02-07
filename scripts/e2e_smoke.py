@@ -117,6 +117,8 @@ def main() -> int:
         "description": "E2E test document",
     }
     resp = client.post(f"{base_url}/api/v1/documents", files=files, data=data)
+    if resp.status_code >= 400:
+        print(f"Document upload failed ({resp.status_code}): {resp.text}")
     resp.raise_for_status()
     document = resp.json()
     document_id = document["id"]

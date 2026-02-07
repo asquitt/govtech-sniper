@@ -8,11 +8,11 @@ set -e
 STAGED=$(git diff --cached --name-only --diff-filter=ACM)
 
 # ── Python checks ──────────────────────────────────────────────
-PY_FILES=$(echo "$STAGED" | grep -E '\.py$' || true)
-if [ -n "$PY_FILES" ]; then
+BACKEND_PY=$(echo "$STAGED" | grep -E '^backend/.*\.py$' || true)
+if [ -n "$BACKEND_PY" ]; then
     echo "Running ruff lint on staged Python files..."
     # Strip backend/ prefix so per-file-ignores resolve correctly
-    PY_RELATIVE=$(echo "$PY_FILES" | sed 's|^backend/||')
+    PY_RELATIVE=$(echo "$BACKEND_PY" | sed 's|^backend/||')
     (cd backend && echo "$PY_RELATIVE" | xargs ruff check)
     echo "Running ruff format check..."
     (cd backend && echo "$PY_RELATIVE" | xargs ruff format --check)
