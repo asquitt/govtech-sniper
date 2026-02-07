@@ -707,6 +707,16 @@ export interface SubmissionPackage {
   updated_at: string;
 }
 
+export interface ProposalFocusDocument {
+  id: number;
+  proposal_id: number;
+  document_id: number;
+  priority_order: number;
+  created_at: string;
+  document_title?: string;
+  document_filename?: string;
+}
+
 export interface Proposal {
   id: number;
   user_id: number;

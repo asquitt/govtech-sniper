@@ -6,6 +6,7 @@ import type {
   ComplianceRequirement,
   Proposal,
   ProposalSection,
+  ProposalFocusDocument,
   SectionEvidence,
   SubmissionPackage,
   KnowledgeBaseDocument,
@@ -753,6 +754,25 @@ export const draftApi = {
       params: { ttl_hours: ttlHours },
     });
     return data;
+  },
+
+  listFocusDocuments: async (proposalId: number): Promise<ProposalFocusDocument[]> => {
+    const { data } = await api.get(`/draft/proposals/${proposalId}/focus-documents`);
+    return data;
+  },
+
+  setFocusDocuments: async (
+    proposalId: number,
+    documentIds: number[]
+  ): Promise<ProposalFocusDocument[]> => {
+    const { data } = await api.put(`/draft/proposals/${proposalId}/focus-documents`, {
+      document_ids: documentIds,
+    });
+    return data;
+  },
+
+  removeFocusDocument: async (proposalId: number, documentId: number): Promise<void> => {
+    await api.delete(`/draft/proposals/${proposalId}/focus-documents/${documentId}`);
   },
 };
 

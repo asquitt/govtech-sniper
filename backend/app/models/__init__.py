@@ -44,6 +44,7 @@ from app.models.word_addin import WordAddinSession, WordAddinEvent, WordAddinSes
 from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
 from app.models.secret import SecretRecord
 from app.models.budget_intel import BudgetIntelligence
+from app.models.proposal_focus_document import ProposalFocusDocument
 from app.models.contract import (
     ContractAward,
     ContractStatus,
@@ -101,6 +102,7 @@ __all__ = [
     "GraphicsRequestStatus",
     "SecretRecord",
     "BudgetIntelligence",
+    "ProposalFocusDocument",
     "ContractAward",
     "ContractStatus",
     "ContractDeliverable",

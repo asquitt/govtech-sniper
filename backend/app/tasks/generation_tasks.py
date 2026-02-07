@@ -15,6 +15,7 @@ from app.database import get_celery_session_context
 from app.models.rfp import RFP, ComplianceMatrix
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
 from app.models.knowledge_base import KnowledgeBaseDocument, ProcessingStatus
+from app.models.proposal_focus_document import ProposalFocusDocument
 
 logger = structlog.get_logger(__name__)
 
@@ -88,13 +89,31 @@ def generate_proposal_section(
             section.status = SectionStatus.GENERATING
             await session.commit()
             
-            # Get user's knowledge base documents
-            docs_result = await session.execute(
-                select(KnowledgeBaseDocument).where(
-                    KnowledgeBaseDocument.user_id == user_id,
-                    KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
-                )
+            # Check for focus documents first
+            focus_result = await session.execute(
+                select(ProposalFocusDocument).where(
+                    ProposalFocusDocument.proposal_id == section.proposal_id
+                ).order_by(ProposalFocusDocument.priority_order)
             )
+            focus_docs = focus_result.scalars().all()
+
+            if focus_docs:
+                # Use only focus documents
+                focus_doc_ids = [fd.document_id for fd in focus_docs]
+                docs_result = await session.execute(
+                    select(KnowledgeBaseDocument).where(
+                        KnowledgeBaseDocument.id.in_(focus_doc_ids),
+                        KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
+                    )
+                )
+            else:
+                # Fall back to all user documents
+                docs_result = await session.execute(
+                    select(KnowledgeBaseDocument).where(
+                        KnowledgeBaseDocument.user_id == user_id,
+                        KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
+                    )
+                )
             documents = docs_result.scalars().all()
             
             # Check for cached context or build inline

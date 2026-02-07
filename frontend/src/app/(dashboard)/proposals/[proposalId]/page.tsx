@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WritingPlanPanel } from "@/components/proposals/writing-plan-panel";
+import { FocusDocumentSelector } from "@/components/proposals/focus-document-selector";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import type {
@@ -390,6 +391,10 @@ export default function ProposalWorkspacePage() {
                 Back
               </Link>
             </Button>
+            <FocusDocumentSelector
+              proposalId={proposalId}
+              documents={documents}
+            />
             <Button variant="outline" asChild>
               <Link href={`/proposals/${proposal.id}/versions`}>
                 Versions
