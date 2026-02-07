@@ -364,7 +364,7 @@ export default function CollaborationPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedId]);
 
   useEffect(() => {
     loadWorkspaces();

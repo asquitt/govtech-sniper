@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,11 +66,7 @@ export function ReviewCommentList({ reviewId, onRefresh }: ReviewCommentListProp
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortKey>("severity");
 
-  useEffect(() => {
-    loadComments();
-  }, [reviewId]);
-
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     setLoading(true);
     try {
       const data = await reviewApi.listComments(reviewId);
@@ -80,7 +76,11 @@ export function ReviewCommentList({ reviewId, onRefresh }: ReviewCommentListProp
     } finally {
       setLoading(false);
     }
-  };
+  }, [reviewId]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
 
   const handleStatusUpdate = async (commentId: number, status: CommentStatus) => {
     try {

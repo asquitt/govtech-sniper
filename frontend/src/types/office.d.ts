@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Ambient type declarations for Office.js loaded from CDN.
  * These provide basic type safety without pulling in the full @types/office-js package.

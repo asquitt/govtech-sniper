@@ -23,7 +23,7 @@ const STATUS_ICONS: Record<ReviewStatus, React.ReactNode> = {
   cancelled: <AlertCircle className="w-4 h-4 text-muted-foreground" />,
 };
 
-function ReviewCard({ item }: { item: ReviewDashboardItem }) {
+function ReviewCard({ item, now }: { item: ReviewDashboardItem; now: number }) {
   const assignmentProgress =
     item.total_assignments > 0
       ? Math.round((item.completed_assignments / item.total_assignments) * 100)
@@ -32,12 +32,12 @@ function ReviewCard({ item }: { item: ReviewDashboardItem }) {
   const isDueSoon =
     item.scheduled_date &&
     item.status !== "completed" &&
-    new Date(item.scheduled_date) < new Date(Date.now() + 3 * 86400000);
+    new Date(item.scheduled_date) < new Date(now + 3 * 86400000);
 
   const isOverdue =
     item.scheduled_date &&
     item.status !== "completed" &&
-    new Date(item.scheduled_date) < new Date();
+    new Date(item.scheduled_date) < new Date(now);
 
   return (
     <Card className="hover:border-primary/40 transition-colors">
@@ -146,6 +146,7 @@ export default function ReviewsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filterType, setFilterType] = useState<ReviewType | "all">("all");
   const [filterStatus, setFilterStatus] = useState<ReviewStatus | "all">("all");
+  const [now] = useState(() => Date.now());
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -253,7 +254,7 @@ export default function ReviewsPage() {
         ) : (
           <div className="space-y-3">
             {filtered.map((item) => (
-              <ReviewCard key={item.review_id} item={item} />
+              <ReviewCard key={item.review_id} item={item} now={now} />
             ))}
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { ScoringSummary } from "@/types";
@@ -21,11 +21,7 @@ export function ReviewScoringSummary({ reviewId }: ReviewScoringSummaryProps) {
   const [summary, setSummary] = useState<ScoringSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSummary();
-  }, [reviewId]);
-
-  const loadSummary = async () => {
+  const loadSummary = useCallback(async () => {
     setLoading(true);
     try {
       const data = await reviewApi.getScoringSummary(reviewId);
@@ -35,7 +31,11 @@ export function ReviewScoringSummary({ reviewId }: ReviewScoringSummaryProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [reviewId]);
+
+  useEffect(() => {
+    loadSummary();
+  }, [loadSummary]);
 
   if (loading) {
     return (

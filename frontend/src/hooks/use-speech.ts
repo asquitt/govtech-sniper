@@ -3,7 +3,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 // Web Speech API types (not in all TS libs)
-/* eslint-disable @typescript-eslint/no-explicit-any */
 type SpeechRecognitionInstance = any;
 
 // ---------------------------------------------------------------------------

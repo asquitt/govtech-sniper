@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,11 +30,7 @@ export function ReviewDashboard({ proposalId, onScheduleClick }: ReviewDashboard
   const [commentCounts, setCommentCounts] = useState<Record<number, { total: number; open: number }>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadReviews();
-  }, [proposalId]);
-
-  const loadReviews = async () => {
+  const loadReviews = useCallback(async () => {
     setLoading(true);
     try {
       const data = await reviewApi.listReviews(proposalId);
@@ -58,7 +54,11 @@ export function ReviewDashboard({ proposalId, onScheduleClick }: ReviewDashboard
     } finally {
       setLoading(false);
     }
-  };
+  }, [proposalId]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
   if (loading) {
     return (
