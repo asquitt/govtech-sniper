@@ -84,6 +84,7 @@ class ProposalSectionCreate(BaseModel):
     section_number: str = Field(max_length=50)
     requirement_id: Optional[str] = None
     requirement_text: Optional[str] = None
+    writing_plan: Optional[str] = None
     display_order: int = 0
 
 
@@ -105,6 +106,7 @@ class ProposalSectionRead(BaseModel):
     section_number: str
     requirement_id: Optional[str]
     requirement_text: Optional[str]
+    writing_plan: Optional[str]
     status: SectionStatus
     generated_content: Optional[GeneratedContentRead]
     final_content: Optional[str]
@@ -123,6 +125,7 @@ class ProposalSectionUpdate(BaseModel):
     section_number: Optional[str] = Field(default=None, max_length=50)
     requirement_id: Optional[str] = None
     requirement_text: Optional[str] = None
+    writing_plan: Optional[str] = None
     final_content: Optional[str] = None
     status: Optional[SectionStatus] = None
     display_order: Optional[int] = None

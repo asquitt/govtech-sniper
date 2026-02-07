@@ -346,6 +346,7 @@ INSTRUCTIONS:
 4. Be specific about experience, metrics, and qualifications
 5. Match the required tone: {tone}
 6. Target word count: approximately {max_words} words
+7. If a WRITING PLAN is included above, follow its guidance on key points, themes, strengths to highlight, and tone preferences
 
 If the Knowledge Base doesn't contain relevant information, state that clearly.
 

@@ -157,7 +157,10 @@ class ProposalSection(ProposalSectionBase, table=True):
     
     # The original requirement text being addressed
     requirement_text: Optional[str] = Field(default=None, sa_column=Column(Text))
-    
+
+    # User-defined writing plan (bullet points, key themes, tone guidance)
+    writing_plan: Optional[str] = Field(default=None, sa_column=Column(Text))
+
     # AI-generated content (stored as JSON for GeneratedContent)
     generated_content: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     

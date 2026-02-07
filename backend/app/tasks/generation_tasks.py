@@ -118,7 +118,11 @@ def generate_proposal_section(
             
             # Get requirement details
             requirement_text = section.requirement_text or section.title
-            
+
+            # Include writing plan if user provided one
+            if section.writing_plan:
+                requirement_text += f"\n\nWRITING PLAN:\n{section.writing_plan}"
+
             # Add additional context if provided
             if additional_context:
                 requirement_text += f"\n\nAdditional Context: {additional_context}"

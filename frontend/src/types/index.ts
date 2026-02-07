@@ -662,6 +662,7 @@ export interface ProposalSection {
   section_number: string;
   requirement_id?: string;
   requirement_text?: string;
+  writing_plan?: string;
   status: SectionStatus;
   generated_content?: GeneratedContent;
   final_content?: string;

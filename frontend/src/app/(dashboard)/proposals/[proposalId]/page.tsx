@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { WritingPlanPanel } from "@/components/proposals/writing-plan-panel";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import type {
@@ -42,6 +43,8 @@ export default function ProposalWorkspacePage() {
   const [sections, setSections] = useState<ProposalSection[]>([]);
   const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
   const [editorContent, setEditorContent] = useState("");
+  const [writingPlan, setWritingPlan] = useState("");
+  const [isSavingPlan, setIsSavingPlan] = useState(false);
   const [evidence, setEvidence] = useState<SectionEvidence[]>([]);
   const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
   const [submissionPackages, setSubmissionPackages] = useState<SubmissionPackage[]>([]);
@@ -123,6 +126,7 @@ export default function ProposalWorkspacePage() {
       const section = sections.find((s) => s.id === selectedSectionId);
       if (section) {
         setEditorContent(section.final_content || section.generated_content?.clean_text || "");
+        setWritingPlan(section.writing_plan || "");
       }
     };
 
@@ -144,6 +148,24 @@ export default function ProposalWorkspacePage() {
       setError("Failed to save section.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveWritingPlan = async () => {
+    if (!selectedSection) return;
+    try {
+      setIsSavingPlan(true);
+      const updated = await draftApi.updateSection(selectedSection.id, {
+        writing_plan: writingPlan,
+      });
+      setSections((prev) =>
+        prev.map((section) => (section.id === updated.id ? updated : section))
+      );
+    } catch (err) {
+      console.error("Failed to save writing plan", err);
+      setError("Failed to save writing plan.");
+    } finally {
+      setIsSavingPlan(false);
     }
   };
 
@@ -457,6 +479,15 @@ export default function ProposalWorkspacePage() {
                     </Button>
                   </div>
                 </div>
+                {selectedSection && (
+                  <WritingPlanPanel
+                    writingPlan={writingPlan}
+                    onChange={setWritingPlan}
+                    onSave={handleSaveWritingPlan}
+                    isSaving={isSavingPlan}
+                    disabled={!selectedSection}
+                  />
+                )}
                 <textarea
                   className="flex-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   placeholder="Write or edit proposal content..."
