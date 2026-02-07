@@ -43,6 +43,13 @@ class CommentStatus(str, Enum):
     RESOLVED = "resolved"
 
 
+class ChecklistItemStatus(str, Enum):
+    PENDING = "pending"
+    PASS = "pass"
+    FAIL = "fail"
+    NA = "na"
+
+
 class ProposalReview(SQLModel, table=True):
     """Color team review for a proposal."""
 
@@ -56,6 +63,7 @@ class ProposalReview(SQLModel, table=True):
     completed_date: datetime | None = None
     overall_score: float | None = None
     summary: str | None = Field(default=None, sa_column=Column(Text))
+    go_no_go_decision: str | None = Field(default=None, max_length=20)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -70,6 +78,8 @@ class ReviewAssignment(SQLModel, table=True):
     review_id: int = Field(foreign_key="proposal_reviews.id", index=True)
     reviewer_user_id: int = Field(foreign_key="users.id", index=True)
     status: AssignmentStatus = Field(default=AssignmentStatus.PENDING)
+    due_date: datetime | None = None
+    completed_at: datetime | None = None
     assigned_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -86,5 +96,21 @@ class ReviewComment(SQLModel, table=True):
     severity: CommentSeverity = Field(default=CommentSeverity.MINOR)
     status: CommentStatus = Field(default=CommentStatus.OPEN)
     resolution_note: str | None = Field(default=None, sa_column=Column(Text))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReviewChecklistItem(SQLModel, table=True):
+    """Checklist item for structured review feedback."""
+
+    __tablename__ = "review_checklist_items"
+
+    id: int | None = Field(default=None, primary_key=True)
+    review_id: int = Field(foreign_key="proposal_reviews.id", index=True)
+    category: str = Field(max_length=100)
+    item_text: str = Field(sa_column=Column(Text))
+    status: ChecklistItemStatus = Field(default=ChecklistItemStatus.PENDING)
+    reviewer_note: str | None = Field(default=None, sa_column=Column(Text))
+    display_order: int = Field(default=0)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

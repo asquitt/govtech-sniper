@@ -8,6 +8,8 @@ export type CommentSeverity = "critical" | "major" | "minor" | "suggestion";
 
 export type CommentStatus = "open" | "accepted" | "rejected" | "resolved";
 
+export type ChecklistItemStatus = "pending" | "pass" | "fail" | "na";
+
 export interface ProposalReview {
   id: number;
   proposal_id: number;
@@ -17,6 +19,7 @@ export interface ProposalReview {
   completed_date?: string | null;
   overall_score?: number | null;
   summary?: string | null;
+  go_no_go_decision?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +29,8 @@ export interface ReviewAssignment {
   review_id: number;
   reviewer_user_id: number;
   status: AssignmentStatus;
+  due_date?: string | null;
+  completed_at?: string | null;
   assigned_at: string;
 }
 
@@ -39,4 +44,30 @@ export interface ReviewComment {
   status: CommentStatus;
   resolution_note?: string | null;
   created_at: string;
+}
+
+export interface ReviewChecklistItem {
+  id: number;
+  review_id: number;
+  category: string;
+  item_text: string;
+  status: ChecklistItemStatus;
+  reviewer_note?: string | null;
+  display_order: number;
+  created_at: string;
+}
+
+export interface ReviewDashboardItem {
+  review_id: number;
+  proposal_id: number;
+  proposal_title: string;
+  review_type: ReviewType;
+  status: ReviewStatus;
+  scheduled_date?: string | null;
+  overall_score?: number | null;
+  go_no_go_decision?: string | null;
+  total_comments: number;
+  open_comments: number;
+  total_assignments: number;
+  completed_assignments: number;
 }

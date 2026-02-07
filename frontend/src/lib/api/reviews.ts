@@ -3,9 +3,12 @@ import type {
   ProposalReview,
   ReviewAssignment,
   ReviewComment,
+  ReviewChecklistItem,
+  ReviewDashboardItem,
   ReviewType,
   CommentSeverity,
   CommentStatus,
+  ChecklistItemStatus,
 } from "@/types";
 
 export const reviewApi = {
@@ -28,10 +31,16 @@ export const reviewApi = {
     return data;
   },
 
+  // Dashboard
+  getDashboard: async (): Promise<ReviewDashboardItem[]> => {
+    const { data } = await api.get("/reviews/dashboard");
+    return data;
+  },
+
   // Assignments
   assignReviewer: async (
     reviewId: number,
-    payload: { reviewer_user_id: number }
+    payload: { reviewer_user_id: number; due_date?: string | null }
   ): Promise<ReviewAssignment> => {
     const { data } = await api.post(
       `/reviews/${reviewId}/assign`,
@@ -73,10 +82,43 @@ export const reviewApi = {
     return data;
   },
 
+  // Checklists
+  createChecklist: async (
+    reviewId: number,
+    payload: { review_type: string }
+  ): Promise<ReviewChecklistItem[]> => {
+    const { data } = await api.post(
+      `/reviews/${reviewId}/checklist`,
+      payload
+    );
+    return data;
+  },
+
+  getChecklist: async (reviewId: number): Promise<ReviewChecklistItem[]> => {
+    const { data } = await api.get(`/reviews/${reviewId}/checklist`);
+    return data;
+  },
+
+  updateChecklistItem: async (
+    reviewId: number,
+    itemId: number,
+    payload: { status?: ChecklistItemStatus; reviewer_note?: string }
+  ): Promise<ReviewChecklistItem> => {
+    const { data } = await api.patch(
+      `/reviews/${reviewId}/checklist/${itemId}`,
+      payload
+    );
+    return data;
+  },
+
   // Complete
   completeReview: async (
     reviewId: number,
-    payload: { overall_score: number; summary?: string }
+    payload: {
+      overall_score: number;
+      summary?: string;
+      go_no_go_decision?: string;
+    }
   ): Promise<ProposalReview> => {
     const { data } = await api.patch(
       `/reviews/${reviewId}/complete`,
