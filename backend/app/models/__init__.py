@@ -88,6 +88,7 @@ from app.models.rfp import RFP, ComplianceMatrix, ComplianceRequirement
 from app.models.salesforce_mapping import SalesforceFieldMapping
 from app.models.saved_search import SavedSearch
 from app.models.secret import SecretRecord
+from app.models.sharepoint_sync import SharePointSyncConfig, SharePointSyncLog, SyncDirection
 from app.models.user import User, UserProfile
 from app.models.webhook import WebhookDelivery, WebhookDeliveryStatus, WebhookSubscription
 from app.models.word_addin import WordAddinEvent, WordAddinSession, WordAddinSessionStatus
@@ -196,4 +197,7 @@ __all__ = [
     "SavedReport",
     "ReportType",
     "ScheduleFrequency",
+    "SharePointSyncConfig",
+    "SharePointSyncLog",
+    "SyncDirection",
 ]

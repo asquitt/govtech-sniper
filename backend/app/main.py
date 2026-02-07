@@ -49,6 +49,7 @@ from app.api.routes import (
     search_router,
     secrets_router,
     sharepoint_router,
+    sharepoint_sync_router,
     signals_router,
     subscription_router,
     teaming_board_router,
@@ -331,6 +332,7 @@ app.include_router(forecasts_router, prefix=api_prefix)
 app.include_router(teaming_board_router, prefix=api_prefix)
 app.include_router(collaboration_router, prefix=api_prefix)
 app.include_router(sharepoint_router, prefix=api_prefix)
+app.include_router(sharepoint_sync_router, prefix=api_prefix)
 app.include_router(salesforce_router, prefix=api_prefix)
 app.include_router(data_sources_router, prefix=api_prefix)
 app.include_router(analytics_reporting_router, prefix=api_prefix)

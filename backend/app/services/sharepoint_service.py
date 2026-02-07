@@ -107,6 +107,45 @@ class SharePointService:
                 "size": data.get("size", 0),
             }
 
+    async def get_file_versions(self, file_id: str) -> list[dict]:
+        """Get version history for a file."""
+        token = await self._get_token()
+        url = f"{GRAPH_BASE}/drives/{self.drive_id}/items/{file_id}/versions"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, headers=self._headers(token))
+            resp.raise_for_status()
+            versions = resp.json().get("value", [])
+            return [
+                {
+                    "id": v["id"],
+                    "last_modified": v.get("lastModifiedDateTime"),
+                    "size": v.get("size", 0),
+                    "modified_by": v.get("lastModifiedBy", {}).get("user", {}).get("displayName"),
+                }
+                for v in versions
+            ]
+
+    async def create_subscription(
+        self,
+        resource: str,
+        notification_url: str,
+        expiration: str,
+    ) -> dict:
+        """Create a Graph API change subscription (webhook) for a resource."""
+        token = await self._get_token()
+        url = f"{GRAPH_BASE}/subscriptions"
+        body = {
+            "changeType": "created,updated",
+            "notificationUrl": notification_url,
+            "resource": resource,
+            "expirationDateTime": expiration,
+        }
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, headers=self._headers(token), json=body)
+            resp.raise_for_status()
+            data = resp.json()
+            return {"id": data["id"], "expiration": data.get("expirationDateTime")}
+
 
 def create_sharepoint_service(config: dict) -> SharePointService:
     """Factory: build SharePointService from IntegrationConfig.config dict."""

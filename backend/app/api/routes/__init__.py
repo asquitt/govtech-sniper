@@ -40,6 +40,7 @@ from app.api.routes.scim import router as scim_router
 from app.api.routes.search import router as search_router
 from app.api.routes.secrets import router as secrets_router
 from app.api.routes.sharepoint import router as sharepoint_router
+from app.api.routes.sharepoint_sync import router as sharepoint_sync_router
 from app.api.routes.signals import router as signals_router
 from app.api.routes.subscription import router as subscription_router
 from app.api.routes.teaming_board import router as teaming_board_router
@@ -89,6 +90,7 @@ __all__ = [
     "teaming_board_router",
     "collaboration_router",
     "sharepoint_router",
+    "sharepoint_sync_router",
     "data_sources_router",
     "salesforce_router",
     "analytics_reporting_router",

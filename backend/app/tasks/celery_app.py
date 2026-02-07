@@ -20,6 +20,7 @@ celery_app = Celery(
         "app.tasks.generation_tasks",
         "app.tasks.document_tasks",
         "app.tasks.maintenance_tasks",
+        "app.tasks.sharepoint_sync_tasks",
     ],
 )
 
@@ -79,6 +80,12 @@ celery_app.conf.update(
             "task": "app.tasks.maintenance_tasks.check_operational_alerts",
             "schedule": crontab(minute=0, hour="*/1"),
             "options": {"queue": "maintenance"},
+        },
+        # Watch SharePoint folders for new RFP documents every 15 minutes
+        "watch-sharepoint-folders": {
+            "task": "app.tasks.sharepoint_sync_tasks.watch_sharepoint_folders",
+            "schedule": crontab(minute="*/15"),
+            "options": {"queue": "periodic"},
         },
     },
     # Task routing
