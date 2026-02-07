@@ -78,6 +78,7 @@ class ComplianceRequirement(BaseModel):
     keywords: list[str] = []  # Key terms for matching
     is_addressed: bool = False  # Has user addressed this?
     notes: str | None = None  # User annotations
+    confidence: float = 0.0  # AI extraction confidence (0.0-1.0)
     status: RequirementStatus = RequirementStatus.OPEN
     assigned_to: str | None = None
     tags: list[str] = Field(default_factory=list)

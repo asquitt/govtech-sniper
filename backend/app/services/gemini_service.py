@@ -137,7 +137,8 @@ Respond with ONLY valid JSON in this format:
             "importance": "mandatory",
             "category": "Technical",
             "page_reference": 12,
-            "keywords": ["contractor", "provide", "deliverable"]
+            "keywords": ["contractor", "provide", "deliverable"],
+            "confidence": 0.95
         }}
     ],
     "summary": "Brief summary of the RFP scope",
@@ -223,6 +224,7 @@ Respond with ONLY valid JSON in this format:
                     category=req_data.get("category"),
                     page_reference=req_data.get("page_reference"),
                     keywords=req_data.get("keywords", []),
+                    confidence=req_data.get("confidence", 0.0),
                 )
                 requirements.append(req)
 

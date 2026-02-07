@@ -180,6 +180,10 @@ class ProposalSection(ProposalSectionBase, table=True):
     # Word count tracking
     word_count: int | None = None
 
+    # Quality scoring (populated by AIQualityScorer after generation)
+    quality_score: float | None = None  # 0-100 overall quality score
+    quality_breakdown: dict | None = Field(default=None, sa_column=Column(JSON))
+
     # Order for display
     display_order: int = Field(default=0)
 

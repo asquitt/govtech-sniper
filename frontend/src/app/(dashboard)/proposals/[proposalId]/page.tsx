@@ -13,6 +13,7 @@ import { EvidencePanel } from "./_components/evidence-panel";
 import { WordAssistantPanel } from "./_components/word-assistant-panel";
 import { GraphicsPanel } from "./_components/graphics-panel";
 import { SubmissionPanel } from "./_components/submission-panel";
+import { CompliancePanel } from "./_components/compliance-panel";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import type {
   Proposal,
@@ -424,6 +425,11 @@ export default function ProposalWorkspacePage() {
               onSave={handleSaveSection}
               onApprove={handleApproveSection}
               isSaving={isSaving}
+              onSectionUpdate={(updated) =>
+                setSections((prev) =>
+                  prev.map((s) => (s.id === updated.id ? updated : s))
+                )
+              }
             />
           </div>
 
@@ -468,6 +474,14 @@ export default function ProposalWorkspacePage() {
               onCreateRequest={handleCreateGraphicsRequest}
               onUpdateStatus={handleUpdateGraphicsStatus}
               onRemoveRequest={handleRemoveGraphicsRequest}
+            />
+
+            <CompliancePanel
+              rfpId={proposal.rfp_id}
+              onSelectRequirement={(reqId) => {
+                const section = sections.find((s) => s.requirement_id === reqId);
+                if (section) setSelectedSectionId(section.id);
+              }}
             />
 
             <SubmissionPanel

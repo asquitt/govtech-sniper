@@ -262,6 +262,7 @@ class ComplianceRequirementRead(BaseModel):
     keywords: list[str]
     is_addressed: bool
     notes: str | None
+    confidence: float = 0.0
     status: RequirementStatus = RequirementStatus.OPEN
     assigned_to: str | None = None
     tags: list[str] = Field(default_factory=list)

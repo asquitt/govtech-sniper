@@ -164,6 +164,14 @@ def generate_proposal_section(
                 # Update section
                 section.set_generated_content(generated)
 
+                # Score quality
+                from app.services.compliance_checker import AIQualityScorer
+
+                scorer = AIQualityScorer()
+                scores = scorer.score_content(generated.clean_text, section.requirement_text)
+                section.quality_score = scores["overall_score"]
+                section.quality_breakdown = scores
+
                 # Update proposal completion count
                 proposal_result = await session.execute(
                     select(Proposal).where(Proposal.id == section.proposal_id)

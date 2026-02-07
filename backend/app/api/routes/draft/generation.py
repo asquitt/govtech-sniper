@@ -2,6 +2,8 @@
 Draft Routes - Section Generation & Status
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +17,9 @@ from app.models.rfp import ComplianceMatrix
 from app.schemas.proposal import (
     DraftRequest,
     DraftResponse,
+    ExpandRequest,
+    ProposalSectionRead,
+    RewriteRequest,
 )
 from app.services.auth_service import UserAuth
 from app.tasks.generation_tasks import (
@@ -76,6 +81,165 @@ async def generate_sections_from_matrix(
         "proposal_id": proposal_id,
         "sections_created": sections_created,
         "message": f"Created {sections_created} sections from compliance matrix",
+    }
+
+
+@router.post("/sections/{section_id}/rewrite", response_model=ProposalSectionRead)
+async def rewrite_section(
+    section_id: int,
+    request: RewriteRequest,
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> ProposalSectionRead:
+    """Rewrite a section's content with a new tone or custom instructions."""
+    resolved_user_id = resolve_user_id(user_id, current_user)
+
+    section_result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = section_result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(Proposal.id == section.proposal_id)
+    )
+    proposal = proposal_result.scalar_one_or_none()
+    if not proposal or proposal.user_id != resolved_user_id:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    content = section.final_content or (
+        section.get_generated_content().clean_text if section.generated_content else None
+    )
+    if not content:
+        raise HTTPException(status_code=400, detail="Section has no content to rewrite")
+
+    from app.services.gemini_service import GeminiService
+
+    gemini = GeminiService()
+    generated = await gemini.rewrite_section(
+        content=content,
+        requirement_text=section.requirement_text or section.title,
+        tone=request.tone,
+        instructions=request.instructions,
+    )
+
+    section.set_generated_content(generated)
+    section.updated_at = datetime.utcnow()
+
+    from app.services.compliance_checker import AIQualityScorer
+
+    scorer = AIQualityScorer()
+    scores = scorer.score_content(generated.clean_text, section.requirement_text)
+    section.quality_score = scores["overall_score"]
+    section.quality_breakdown = scores
+
+    await session.commit()
+    await session.refresh(section)
+    return ProposalSectionRead.model_validate(section)
+
+
+@router.post("/sections/{section_id}/expand", response_model=ProposalSectionRead)
+async def expand_section(
+    section_id: int,
+    request: ExpandRequest,
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> ProposalSectionRead:
+    """Expand a section's content with more detail."""
+    resolved_user_id = resolve_user_id(user_id, current_user)
+
+    section_result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = section_result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(Proposal.id == section.proposal_id)
+    )
+    proposal = proposal_result.scalar_one_or_none()
+    if not proposal or proposal.user_id != resolved_user_id:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    content = section.final_content or (
+        section.get_generated_content().clean_text if section.generated_content else None
+    )
+    if not content:
+        raise HTTPException(status_code=400, detail="Section has no content to expand")
+
+    from app.services.gemini_service import GeminiService
+
+    gemini = GeminiService()
+    generated = await gemini.expand_section(
+        content=content,
+        requirement_text=section.requirement_text or section.title,
+        target_words=request.target_words,
+        focus_area=request.focus_area,
+    )
+
+    section.set_generated_content(generated)
+    section.updated_at = datetime.utcnow()
+
+    from app.services.compliance_checker import AIQualityScorer
+
+    scorer = AIQualityScorer()
+    scores = scorer.score_content(generated.clean_text, section.requirement_text)
+    section.quality_score = scores["overall_score"]
+    section.quality_breakdown = scores
+
+    await session.commit()
+    await session.refresh(section)
+    return ProposalSectionRead.model_validate(section)
+
+
+@router.get("/proposals/{proposal_id}/generation-progress")
+async def get_generation_progress(
+    proposal_id: int,
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Get aggregate generation progress for all sections in a proposal."""
+    resolved_user_id = resolve_user_id(user_id, current_user)
+
+    proposal_result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
+    proposal = proposal_result.scalar_one_or_none()
+    if not proposal or proposal.user_id != resolved_user_id:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    sections_result = await session.execute(
+        select(ProposalSection).where(ProposalSection.proposal_id == proposal_id)
+    )
+    sections = sections_result.scalars().all()
+
+    total = len(sections)
+    counts: dict[str, int] = {
+        "pending": 0,
+        "generating": 0,
+        "generated": 0,
+        "editing": 0,
+        "approved": 0,
+    }
+    for s in sections:
+        status_key = s.status.value if hasattr(s.status, "value") else s.status
+        if status_key in counts:
+            counts[status_key] += 1
+
+    completed = counts["generated"] + counts["editing"] + counts["approved"]
+    return {
+        "proposal_id": proposal_id,
+        "total": total,
+        "completed": completed,
+        "pending": counts["pending"],
+        "generating": counts["generating"],
+        "generated": counts["generated"],
+        "editing": counts["editing"],
+        "approved": counts["approved"],
+        "completion_percentage": round((completed / total * 100) if total > 0 else 0, 1),
     }
 
 

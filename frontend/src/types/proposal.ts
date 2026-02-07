@@ -35,6 +35,7 @@ export interface ComplianceRequirement {
   keywords: string[];
   is_addressed: boolean;
   notes?: string;
+  confidence?: number;
   status?: RequirementStatus;
   assigned_to?: string;
   tags?: string[];
@@ -100,6 +101,8 @@ export interface ProposalSection {
   generated_content?: GeneratedContent;
   final_content?: string;
   word_count?: number;
+  quality_score?: number;
+  quality_breakdown?: Record<string, number>;
   display_order: number;
   created_at: string;
   updated_at: string;

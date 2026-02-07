@@ -224,4 +224,35 @@ export const draftApi = {
     const { data } = await api.post(`/draft/proposals/${proposalId}/outline/approve`);
     return data;
   },
+
+  rewriteSection: async (
+    sectionId: number,
+    payload: { tone: string; instructions?: string }
+  ): Promise<ProposalSection> => {
+    const { data } = await api.post(`/draft/sections/${sectionId}/rewrite`, payload);
+    return data;
+  },
+
+  expandSection: async (
+    sectionId: number,
+    payload: { target_words: number; focus_area?: string }
+  ): Promise<ProposalSection> => {
+    const { data } = await api.post(`/draft/sections/${sectionId}/expand`, payload);
+    return data;
+  },
+
+  getGenerationProgress: async (
+    proposalId: number
+  ): Promise<{
+    total: number;
+    completed: number;
+    pending: number;
+    generating: number;
+    completion_percentage: number;
+  }> => {
+    const { data } = await api.get(
+      `/draft/proposals/${proposalId}/generation-progress`
+    );
+    return data;
+  },
 };

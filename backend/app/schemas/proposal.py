@@ -117,6 +117,8 @@ class ProposalSectionRead(BaseModel):
     generated_content: GeneratedContentRead | None
     final_content: str | None
     word_count: int | None
+    quality_score: float | None = None
+    quality_breakdown: dict | None = None
     display_order: int
     created_at: datetime
     updated_at: datetime
