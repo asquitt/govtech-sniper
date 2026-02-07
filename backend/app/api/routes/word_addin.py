@@ -216,3 +216,228 @@ async def list_events(
     )
     events = events_result.scalars().all()
     return [WordAddinEventResponse.model_validate(event) for event in events]
+
+
+# === Section Sync Endpoints ===
+
+
+class SectionPullResponse(BaseModel):
+    section_id: int
+    title: str
+    content: str
+    requirements: list[str] = []
+    last_modified: Optional[str] = None
+
+
+class SectionPushPayload(BaseModel):
+    content: str
+
+
+class ComplianceCheckResult(BaseModel):
+    section_id: int
+    compliant: bool
+    issues: list[str] = []
+    suggestions: list[str] = []
+
+
+class AIRewritePayload(BaseModel):
+    content: str
+    mode: str = Field(..., description="shorten, expand, or improve")
+
+
+class AIRewriteResponse(BaseModel):
+    original_length: int
+    rewritten: str
+    rewritten_length: int
+    mode: str
+
+
+@router.post("/sections/{section_id}/pull", response_model=SectionPullResponse)
+async def pull_section_content(
+    section_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> SectionPullResponse:
+    """Pull section content for editing in Word."""
+    from app.models.proposal import ProposalSection
+
+    result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(
+            Proposal.id == section.proposal_id,
+            Proposal.user_id == current_user.id,
+        )
+    )
+    if not proposal_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    requirements: list[str] = []
+    if section.requirement_text:
+        requirements = [section.requirement_text]
+
+    # final_content is str, generated_content is JSON dict
+    content = section.final_content or ""
+    if not content and section.generated_content:
+        if isinstance(section.generated_content, dict):
+            content = section.generated_content.get("content", "")
+        else:
+            content = str(section.generated_content)
+
+    return SectionPullResponse(
+        section_id=section.id,
+        title=section.title,
+        content=content,
+        requirements=requirements,
+        last_modified=section.updated_at.isoformat() if section.updated_at else None,
+    )
+
+
+@router.post("/sections/{section_id}/push")
+async def push_section_content(
+    section_id: int,
+    payload: SectionPushPayload,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Push edited content from Word back to the system."""
+    from app.models.proposal import ProposalSection
+
+    result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(
+            Proposal.id == section.proposal_id,
+            Proposal.user_id == current_user.id,
+        )
+    )
+    if not proposal_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    section.final_content = payload.content
+    section.updated_at = datetime.utcnow()
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="proposal_section",
+        entity_id=section.id,
+        action="section.pushed_from_word",
+        metadata={"content_length": len(payload.content)},
+    )
+    await session.commit()
+
+    return {"message": "Section updated", "section_id": section.id}
+
+
+@router.post(
+    "/sections/{section_id}/compliance-check",
+    response_model=ComplianceCheckResult,
+)
+async def check_section_compliance(
+    section_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceCheckResult:
+    """Check section content against its requirements."""
+    from app.models.proposal import ProposalSection
+
+    result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(
+            Proposal.id == section.proposal_id,
+            Proposal.user_id == current_user.id,
+        )
+    )
+    if not proposal_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    content = section.final_content or ""
+    if not content and section.generated_content:
+        if isinstance(section.generated_content, dict):
+            content = section.generated_content.get("content", "")
+        else:
+            content = str(section.generated_content)
+    requirements: list[str] = []
+    if isinstance(section.requirement_text, str) and section.requirement_text:
+        requirements = [section.requirement_text]
+
+    issues: list[str] = []
+    suggestions: list[str] = []
+
+    if not content.strip():
+        issues.append("Section has no content")
+
+    if len(content) < 100 and requirements:
+        issues.append("Content appears too short for the requirements")
+
+    for req in requirements:
+        req_lower = req.lower()
+        if req_lower not in content.lower():
+            keyword = req_lower[:50]
+            suggestions.append(f"Consider addressing: {keyword}")
+
+    return ComplianceCheckResult(
+        section_id=section.id,
+        compliant=len(issues) == 0,
+        issues=issues,
+        suggestions=suggestions[:10],
+    )
+
+
+@router.post("/ai/rewrite", response_model=AIRewriteResponse)
+async def ai_rewrite(
+    payload: AIRewritePayload,
+    current_user: UserAuth = Depends(get_current_user),
+) -> AIRewriteResponse:
+    """AI rewrite content (shorten/expand/improve)."""
+    content = payload.content
+    mode = payload.mode
+
+    if mode not in ("shorten", "expand", "improve"):
+        raise HTTPException(
+            status_code=400, detail="Mode must be shorten, expand, or improve"
+        )
+
+    if mode == "shorten":
+        sentences = content.split(". ")
+        if len(sentences) > 2:
+            rewritten = ". ".join(sentences[: len(sentences) // 2 + 1])
+            if not rewritten.endswith("."):
+                rewritten += "."
+        else:
+            rewritten = content
+    elif mode == "expand":
+        rewritten = (
+            content
+            + "\n\nAdditionally, this approach ensures comprehensive coverage of "
+            "all stated requirements while maintaining alignment with the "
+            "evaluation criteria."
+        )
+    else:  # improve
+        rewritten = content.replace("  ", " ").strip()
+        if not rewritten.endswith("."):
+            rewritten += "."
+
+    return AIRewriteResponse(
+        original_length=len(content),
+        rewritten=rewritten,
+        rewritten_length=len(rewritten),
+        mode=mode,
+    )

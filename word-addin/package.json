@@ -1,0 +1,13 @@
+{
+  "name": "rfp-sniper-word-addin",
+  "version": "1.0.0",
+  "description": "RFP Sniper Word Add-in for proposal editing",
+  "main": "src/taskpane/taskpane.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
