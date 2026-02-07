@@ -331,6 +331,53 @@ async def delete_rfp(
     return {"message": f"RFP {rfp_id} deleted"}
 
 
+@router.post("/{rfp_id}/match-score")
+async def compute_match_score(
+    rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Compute AI match score for an RFP against the user's profile."""
+    from app.models.user import UserProfile
+    from app.services.matching_service import OpportunityMatchingService
+
+    result = await session.execute(select(RFP).where(RFP.id == rfp_id))
+    rfp = result.scalar_one_or_none()
+    if not rfp:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
+    profile_result = await session.execute(
+        select(UserProfile).where(UserProfile.user_id == rfp.user_id)
+    )
+    profile = profile_result.scalar_one_or_none()
+    if not profile:
+        raise HTTPException(
+            status_code=400, detail="User profile not found. Create a profile first."
+        )
+
+    service = OpportunityMatchingService()
+    match = await service.score_opportunity(rfp, profile)
+
+    rfp.match_score = match.overall_score
+    rfp.match_reasoning = match.reasoning
+    rfp.match_details = match.to_dict()
+
+    from datetime import datetime
+
+    rfp.updated_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(rfp)
+
+    return {
+        "rfp_id": rfp.id,
+        "match_score": match.overall_score,
+        "category_scores": match.category_scores,
+        "strengths": match.strengths,
+        "gaps": match.gaps,
+        "reasoning": match.reasoning,
+    }
+
+
 @router.post("/{rfp_id}/upload-pdf")
 async def upload_rfp_pdf(
     rfp_id: int,

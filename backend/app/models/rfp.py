@@ -154,6 +154,11 @@ class RFP(RFPBase, table=True):
     qualification_reason: str | None = Field(default=None, sa_column=Column(Text))
     qualification_score: float | None = None  # 0-100
 
+    # AI Match Score (opportunity matching against user profile)
+    match_score: float | None = None  # 0-100
+    match_reasoning: str | None = Field(default=None, sa_column=Column(Text))
+    match_details: dict | None = Field(default=None, sa_column=Column(JSON))
+
     # File references
     pdf_file_path: str | None = Field(default=None, max_length=500)
     attachment_paths: list[str] = Field(default=[], sa_column=Column(JSON))

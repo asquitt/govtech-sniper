@@ -172,6 +172,9 @@ class RFPRead(BaseModel):
     budget_estimate: int | None
     competitive_landscape: str | None
     intel_notes: str | None
+    match_score: float | None = None
+    match_reasoning: str | None = None
+    match_details: dict | None = None
     created_at: datetime
     updated_at: datetime
     analyzed_at: datetime | None
@@ -213,6 +216,7 @@ class RFPListItem(BaseModel):
     status: RFPStatus
     is_qualified: bool | None
     qualification_score: float | None
+    match_score: float | None = None
     response_deadline: datetime | None
     created_at: datetime
 
