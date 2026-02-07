@@ -5,19 +5,18 @@ Encrypted secrets storage with audit logging.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.secret import SecretRecord
-from app.services.encryption_service import encrypt_value, redact_value
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
+from app.services.encryption_service import encrypt_value, redact_value
 
 router = APIRouter(prefix="/secrets", tags=["Secrets"])
 
@@ -37,11 +36,11 @@ class SecretResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("", response_model=List[SecretResponse])
+@router.get("", response_model=list[SecretResponse])
 async def list_secrets(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SecretResponse]:
+) -> list[SecretResponse]:
     result = await session.execute(
         select(SecretRecord).where(SecretRecord.user_id == current_user.id)
     )

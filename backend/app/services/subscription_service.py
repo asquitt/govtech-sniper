@@ -4,18 +4,16 @@ RFP Sniper - Subscription Service
 Plan definitions, feature access checks, usage stats, and Stripe stubs.
 """
 
-from datetime import datetime
-from typing import Optional
 
+import structlog
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, func
-import structlog
+from sqlmodel import func, select
 
-from app.models.user import User, UserTier
-from app.models.rfp import RFP
-from app.models.proposal import Proposal
 from app.api.deps import FEATURE_GATES, TIER_LEVELS
+from app.models.proposal import Proposal
+from app.models.rfp import RFP
+from app.models.user import User, UserTier
 
 logger = structlog.get_logger(__name__)
 
@@ -23,6 +21,7 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 # Plan Definitions
 # =============================================================================
+
 
 class PlanFeature(BaseModel):
     name: str
@@ -115,14 +114,20 @@ PLAN_DEFINITIONS: dict[str, PlanDefinition] = {
 # Public Helpers
 # =============================================================================
 
-def get_plan_details(tier: str) -> Optional[PlanDefinition]:
+
+def get_plan_details(tier: str) -> PlanDefinition | None:
     """Return plan definition for a tier, or None if unknown."""
     return PLAN_DEFINITIONS.get(tier)
 
 
 def get_all_plans() -> list[PlanDefinition]:
     """Return all plans in tier order."""
-    order = [UserTier.FREE.value, UserTier.STARTER.value, UserTier.PROFESSIONAL.value, UserTier.ENTERPRISE.value]
+    order = [
+        UserTier.FREE.value,
+        UserTier.STARTER.value,
+        UserTier.PROFESSIONAL.value,
+        UserTier.ENTERPRISE.value,
+    ]
     return [PLAN_DEFINITIONS[t] for t in order]
 
 
@@ -151,9 +156,12 @@ async def get_usage_stats(user_id: int, session: AsyncSession) -> UsageStats:
     user = user_result.scalar_one_or_none()
     if not user:
         return UsageStats(
-            rfps_used=0, rfps_limit=0,
-            proposals_used=0, proposals_limit=0,
-            api_calls_used=0, api_calls_limit=0,
+            rfps_used=0,
+            rfps_limit=0,
+            proposals_used=0,
+            proposals_limit=0,
+            api_calls_used=0,
+            api_calls_limit=0,
         )
 
     plan = PLAN_DEFINITIONS.get(user.tier.value, PLAN_DEFINITIONS[UserTier.FREE.value])
@@ -181,6 +189,7 @@ async def get_usage_stats(user_id: int, session: AsyncSession) -> UsageStats:
 # =============================================================================
 # Stripe Stubs
 # =============================================================================
+
 
 class CheckoutSessionResponse(BaseModel):
     checkout_url: str

@@ -2,7 +2,6 @@
 
 import json
 import math
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -50,7 +49,7 @@ def _simple_embedding(text: str) -> list[float]:
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     mag_a = math.sqrt(sum(x * x for x in a))
     mag_b = math.sqrt(sum(x * x for x in b))
     if mag_a == 0 or mag_b == 0:
@@ -94,7 +93,7 @@ async def index_entity(
 async def search(
     session: AsyncSession,
     query: str,
-    entity_types: Optional[list[str]] = None,
+    entity_types: list[str] | None = None,
     limit: int = 10,
 ) -> list[dict]:
     """Semantic search across indexed entities."""
@@ -113,13 +112,15 @@ async def search(
             continue
         doc_embedding = json.loads(emb.embedding_json)
         score = _cosine_similarity(query_embedding, doc_embedding)
-        scored.append({
-            "entity_type": emb.entity_type,
-            "entity_id": emb.entity_id,
-            "chunk_text": emb.chunk_text,
-            "score": round(score, 4),
-            "chunk_index": emb.chunk_index,
-        })
+        scored.append(
+            {
+                "entity_type": emb.entity_type,
+                "entity_id": emb.entity_id,
+                "chunk_text": emb.chunk_text,
+                "score": round(score, 4),
+                "chunk_index": emb.chunk_index,
+            }
+        )
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[:limit]

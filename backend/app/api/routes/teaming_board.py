@@ -5,15 +5,13 @@ Partner discovery and teaming requests.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.capture import TeamingPartner, TeamingRequest, TeamingRequestStatus
 from app.schemas.teaming import (
     TeamingPartnerExtended,
@@ -23,6 +21,7 @@ from app.schemas.teaming import (
     TeamingRequestUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/teaming", tags=["Teaming Board"])
 
@@ -32,16 +31,16 @@ router = APIRouter(prefix="/teaming", tags=["Teaming Board"])
 # -----------------------------------------------------------------------------
 
 
-@router.get("/search", response_model=List[TeamingPartnerPublicProfile])
+@router.get("/search", response_model=list[TeamingPartnerPublicProfile])
 async def search_partners(
-    naics: Optional[str] = Query(None, description="Filter by NAICS code"),
-    set_aside: Optional[str] = Query(None, description="Filter by set-aside type"),
-    capability: Optional[str] = Query(None, description="Filter by capability keyword"),
-    clearance: Optional[str] = Query(None, description="Filter by clearance level"),
-    q: Optional[str] = Query(None, description="Free-text name search"),
+    naics: str | None = Query(None, description="Filter by NAICS code"),
+    set_aside: str | None = Query(None, description="Filter by set-aside type"),
+    capability: str | None = Query(None, description="Filter by capability keyword"),
+    clearance: str | None = Query(None, description="Filter by clearance level"),
+    q: str | None = Query(None, description="Free-text name search"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[TeamingPartnerPublicProfile]:
+) -> list[TeamingPartnerPublicProfile]:
     """Search public partner profiles with optional filters."""
     stmt = select(TeamingPartner).where(TeamingPartner.is_public == True)  # noqa: E712
 
@@ -97,15 +96,15 @@ async def get_partner_profile(
 @router.patch("/my-profile/{partner_id}", response_model=TeamingPartnerExtended)
 async def update_my_partner_profile(
     partner_id: int,
-    is_public: Optional[bool] = None,
-    naics_codes: Optional[List[str]] = None,
-    set_asides: Optional[List[str]] = None,
-    capabilities: Optional[List[str]] = None,
-    clearance_level: Optional[str] = None,
-    past_performance_summary: Optional[str] = None,
-    website: Optional[str] = None,
-    company_duns: Optional[str] = None,
-    cage_code: Optional[str] = None,
+    is_public: bool | None = None,
+    naics_codes: list[str] | None = None,
+    set_asides: list[str] | None = None,
+    capabilities: list[str] | None = None,
+    clearance_level: str | None = None,
+    past_performance_summary: str | None = None,
+    website: str | None = None,
+    company_duns: str | None = None,
+    cage_code: str | None = None,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TeamingPartnerExtended:
@@ -222,19 +221,17 @@ async def send_teaming_request(
     )
 
 
-@router.get("/requests", response_model=List[TeamingRequestRead])
+@router.get("/requests", response_model=list[TeamingRequestRead])
 async def list_teaming_requests(
     direction: str = Query("sent", description="'sent' or 'received'"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[TeamingRequestRead]:
+) -> list[TeamingRequestRead]:
     """List sent or received teaming requests."""
     if direction == "received":
         # Requests to partners owned by current user
         my_partner_result = await session.execute(
-            select(TeamingPartner.id).where(
-                TeamingPartner.user_id == current_user.id
-            )
+            select(TeamingPartner.id).where(TeamingPartner.user_id == current_user.id)
         )
         my_partner_ids = [pid for pid in my_partner_result.scalars().all()]
 
@@ -242,15 +239,11 @@ async def list_teaming_requests(
             return []
 
         result = await session.execute(
-            select(TeamingRequest).where(
-                TeamingRequest.to_partner_id.in_(my_partner_ids)
-            )
+            select(TeamingRequest).where(TeamingRequest.to_partner_id.in_(my_partner_ids))
         )
     else:
         result = await session.execute(
-            select(TeamingRequest).where(
-                TeamingRequest.from_user_id == current_user.id
-            )
+            select(TeamingRequest).where(TeamingRequest.from_user_id == current_user.id)
         )
 
     requests = result.scalars().all()
@@ -292,9 +285,7 @@ async def update_teaming_request(
     if payload.status not in ("accepted", "declined"):
         raise HTTPException(status_code=400, detail="Status must be 'accepted' or 'declined'")
 
-    result = await session.execute(
-        select(TeamingRequest).where(TeamingRequest.id == request_id)
-    )
+    result = await session.execute(select(TeamingRequest).where(TeamingRequest.id == request_id))
     request = result.scalar_one_or_none()
     if not request:
         raise HTTPException(status_code=404, detail="Teaming request not found")
@@ -330,7 +321,9 @@ async def update_teaming_request(
         to_partner_id=request.to_partner_id,
         rfp_id=request.rfp_id,
         message=request.message,
-        status=request.status.value if isinstance(request.status, TeamingRequestStatus) else request.status,
+        status=request.status.value
+        if isinstance(request.status, TeamingRequestStatus)
+        else request.status,
         partner_name=partner.name,
         created_at=request.created_at,
         updated_at=request.updated_at,

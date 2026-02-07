@@ -2,29 +2,28 @@
 Draft Routes - Proposal CRUD
 """
 
-from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user_optional, resolve_user_id
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.proposal import Proposal
 from app.models.rfp import RFP
 from app.schemas.proposal import ProposalCreate, ProposalRead
+from app.services.auth_service import UserAuth
 
 router = APIRouter()
 
 
-@router.get("/proposals", response_model=List[ProposalRead])
+@router.get("/proposals", response_model=list[ProposalRead])
 async def list_proposals(
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    rfp_id: Optional[int] = Query(None, description="Filter by RFP ID"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    rfp_id: int | None = Query(None, description="Filter by RFP ID"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
-) -> List[ProposalRead]:
+) -> list[ProposalRead]:
     """
     List proposals for a user.
     """
@@ -46,9 +45,7 @@ async def get_proposal(
     """
     Get a proposal by id.
     """
-    result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -59,8 +56,8 @@ async def get_proposal(
 @router.post("/proposals", response_model=ProposalRead)
 async def create_proposal(
     proposal: ProposalCreate,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> ProposalRead:
     """
@@ -70,9 +67,7 @@ async def create_proposal(
     endpoints to add content.
     """
     # Verify RFP exists
-    result = await session.execute(
-        select(RFP).where(RFP.id == proposal.rfp_id)
-    )
+    result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
     rfp = result.scalar_one_or_none()
 
     if not rfp:

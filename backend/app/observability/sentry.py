@@ -4,17 +4,17 @@ RFP Sniper - Sentry Integration
 Error tracking and performance monitoring with Sentry.
 """
 
-from typing import Optional
+
 import structlog
 
 logger = structlog.get_logger(__name__)
 
 
 def init_sentry(
-    dsn: Optional[str],
+    dsn: str | None,
     environment: str = "development",
     traces_sample_rate: float = 0.1,
-    release: Optional[str] = None,
+    release: str | None = None,
 ) -> bool:
     """
     Initialize Sentry SDK for error tracking.
@@ -35,9 +35,9 @@ def init_sentry(
     try:
         import sentry_sdk
         from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-        from sentry_sdk.integrations.redis import RedisIntegration
         from sentry_sdk.integrations.httpx import HttpxIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
+        from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
         sentry_sdk.init(
             dsn=dsn,
@@ -93,7 +93,7 @@ def _before_send(event, hint):
     return event
 
 
-def capture_exception(exc: Exception, context: Optional[dict] = None) -> Optional[str]:
+def capture_exception(exc: Exception, context: dict | None = None) -> str | None:
     """
     Manually capture an exception and send to Sentry.
 
@@ -116,7 +116,7 @@ def capture_exception(exc: Exception, context: Optional[dict] = None) -> Optiona
         return None
 
 
-def capture_message(message: str, level: str = "info", context: Optional[dict] = None) -> Optional[str]:
+def capture_message(message: str, level: str = "info", context: dict | None = None) -> str | None:
     """
     Capture a message and send to Sentry.
 
@@ -140,7 +140,7 @@ def capture_message(message: str, level: str = "info", context: Optional[dict] =
         return None
 
 
-def set_user(user_id: int, email: Optional[str] = None, username: Optional[str] = None):
+def set_user(user_id: int, email: str | None = None, username: str | None = None):
     """
     Set the current user context for Sentry.
 
@@ -152,11 +152,13 @@ def set_user(user_id: int, email: Optional[str] = None, username: Optional[str] 
     try:
         import sentry_sdk
 
-        sentry_sdk.set_user({
-            "id": user_id,
-            "email": email,
-            "username": username,
-        })
+        sentry_sdk.set_user(
+            {
+                "id": user_id,
+                "email": email,
+                "username": username,
+            }
+        )
     except ImportError:
         pass
 
@@ -165,7 +167,7 @@ def add_breadcrumb(
     message: str,
     category: str = "custom",
     level: str = "info",
-    data: Optional[dict] = None,
+    data: dict | None = None,
 ):
     """
     Add a breadcrumb for debugging.

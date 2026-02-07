@@ -3,11 +3,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
-from app.api.deps import get_current_user, check_rate_limit
+from app.schemas.search import SearchRequest, SearchResponse, SearchResult
 from app.services.auth_service import UserAuth
 from app.services.embedding_service import search
-from app.schemas.search import SearchRequest, SearchResult, SearchResponse
 
 router = APIRouter(prefix="/search", tags=["Search"])
 

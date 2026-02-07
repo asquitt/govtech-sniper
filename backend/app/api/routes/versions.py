@@ -5,14 +5,14 @@ API endpoints for proposal and section version history.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, func
-from pydantic import BaseModel
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import func, select
 
+from app.api.deps import UserAuth, get_current_user
 from app.database import get_session
 from app.models.proposal import (
     Proposal,
@@ -21,7 +21,6 @@ from app.models.proposal import (
     ProposalVersionType,
     SectionVersion,
 )
-from app.api.deps import get_current_user, UserAuth
 
 logger = structlog.get_logger(__name__)
 
@@ -32,8 +31,10 @@ router = APIRouter(prefix="/versions", tags=["Version History"])
 # Response Schemas
 # =============================================================================
 
+
 class ProposalVersionResponse(BaseModel):
     """Response for proposal version."""
+
     id: int
     proposal_id: int
     version_number: int
@@ -46,28 +47,31 @@ class ProposalVersionResponse(BaseModel):
 
 class SectionVersionResponse(BaseModel):
     """Response for section version."""
+
     id: int
     section_id: int
     version_number: int
     change_type: str
-    change_summary: Optional[str]
+    change_summary: str | None
     word_count: int
     created_at: datetime
 
 
 class VersionDetailResponse(BaseModel):
     """Detailed version with content."""
+
     id: int
     version_number: int
     change_type: str
     content: str
     word_count: int
     created_at: datetime
-    diff_from_previous: Optional[str]
+    diff_from_previous: str | None
 
 
 class RestoreRequest(BaseModel):
     """Request to restore a version."""
+
     version_id: int
 
 
@@ -75,20 +79,22 @@ class RestoreRequest(BaseModel):
 # Helper Functions
 # =============================================================================
 
+
 async def create_proposal_version(
     session: AsyncSession,
     proposal: Proposal,
     user_id: int,
     version_type: ProposalVersionType,
     description: str,
-    section_id: Optional[int] = None,
-    section_snapshot: Optional[dict] = None,
+    section_id: int | None = None,
+    section_snapshot: dict | None = None,
 ) -> ProposalVersion:
     """Create a new proposal version entry."""
     # Get current max version number
     result = await session.execute(
-        select(func.max(ProposalVersion.version_number))
-        .where(ProposalVersion.proposal_id == proposal.id)
+        select(func.max(ProposalVersion.version_number)).where(
+            ProposalVersion.proposal_id == proposal.id
+        )
     )
     max_version = result.scalar() or 0
 
@@ -121,13 +127,14 @@ async def create_section_version(
     section: ProposalSection,
     user_id: int,
     change_type: str,
-    change_summary: Optional[str] = None,
+    change_summary: str | None = None,
 ) -> SectionVersion:
     """Create a new section version entry."""
     # Get current max version number
     result = await session.execute(
-        select(func.max(SectionVersion.version_number))
-        .where(SectionVersion.section_id == section.id)
+        select(func.max(SectionVersion.version_number)).where(
+            SectionVersion.section_id == section.id
+        )
     )
     max_version = result.scalar() or 0
 
@@ -154,14 +161,15 @@ async def create_section_version(
 # Proposal Version Endpoints
 # =============================================================================
 
-@router.get("/proposals/{proposal_id}", response_model=List[ProposalVersionResponse])
+
+@router.get("/proposals/{proposal_id}", response_model=list[ProposalVersionResponse])
 async def list_proposal_versions(
     proposal_id: int,
     limit: int = Query(50, le=100),
     offset: int = Query(0),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ProposalVersionResponse]:
+) -> list[ProposalVersionResponse]:
     """
     List all versions of a proposal.
     """
@@ -253,13 +261,14 @@ async def get_proposal_version(
 # Section Version Endpoints
 # =============================================================================
 
-@router.get("/sections/{section_id}", response_model=List[SectionVersionResponse])
+
+@router.get("/sections/{section_id}", response_model=list[SectionVersionResponse])
 async def list_section_versions(
     section_id: int,
     limit: int = Query(50, le=100),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SectionVersionResponse]:
+) -> list[SectionVersionResponse]:
     """
     List all versions of a proposal section.
     """

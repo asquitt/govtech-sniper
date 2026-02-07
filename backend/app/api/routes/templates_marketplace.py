@@ -5,18 +5,17 @@ Browse, fork, rate, and publish templates in the marketplace.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-from pydantic import BaseModel
-import structlog
 
-from app.database import get_session
-from app.api.deps import get_current_user, UserAuth
+from app.api.deps import UserAuth, get_current_user
 from app.api.routes.templates import ProposalTemplate
+from app.database import get_session
 
 logger = structlog.get_logger(__name__)
 
@@ -27,38 +26,43 @@ router = APIRouter(prefix="/templates", tags=["Template Marketplace"])
 # Schemas
 # =============================================================================
 
+
 class MarketplaceTemplateResponse(BaseModel):
     """Marketplace template response (includes rating/public fields)."""
+
     id: int
     name: str
     category: str
-    subcategory: Optional[str]
+    subcategory: str | None
     description: str
     placeholders: dict
-    keywords: List[str]
+    keywords: list[str]
     usage_count: int
     is_public: bool
     rating_sum: int
     rating_count: int
-    forked_from_id: Optional[int]
-    user_id: Optional[int]
+    forked_from_id: int | None
+    user_id: int | None
     created_at: datetime
 
 
 class MarketplaceBrowseResponse(BaseModel):
     """Paginated marketplace browse response."""
-    items: List[MarketplaceTemplateResponse]
+
+    items: list[MarketplaceTemplateResponse]
     total: int
 
 
 class RateRequest(BaseModel):
     """Rate a template."""
+
     rating: int  # 1-5
 
 
 # =============================================================================
 # Helpers
 # =============================================================================
+
 
 def _to_marketplace_response(t: ProposalTemplate) -> MarketplaceTemplateResponse:
     return MarketplaceTemplateResponse(
@@ -83,10 +87,11 @@ def _to_marketplace_response(t: ProposalTemplate) -> MarketplaceTemplateResponse
 # Endpoints
 # =============================================================================
 
+
 @router.get("/marketplace", response_model=MarketplaceBrowseResponse)
 async def browse_marketplace(
-    q: Optional[str] = Query(None, description="Search query"),
-    category: Optional[str] = Query(None, description="Filter by category"),
+    q: str | None = Query(None, description="Search query"),
+    category: str | None = Query(None, description="Filter by category"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: UserAuth = Depends(get_current_user),
@@ -111,7 +116,8 @@ async def browse_marketplace(
     if q:
         q_lower = q.lower()
         templates = [
-            t for t in templates
+            t
+            for t in templates
             if q_lower in t.name.lower()
             or q_lower in t.description.lower()
             or any(q_lower in kw.lower() for kw in t.keywords)
@@ -124,18 +130,16 @@ async def browse_marketplace(
     )
 
 
-@router.get("/marketplace/popular", response_model=List[MarketplaceTemplateResponse])
+@router.get("/marketplace/popular", response_model=list[MarketplaceTemplateResponse])
 async def popular_templates(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[MarketplaceTemplateResponse]:
+) -> list[MarketplaceTemplateResponse]:
     """Get top public templates by usage and rating."""
     result = await session.execute(
         select(ProposalTemplate)
         .where(ProposalTemplate.is_public == True)
-        .order_by(
-            (ProposalTemplate.usage_count + ProposalTemplate.rating_sum).desc()
-        )
+        .order_by((ProposalTemplate.usage_count + ProposalTemplate.rating_sum).desc())
         .limit(20)
     )
     templates = list(result.scalars().all())
@@ -202,7 +206,9 @@ async def fork_template(
     await session.commit()
     await session.refresh(forked)
 
-    logger.info("Template forked", original_id=template_id, fork_id=forked.id, user_id=current_user.id)
+    logger.info(
+        "Template forked", original_id=template_id, fork_id=forked.id, user_id=current_user.id
+    )
     return _to_marketplace_response(forked)
 
 

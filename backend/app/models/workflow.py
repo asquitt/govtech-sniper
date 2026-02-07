@@ -1,10 +1,9 @@
 """Workflow automation rules and execution history models."""
 
 from datetime import datetime
-from typing import Optional
 from enum import Enum
 
-from sqlmodel import Field, SQLModel, Column, JSON
+from sqlmodel import JSON, Column, Field, SQLModel
 
 
 class TriggerType(str, Enum):
@@ -23,7 +22,7 @@ class ExecutionStatus(str, Enum):
 class WorkflowRule(SQLModel, table=True):
     __tablename__ = "workflow_rules"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     name: str = Field(max_length=255)
     is_enabled: bool = Field(default=True)
@@ -38,11 +37,11 @@ class WorkflowRule(SQLModel, table=True):
 class WorkflowExecution(SQLModel, table=True):
     __tablename__ = "workflow_executions"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     rule_id: int = Field(foreign_key="workflow_rules.id", index=True)
     triggered_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     entity_type: str = Field(max_length=50)
     entity_id: int
     status: ExecutionStatus
     result: dict = Field(default={}, sa_column=Column(JSON))
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None

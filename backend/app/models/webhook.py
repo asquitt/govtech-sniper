@@ -5,10 +5,9 @@ Webhook subscriptions and delivery logs.
 """
 
 from datetime import datetime
-from typing import Optional, List
 from enum import Enum
 
-from sqlmodel import Field, SQLModel, Column, JSON
+from sqlmodel import JSON, Column, Field, SQLModel
 
 
 class WebhookDeliveryStatus(str, Enum):
@@ -22,16 +21,17 @@ class WebhookSubscription(SQLModel, table=True):
     """
     Webhook subscription configuration.
     """
+
     __tablename__ = "webhook_subscriptions"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
     name: str = Field(max_length=255)
     target_url: str = Field(max_length=1000)
-    secret: Optional[str] = Field(default=None, max_length=255)
+    secret: str | None = Field(default=None, max_length=255)
 
-    event_types: List[str] = Field(default=[], sa_column=Column(JSON))
+    event_types: list[str] = Field(default=[], sa_column=Column(JSON))
     is_active: bool = Field(default=True)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -42,17 +42,18 @@ class WebhookDelivery(SQLModel, table=True):
     """
     Delivery log for webhook events.
     """
+
     __tablename__ = "webhook_deliveries"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     subscription_id: int = Field(foreign_key="webhook_subscriptions.id", index=True)
 
     event_type: str = Field(max_length=128, index=True)
     payload: dict = Field(default={}, sa_column=Column(JSON))
 
     status: WebhookDeliveryStatus = Field(default=WebhookDeliveryStatus.PENDING)
-    response_code: Optional[int] = None
-    response_body: Optional[str] = None
+    response_code: int | None = None
+    response_body: str | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    delivered_at: Optional[datetime] = None
+    delivered_at: datetime | None = None

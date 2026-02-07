@@ -6,7 +6,6 @@ via its public ATOM feed.
 """
 
 import xml.etree.ElementTree as ET
-from typing import Optional
 
 import httpx
 import structlog
@@ -44,7 +43,7 @@ class FPDSProvider(DataSourceProvider):
             for code in params.naics_codes:
                 query_parts.append(f"NAICS:{code}")
         if params.agency:
-            query_parts.append(f"AGENCY_NAME:\"{params.agency}\"")
+            query_parts.append(f'AGENCY_NAME:"{params.agency}"')
 
         query_string = " ".join(query_parts) if query_parts else "LAST_MOD_DATE:[2024/01/01,]"
 
@@ -62,12 +61,12 @@ class FPDSProvider(DataSourceProvider):
 
         return _parse_atom_feed(xml_text, params.limit)
 
-    async def get_details(self, opportunity_id: str) -> Optional[RawOpportunity]:
+    async def get_details(self, opportunity_id: str) -> RawOpportunity | None:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(
                     FPDS_BASE_URL,
-                    params={"s": "FPDS", "q": f"PIID:\"{opportunity_id}\"", "feed": ""},
+                    params={"s": "FPDS", "q": f'PIID:"{opportunity_id}"', "feed": ""},
                 )
                 resp.raise_for_status()
                 xml_text = resp.text
@@ -159,7 +158,7 @@ def _parse_atom_feed(xml_text: str, limit: int) -> list[RawOpportunity]:
 
         if not external_id:
             id_el = entry.find("atom:id", NS)
-            external_id = (id_el.text if id_el is not None and id_el.text else "unknown")
+            external_id = id_el.text if id_el is not None and id_el.text else "unknown"
 
         title_text = title_el.text if title_el is not None and title_el.text else "Untitled"
         source_url = link_el.get("href") if link_el is not None else None

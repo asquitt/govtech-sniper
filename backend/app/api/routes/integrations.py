@@ -5,23 +5,15 @@ CRUD for integration configurations.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.services.encryption_service import (
-    encrypt_secrets,
-    decrypt_secrets,
-    redact_secrets,
-    secret_placeholder,
-)
-from app.services.sso_service import exchange_sso_code
+from app.database import get_session
 from app.models.integration import (
     IntegrationConfig,
     IntegrationProvider,
@@ -30,11 +22,19 @@ from app.models.integration import (
     IntegrationWebhookEvent,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
+from app.services.encryption_service import (
+    decrypt_secrets,
+    encrypt_secrets,
+    redact_secrets,
+    secret_placeholder,
+)
+from app.services.sso_service import exchange_sso_code
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
 
 
-PROVIDER_DEFINITIONS: Dict[IntegrationProvider, Dict[str, Any]] = {
+PROVIDER_DEFINITIONS: dict[IntegrationProvider, dict[str, Any]] = {
     IntegrationProvider.OKTA: {
         "label": "Okta",
         "category": "sso",
@@ -141,23 +141,23 @@ PROVIDER_DEFINITIONS: Dict[IntegrationProvider, Dict[str, Any]] = {
 
 class IntegrationCreate(BaseModel):
     provider: IntegrationProvider
-    name: Optional[str] = None
+    name: str | None = None
     is_enabled: bool = True
     config: dict = Field(default_factory=dict)
 
 
 class IntegrationUpdate(BaseModel):
-    name: Optional[str] = None
-    is_enabled: Optional[bool] = None
-    config: Optional[dict] = None
+    name: str | None = None
+    is_enabled: bool | None = None
+    config: dict | None = None
 
 
 class IntegrationProviderDefinition(BaseModel):
     provider: IntegrationProvider
     label: str
     category: str
-    required_fields: List[dict]
-    optional_fields: List[dict]
+    required_fields: list[dict]
+    optional_fields: list[dict]
     supports_sync: bool
     supports_webhooks: bool
 
@@ -165,7 +165,7 @@ class IntegrationProviderDefinition(BaseModel):
 class IntegrationTestResult(BaseModel):
     status: str
     message: str
-    missing_fields: List[str]
+    missing_fields: list[str]
     checked_at: datetime
 
 
@@ -173,10 +173,10 @@ class IntegrationSyncResponse(BaseModel):
     id: int
     status: IntegrationSyncStatus
     items_synced: int
-    error: Optional[str]
+    error: str | None
     details: dict
     started_at: datetime
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -200,14 +200,14 @@ class IntegrationSsoCallbackRequest(BaseModel):
     code: str
 
 
-def _get_provider_definition(provider: IntegrationProvider) -> Dict[str, Any]:
+def _get_provider_definition(provider: IntegrationProvider) -> dict[str, Any]:
     definition = PROVIDER_DEFINITIONS.get(provider)
     if not definition:
         raise HTTPException(status_code=400, detail="Unsupported provider")
     return definition
 
 
-def _missing_required_fields(definition: Dict[str, Any], config: dict) -> List[str]:
+def _missing_required_fields(definition: dict[str, Any], config: dict) -> list[str]:
     config = config or {}
     missing = []
     for field in definition.get("required_fields", []):
@@ -220,15 +220,15 @@ def _missing_required_fields(definition: Dict[str, Any], config: dict) -> List[s
     return missing
 
 
-def _secret_field_keys(definition: Dict[str, Any]) -> List[str]:
+def _secret_field_keys(definition: dict[str, Any]) -> list[str]:
     fields = definition.get("required_fields", []) + definition.get("optional_fields", [])
     return [field["key"] for field in fields if field.get("secret")]
 
 
 def _merge_integration_config(
     existing: dict,
-    incoming: Optional[dict],
-    secret_fields: List[str],
+    incoming: dict | None,
+    secret_fields: list[str],
 ) -> dict:
     if not incoming:
         return existing
@@ -240,17 +240,17 @@ def _merge_integration_config(
     return merged
 
 
-def _prepare_config_for_storage(config: dict, definition: Dict[str, Any]) -> dict:
+def _prepare_config_for_storage(config: dict, definition: dict[str, Any]) -> dict:
     secret_fields = _secret_field_keys(definition)
     return encrypt_secrets(config or {}, secret_fields)
 
 
-def _prepare_config_for_response(config: dict, definition: Dict[str, Any]) -> dict:
+def _prepare_config_for_response(config: dict, definition: dict[str, Any]) -> dict:
     secret_fields = _secret_field_keys(definition)
     return redact_secrets(config or {}, secret_fields)
 
 
-def _prepare_config_for_internal_use(config: dict, definition: Dict[str, Any]) -> dict:
+def _prepare_config_for_internal_use(config: dict, definition: dict[str, Any]) -> dict:
     secret_fields = _secret_field_keys(definition)
     return decrypt_secrets(config or {}, secret_fields)
 
@@ -283,7 +283,7 @@ def _build_sso_authorize_url(provider: IntegrationProvider, config: dict, state:
 class IntegrationResponse(BaseModel):
     id: int
     provider: IntegrationProvider
-    name: Optional[str]
+    name: str | None
     is_enabled: bool
     config: dict
     created_at: datetime
@@ -292,10 +292,10 @@ class IntegrationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("/providers", response_model=List[IntegrationProviderDefinition])
+@router.get("/providers", response_model=list[IntegrationProviderDefinition])
 async def list_integration_providers(
     current_user: UserAuth = Depends(get_current_user),
-) -> List[IntegrationProviderDefinition]:
+) -> list[IntegrationProviderDefinition]:
     """
     List supported integration providers and their configuration requirements.
     """
@@ -316,12 +316,12 @@ async def list_integration_providers(
     return definitions
 
 
-@router.get("", response_model=List[IntegrationResponse])
+@router.get("", response_model=list[IntegrationResponse])
 async def list_integrations(
-    provider: Optional[IntegrationProvider] = Query(None),
+    provider: IntegrationProvider | None = Query(None),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[IntegrationResponse]:
+) -> list[IntegrationResponse]:
     query = select(IntegrationConfig).where(IntegrationConfig.user_id == current_user.id)
     if provider:
         query = query.where(IntegrationConfig.provider == provider)
@@ -513,9 +513,7 @@ async def authorize_sso(
 
     state = f"sso-{integration.id}-{int(datetime.utcnow().timestamp())}"
     config = _prepare_config_for_internal_use(integration.config, definition)
-    authorization_url = _build_sso_authorize_url(
-        integration.provider, config, state
-    )
+    authorization_url = _build_sso_authorize_url(integration.provider, config, state)
 
     await log_audit_event(
         session,
@@ -657,13 +655,13 @@ async def run_integration_sync(
     return IntegrationSyncResponse.model_validate(sync_run)
 
 
-@router.get("/{integration_id}/syncs", response_model=List[IntegrationSyncResponse])
+@router.get("/{integration_id}/syncs", response_model=list[IntegrationSyncResponse])
 async def list_integration_syncs(
     integration_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
     limit: int = Query(25, ge=1, le=200),
-) -> List[IntegrationSyncResponse]:
+) -> list[IntegrationSyncResponse]:
     result = await session.execute(
         select(IntegrationConfig).where(
             IntegrationConfig.id == integration_id,
@@ -729,13 +727,13 @@ async def receive_integration_webhook(
     return IntegrationWebhookEventResponse.model_validate(event)
 
 
-@router.get("/{integration_id}/webhooks", response_model=List[IntegrationWebhookEventResponse])
+@router.get("/{integration_id}/webhooks", response_model=list[IntegrationWebhookEventResponse])
 async def list_integration_webhook_events(
     integration_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
     limit: int = Query(25, ge=1, le=200),
-) -> List[IntegrationWebhookEventResponse]:
+) -> list[IntegrationWebhookEventResponse]:
     result = await session.execute(
         select(IntegrationConfig).where(
             IntegrationConfig.id == integration_id,

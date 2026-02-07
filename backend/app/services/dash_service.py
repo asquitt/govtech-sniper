@@ -4,18 +4,17 @@ RFP Sniper - Dash Service
 Context-aware assistant with lightweight tool dispatch for Phase 4.
 """
 
-from typing import Optional, Tuple, List, Dict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.config import settings
-from app.models.rfp import RFP, ComplianceMatrix
-from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.award import AwardRecord
 from app.models.budget_intel import BudgetIntelligence
-from app.models.contract import ContractAward
 from app.models.contact import OpportunityContact
+from app.models.contract import ContractAward
+from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.rfp import RFP, ComplianceMatrix
 
 
 def _detect_intent(question: str) -> str:
@@ -26,7 +25,10 @@ def _detect_intent(question: str) -> str:
         return "compliance_gap"
     if any(keyword in text for keyword in ["capability", "capabilities", "capability statement"]):
         return "capability_statement"
-    if any(keyword in text for keyword in ["competitor", "competition", "award", "awardee", "incumbent", "competitive"]):
+    if any(
+        keyword in text
+        for keyword in ["competitor", "competition", "award", "awardee", "incumbent", "competitive"]
+    ):
         return "competitive_intel"
     return "general"
 
@@ -39,7 +41,7 @@ def _truncate(text: str, max_chars: int = 400) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-def _build_rfp_context(rfp: Optional[RFP]) -> str:
+def _build_rfp_context(rfp: RFP | None) -> str:
     if not rfp:
         return "No opportunity context found."
 
@@ -55,28 +57,32 @@ def _build_rfp_context(rfp: Optional[RFP]) -> str:
     return " | ".join(parts)
 
 
-def _build_doc_citations(docs: List[KnowledgeBaseDocument]) -> List[dict]:
-    citations: List[dict] = []
+def _build_doc_citations(docs: list[KnowledgeBaseDocument]) -> list[dict]:
+    citations: list[dict] = []
     for doc in docs:
-        citations.append({
-            "type": "document",
-            "document_id": doc.id,
-            "title": doc.title,
-            "filename": doc.original_filename,
-        })
+        citations.append(
+            {
+                "type": "document",
+                "document_id": doc.id,
+                "title": doc.title,
+                "filename": doc.original_filename,
+            }
+        )
     return citations
 
 
-def _summarize_compliance(matrix: ComplianceMatrix) -> Tuple[str, List[dict]]:
+def _summarize_compliance(matrix: ComplianceMatrix) -> tuple[str, list[dict]]:
     open_requirements = [req for req in matrix.requirements if not req.get("is_addressed")]
     citations = []
     top_items = open_requirements[:5]
     for req in top_items:
-        citations.append({
-            "type": "requirement",
-            "requirement_id": req.get("id"),
-            "section": req.get("section"),
-        })
+        citations.append(
+            {
+                "type": "requirement",
+                "requirement_id": req.get("id"),
+                "section": req.get("section"),
+            }
+        )
     if not open_requirements:
         return "All compliance requirements are marked as addressed.", citations
 
@@ -89,7 +95,7 @@ def _summarize_compliance(matrix: ComplianceMatrix) -> Tuple[str, List[dict]]:
     return "\n".join(summary_lines), citations
 
 
-def _summarize_awards(awards: List[AwardRecord]) -> Tuple[str, List[dict]]:
+def _summarize_awards(awards: list[AwardRecord]) -> tuple[str, list[dict]]:
     if not awards:
         return "No award intelligence records found yet.", []
 
@@ -98,43 +104,47 @@ def _summarize_awards(awards: List[AwardRecord]) -> Tuple[str, List[dict]]:
         key=lambda award: award.award_amount or 0,
         reverse=True,
     )[:3]
-    citations: List[dict] = []
+    citations: list[dict] = []
     lines = [f"Award records found: {len(awards)}."]
     for award in top_awards:
-        citations.append({
-            "type": "award",
-            "award_id": award.id,
-            "awardee": award.awardee_name,
-        })
+        citations.append(
+            {
+                "type": "award",
+                "award_id": award.id,
+                "awardee": award.awardee_name,
+            }
+        )
         amount = f"${award.award_amount:,}" if award.award_amount else "Amount TBD"
         vehicle = award.contract_vehicle or "Vehicle unknown"
         lines.append(f"- {award.awardee_name} · {amount} · {vehicle}")
     return "\n".join(lines), citations
 
 
-def _summarize_contacts(contacts: List[OpportunityContact]) -> Tuple[str, List[dict]]:
+def _summarize_contacts(contacts: list[OpportunityContact]) -> tuple[str, list[dict]]:
     if not contacts:
         return "No opportunity contacts recorded.", []
     top_contacts = contacts[:3]
-    citations: List[dict] = []
+    citations: list[dict] = []
     lines = [f"Contacts recorded: {len(contacts)}."]
     for contact in top_contacts:
-        citations.append({
-            "type": "contact",
-            "contact_id": contact.id,
-            "name": contact.name,
-        })
+        citations.append(
+            {
+                "type": "contact",
+                "contact_id": contact.id,
+                "name": contact.name,
+            }
+        )
         role = contact.role or "Role unknown"
         org = contact.organization or "Org unknown"
         lines.append(f"- {contact.name} · {role} · {org}")
     return "\n".join(lines), citations
 
 
-def _summarize_budgets(records: List[BudgetIntelligence]) -> Tuple[str, List[dict]]:
+def _summarize_budgets(records: list[BudgetIntelligence]) -> tuple[str, list[dict]]:
     if not records:
         return "No budget intelligence records found.", []
     top = records[:3]
-    citations: List[dict] = []
+    citations: list[dict] = []
     lines = [f"Budget records found: {len(records)}."]
     for record in top:
         citations.append({"type": "budget_intel", "id": record.id})
@@ -143,10 +153,10 @@ def _summarize_budgets(records: List[BudgetIntelligence]) -> Tuple[str, List[dic
     return "\n".join(lines), citations
 
 
-def _summarize_contracts(contracts: List[ContractAward]) -> Tuple[str, List[dict]]:
+def _summarize_contracts(contracts: list[ContractAward]) -> tuple[str, list[dict]]:
     if not contracts:
         return "No related contracts found.", []
-    citations: List[dict] = []
+    citations: list[dict] = []
     lines = [f"Related contracts: {len(contracts)}."]
     for contract in contracts[:3]:
         citations.append({"type": "contract", "id": contract.id})
@@ -159,26 +169,26 @@ async def generate_dash_response(
     *,
     user_id: int,
     question: str,
-    rfp_id: Optional[int] = None,
-) -> Tuple[str, List[dict]]:
+    rfp_id: int | None = None,
+) -> tuple[str, list[dict]]:
     """
     Generate a response grounded in internal data.
     Returns (content, citations).
     """
-    citations: List[dict] = []
+    citations: list[dict] = []
 
-    rfp: Optional[RFP] = None
+    rfp: RFP | None = None
     if rfp_id is not None:
-        result = await session.execute(
-            select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id)
-        )
+        result = await session.execute(select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id))
         rfp = result.scalar_one_or_none()
         if rfp:
-            citations.append({
-                "type": "rfp",
-                "rfp_id": rfp.id,
-                "title": rfp.title,
-            })
+            citations.append(
+                {
+                    "type": "rfp",
+                    "rfp_id": rfp.id,
+                    "title": rfp.title,
+                }
+            )
 
     docs_result = await session.execute(
         select(KnowledgeBaseDocument)
@@ -214,7 +224,9 @@ async def generate_dash_response(
                 answer = f"{context}\n{gap_summary}"
     elif intent == "capability_statement":
         if not docs:
-            answer = "Upload capability statements or past performance documents to draft a statement."
+            answer = (
+                "Upload capability statements or past performance documents to draft a statement."
+            )
         else:
             doc_titles = ", ".join([doc.title for doc in docs])
             answer = (
@@ -223,10 +235,10 @@ async def generate_dash_response(
                 "We have proven experience supporting federal programs with secure, compliant delivery."
             )
     elif intent == "competitive_intel":
-        awards: List[AwardRecord] = []
-        contacts: List[OpportunityContact] = []
-        budgets: List[BudgetIntelligence] = []
-        contracts: List[ContractAward] = []
+        awards: list[AwardRecord] = []
+        contacts: list[OpportunityContact] = []
+        budgets: list[BudgetIntelligence] = []
+        contracts: list[ContractAward] = []
         if rfp:
             awards_result = await session.execute(
                 select(AwardRecord).where(

@@ -8,19 +8,19 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.user import User
-from app.api.deps import get_current_user
 from app.services.auth_service import UserAuth
 from app.services.subscription_service import (
+    CheckoutSessionResponse,
+    PlanDefinition,
+    UsageStats,
+    create_checkout_session,
     get_all_plans,
     get_plan_details,
     get_usage_stats,
-    create_checkout_session,
     handle_webhook,
-    PlanDefinition,
-    UsageStats,
-    CheckoutSessionResponse,
 )
 
 router = APIRouter(prefix="/subscription", tags=["Subscription"])

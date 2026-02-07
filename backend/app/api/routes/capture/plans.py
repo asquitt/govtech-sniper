@@ -3,26 +3,25 @@ Capture Plans - CRUD and stage management.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.rfp import RFP
+from app.database import get_session
 from app.models.capture import CapturePlan
+from app.models.rfp import RFP
 from app.schemas.capture import (
+    CaptureMatchInsight,
     CapturePlanCreate,
-    CapturePlanUpdate,
-    CapturePlanRead,
     CapturePlanListItem,
     CapturePlanListResponse,
-    CaptureMatchInsight,
+    CapturePlanRead,
+    CapturePlanUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
@@ -90,11 +89,9 @@ async def list_capture_plans(
     )
     plans = result.scalars().all()
 
-    items: List[CapturePlanListItem] = []
+    items: list[CapturePlanListItem] = []
     if include_rfp:
-        rfp_result = await session.execute(
-            select(RFP).where(RFP.user_id == current_user.id)
-        )
+        rfp_result = await session.execute(select(RFP).where(RFP.user_id == current_user.id))
         rfps = {rfp.id: rfp for rfp in rfp_result.scalars().all()}
         for plan in plans:
             rfp = rfps.get(plan.rfp_id)
@@ -169,10 +166,7 @@ async def get_capture_plan(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> CapturePlanRead:
-    result = await session.execute(
-        select(CapturePlan)
-        .where(CapturePlan.rfp_id == rfp_id)
-    )
+    result = await session.execute(select(CapturePlan).where(CapturePlan.rfp_id == rfp_id))
     plan = result.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Capture plan not found")
@@ -194,9 +188,7 @@ async def update_capture_plan(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> CapturePlanRead:
-    result = await session.execute(
-        select(CapturePlan).where(CapturePlan.id == plan_id)
-    )
+    result = await session.execute(select(CapturePlan).where(CapturePlan.id == plan_id))
     plan = result.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Capture plan not found")

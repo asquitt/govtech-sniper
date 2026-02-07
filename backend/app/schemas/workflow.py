@@ -1,17 +1,16 @@
 """Workflow rule and execution schemas."""
 
 from datetime import datetime
-from typing import Optional, List, Union
 
 from pydantic import BaseModel
 
-from app.models.workflow import TriggerType, ExecutionStatus
+from app.models.workflow import ExecutionStatus, TriggerType
 
 
 class WorkflowCondition(BaseModel):
     field: str
     operator: str  # equals, gt, lt, contains, in_list
-    value: Union[str, int, float, List[str]]
+    value: str | int | float | list[str]
 
 
 class WorkflowAction(BaseModel):
@@ -22,8 +21,8 @@ class WorkflowAction(BaseModel):
 class WorkflowRuleCreate(BaseModel):
     name: str
     trigger_type: TriggerType
-    conditions: List[WorkflowCondition] = []
-    actions: List[WorkflowAction] = []
+    conditions: list[WorkflowCondition] = []
+    actions: list[WorkflowAction] = []
     priority: int = 0
 
 
@@ -43,12 +42,12 @@ class WorkflowRuleRead(BaseModel):
 
 
 class WorkflowRuleUpdate(BaseModel):
-    name: Optional[str] = None
-    trigger_type: Optional[TriggerType] = None
-    conditions: Optional[List[WorkflowCondition]] = None
-    actions: Optional[List[WorkflowAction]] = None
-    priority: Optional[int] = None
-    is_enabled: Optional[bool] = None
+    name: str | None = None
+    trigger_type: TriggerType | None = None
+    conditions: list[WorkflowCondition] | None = None
+    actions: list[WorkflowAction] | None = None
+    priority: int | None = None
+    is_enabled: bool | None = None
 
 
 class WorkflowExecutionRead(BaseModel):
@@ -59,11 +58,11 @@ class WorkflowExecutionRead(BaseModel):
     entity_id: int
     status: ExecutionStatus
     result: dict
-    completed_at: Optional[datetime]
+    completed_at: datetime | None
 
     model_config = {"from_attributes": True}
 
 
 class WorkflowRuleListResponse(BaseModel):
-    items: List[WorkflowRuleRead]
+    items: list[WorkflowRuleRead]
     total: int

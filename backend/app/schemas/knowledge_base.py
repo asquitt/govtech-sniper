@@ -5,47 +5,48 @@ Request/Response models for document uploads.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, computed_field
 
 from app.models.knowledge_base import DocumentType, ProcessingStatus
 
-
 # =============================================================================
 # Document Schemas
 # =============================================================================
 
+
 class DocumentCreate(BaseModel):
     """Schema for creating document metadata."""
+
     title: str = Field(max_length=255)
     document_type: DocumentType = Field(default=DocumentType.OTHER)
-    description: Optional[str] = Field(default=None, max_length=1000)
-    tags: List[str] = Field(default=[])
+    description: str | None = Field(default=None, max_length=1000)
+    tags: list[str] = Field(default=[])
 
 
 class DocumentRead(BaseModel):
     """Schema for reading document data."""
+
     id: int
     user_id: int
     title: str
     document_type: DocumentType
-    description: Optional[str]
+    description: str | None
     original_filename: str
     file_size_bytes: int
     mime_type: str
-    page_count: Optional[int]
+    page_count: int | None
     processing_status: ProcessingStatus
-    processing_error: Optional[str]
-    gemini_cache_name: Optional[str]
-    gemini_cache_expires_at: Optional[datetime]
-    extracted_metadata: Dict
-    tags: List[str]
+    processing_error: str | None
+    gemini_cache_name: str | None
+    gemini_cache_expires_at: datetime | None
+    extracted_metadata: dict
+    tags: list[str]
     times_cited: int
-    last_cited_at: Optional[datetime]
+    last_cited_at: datetime | None
     created_at: datetime
     updated_at: datetime
-    processed_at: Optional[datetime]
+    processed_at: datetime | None
     is_ready: bool = False
 
     model_config = {"from_attributes": True}
@@ -81,14 +82,16 @@ class DocumentRead(BaseModel):
 
 class DocumentUpdate(BaseModel):
     """Schema for updating document metadata."""
-    title: Optional[str] = Field(default=None, max_length=255)
-    document_type: Optional[DocumentType] = None
-    description: Optional[str] = Field(default=None, max_length=1000)
-    tags: Optional[List[str]] = None
+
+    title: str | None = Field(default=None, max_length=255)
+    document_type: DocumentType | None = None
+    description: str | None = Field(default=None, max_length=1000)
+    tags: list[str] | None = None
 
 
 class DocumentUploadResponse(BaseModel):
     """Response from document upload endpoint."""
+
     id: int
     title: str
     original_filename: str
@@ -99,10 +102,11 @@ class DocumentUploadResponse(BaseModel):
 
 class DocumentListItem(BaseModel):
     """Condensed document for list views."""
+
     id: int
     title: str
     document_type: DocumentType
-    description: Optional[str] = None
+    description: str | None = None
     original_filename: str
     processing_status: ProcessingStatus
     file_size_bytes: int
@@ -119,5 +123,6 @@ class DocumentListItem(BaseModel):
 
 class DocumentListResponse(BaseModel):
     """Response for document list endpoints."""
-    documents: List[DocumentListItem]
+
+    documents: list[DocumentListItem]
     total: int

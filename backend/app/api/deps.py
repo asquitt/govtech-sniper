@@ -5,17 +5,17 @@ FastAPI dependencies for authentication, database sessions, and rate limiting.
 """
 
 from datetime import datetime
-from typing import Optional, Annotated
+from typing import Annotated
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import structlog
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-import structlog
 
 from app.database import get_session
 from app.models.user import User, UserProfile, UserTier
-from app.services.auth_service import decode_token, TokenData, UserAuth
+from app.services.auth_service import UserAuth, decode_token
 
 logger = structlog.get_logger(__name__)
 
@@ -27,10 +27,11 @@ security = HTTPBearer(auto_error=False)
 # Authentication Dependencies
 # =============================================================================
 
+
 async def get_current_user_optional(
-    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
     session: AsyncSession = Depends(get_session),
-) -> Optional[UserAuth]:
+) -> UserAuth | None:
     """
     Get current user if authenticated, None otherwise.
     Use this for endpoints that work with or without auth.
@@ -43,9 +44,7 @@ async def get_current_user_optional(
         return None
 
     # Fetch user from database
-    result = await session.execute(
-        select(User).where(User.id == token_data.user_id)
-    )
+    result = await session.execute(select(User).where(User.id == token_data.user_id))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
@@ -62,7 +61,7 @@ async def get_current_user_optional(
 
 
 async def get_current_user(
-    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
     session: AsyncSession = Depends(get_session),
 ) -> UserAuth:
     """
@@ -83,9 +82,7 @@ async def get_current_user(
         raise credentials_exception
 
     # Fetch user from database
-    result = await session.execute(
-        select(User).where(User.id == token_data.user_id)
-    )
+    result = await session.execute(select(User).where(User.id == token_data.user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -110,7 +107,7 @@ async def get_current_user(
 async def get_current_user_with_profile(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> tuple[UserAuth, Optional[UserProfile]]:
+) -> tuple[UserAuth, UserProfile | None]:
     """
     Get current user and their profile.
     """
@@ -125,6 +122,7 @@ async def get_current_user_with_profile(
 # =============================================================================
 # Rate Limiting Dependencies
 # =============================================================================
+
 
 class RateLimiter:
     """
@@ -160,10 +158,7 @@ class RateLimiter:
             self.requests[key] = []
 
         # Filter to only requests within window
-        self.requests[key] = [
-            req for req in self.requests[key]
-            if req.timestamp() > window_start
-        ]
+        self.requests[key] = [req for req in self.requests[key] if req.timestamp() > window_start]
 
         # Check if under limit
         current_count = len(self.requests[key])
@@ -184,7 +179,7 @@ rate_limiter = RateLimiter()
 
 async def check_rate_limit(
     request: Request,
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
 ) -> None:
     """
     Check rate limit for the current request.
@@ -229,9 +224,10 @@ async def check_rate_limit(
 # User ID Resolution
 # =============================================================================
 
+
 def resolve_user_id(
-    user_id: Optional[int],
-    current_user: Optional[UserAuth],
+    user_id: int | None,
+    current_user: UserAuth | None,
 ) -> int:
     """
     Resolve a user ID from either an explicit parameter or the auth token.
@@ -307,6 +303,7 @@ def require_feature(feature_name: str):
 # Tier-Based Access Control
 # =============================================================================
 
+
 def require_tier(minimum_tier: str):
     """
     Dependency factory to require minimum subscription tier.
@@ -314,6 +311,7 @@ def require_tier(minimum_tier: str):
     Usage:
         @router.get("/premium-feature", dependencies=[Depends(require_tier("professional"))])
     """
+
     async def tier_checker(current_user: UserAuth = Depends(get_current_user)):
         user_level = TIER_LEVELS.get(current_user.tier, 0)
         required_level = TIER_LEVELS.get(minimum_tier, 0)
@@ -333,6 +331,7 @@ def require_tier(minimum_tier: str):
 # API Usage Tracking
 # =============================================================================
 
+
 async def track_api_usage(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -341,9 +340,7 @@ async def track_api_usage(
     Track API usage for the current user.
     Updates daily counters in the database.
     """
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
 
     if user:

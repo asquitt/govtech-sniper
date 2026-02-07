@@ -2,18 +2,15 @@
 Forecast matching service — matches procurement forecasts to existing RFPs.
 """
 
-from typing import List, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.models.forecast import ForecastAlert, ProcurementForecast
 from app.models.rfp import RFP
-from app.models.forecast import ProcurementForecast, ForecastAlert
 
 
-async def run_forecast_matching(
-    session: AsyncSession, user_id: int
-) -> List[ForecastAlert]:
+async def run_forecast_matching(session: AsyncSession, user_id: int) -> list[ForecastAlert]:
     """
     Match user's forecasts to their RFPs based on:
     - Agency (exact match, 30 points)
@@ -29,12 +26,10 @@ async def run_forecast_matching(
     )
     forecasts = forecasts_result.scalars().all()
 
-    rfps_result = await session.execute(
-        select(RFP).where(RFP.user_id == user_id)
-    )
+    rfps_result = await session.execute(select(RFP).where(RFP.user_id == user_id))
     rfps = rfps_result.scalars().all()
 
-    new_alerts: List[ForecastAlert] = []
+    new_alerts: list[ForecastAlert] = []
 
     for forecast in forecasts:
         for rfp in rfps:
@@ -68,12 +63,10 @@ async def run_forecast_matching(
     return new_alerts
 
 
-def _compute_match(
-    forecast: ProcurementForecast, rfp: RFP
-) -> Tuple[float, List[str]]:
+def _compute_match(forecast: ProcurementForecast, rfp: RFP) -> tuple[float, list[str]]:
     """Compute match score between a forecast and an RFP."""
     score = 0.0
-    reasons: List[str] = []
+    reasons: list[str] = []
 
     # Agency match (30 points)
     if forecast.agency and rfp.agency:

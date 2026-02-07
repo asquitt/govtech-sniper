@@ -4,25 +4,24 @@ RFP Sniper - Audit Routes
 Advanced audit log views and summaries.
 """
 
-from datetime import datetime, timedelta
-from typing import List, Optional
 import csv
+import hashlib
+import hmac
 import io
 import json
-import hmac
-import hashlib
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse, JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
-from sqlmodel import select
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
-from app.database import get_session
-from app.api.deps import get_current_user, UserAuth
-from app.models.audit import AuditEvent
+from app.api.deps import UserAuth, get_current_user
 from app.config import settings
+from app.database import get_session
+from app.models.audit import AuditEvent
 from app.services.audit_service import log_audit_event
 
 router = APIRouter(prefix="/audit", tags=["Audit"])
@@ -30,9 +29,9 @@ router = APIRouter(prefix="/audit", tags=["Audit"])
 
 class AuditEventResponse(BaseModel):
     id: int
-    user_id: Optional[int]
+    user_id: int | None
     entity_type: str
-    entity_id: Optional[int]
+    entity_id: int | None
     action: str
     event_metadata: dict
     created_at: datetime
@@ -43,21 +42,21 @@ class AuditEventResponse(BaseModel):
 class AuditSummaryResponse(BaseModel):
     period_days: int
     total_events: int
-    by_action: List[dict]
-    by_entity_type: List[dict]
+    by_action: list[dict]
+    by_entity_type: list[dict]
 
 
-@router.get("", response_model=List[AuditEventResponse])
+@router.get("", response_model=list[AuditEventResponse])
 async def list_audit_events(
-    entity_type: Optional[str] = Query(None),
-    action: Optional[str] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    entity_type: str | None = Query(None),
+    action: str | None = Query(None),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[AuditEventResponse]:
+) -> list[AuditEventResponse]:
     query = select(AuditEvent).where(AuditEvent.user_id == current_user.id)
 
     if entity_type:
@@ -100,10 +99,7 @@ async def get_audit_summary(
         .group_by(AuditEvent.action)
         .order_by(func.count(AuditEvent.id).desc())
     )
-    by_action = [
-        {"action": row.action, "count": row.count}
-        for row in by_action_result.all()
-    ]
+    by_action = [{"action": row.action, "count": row.count} for row in by_action_result.all()]
 
     by_entity_result = await session.execute(
         select(AuditEvent.entity_type, func.count(AuditEvent.id).label("count"))
@@ -115,8 +111,7 @@ async def get_audit_summary(
         .order_by(func.count(AuditEvent.id).desc())
     )
     by_entity = [
-        {"entity_type": row.entity_type, "count": row.count}
-        for row in by_entity_result.all()
+        {"entity_type": row.entity_type, "count": row.count} for row in by_entity_result.all()
     ]
 
     return AuditSummaryResponse(
@@ -130,8 +125,8 @@ async def get_audit_summary(
 @router.get("/export")
 async def export_audit_events(
     format: str = Query("json", pattern="^(json|csv)$"),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    start_date: datetime | None = Query(None),
+    end_date: datetime | None = Query(None),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):

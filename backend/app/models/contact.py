@@ -6,36 +6,36 @@ plus agency-level contact directory.
 """
 
 from datetime import datetime
-from typing import Optional
 
-from sqlmodel import Field, SQLModel, Column, Text, JSON
+from sqlmodel import JSON, Column, Field, SQLModel, Text
 
 
 class OpportunityContact(SQLModel, table=True):
     """
     Contact record associated with an opportunity.
     """
+
     __tablename__ = "opportunity_contacts"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
-    rfp_id: Optional[int] = Field(default=None, foreign_key="rfps.id", index=True)
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id", index=True)
 
     name: str = Field(max_length=255)
-    role: Optional[str] = Field(default=None, max_length=255)
-    organization: Optional[str] = Field(default=None, max_length=255)
-    email: Optional[str] = Field(default=None, max_length=255)
-    phone: Optional[str] = Field(default=None, max_length=50)
-    notes: Optional[str] = Field(default=None, sa_column=Column(Text))
+    role: str | None = Field(default=None, max_length=255)
+    organization: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    notes: str | None = Field(default=None, sa_column=Column(Text))
 
     # Contact intelligence fields
-    agency: Optional[str] = Field(default=None, max_length=255, index=True)
-    title: Optional[str] = Field(default=None, max_length=255)
-    department: Optional[str] = Field(default=None, max_length=255)
-    location: Optional[str] = Field(default=None, max_length=255)
-    source: Optional[str] = Field(default="manual", max_length=50)  # manual|ai_extracted|imported
-    extraction_confidence: Optional[float] = Field(default=None)
-    linked_rfp_ids: Optional[list] = Field(default=None, sa_column=Column(JSON))
+    agency: str | None = Field(default=None, max_length=255, index=True)
+    title: str | None = Field(default=None, max_length=255)
+    department: str | None = Field(default=None, max_length=255)
+    location: str | None = Field(default=None, max_length=255)
+    source: str | None = Field(default="manual", max_length=50)  # manual|ai_extracted|imported
+    extraction_confidence: float | None = Field(default=None)
+    linked_rfp_ids: list | None = Field(default=None, sa_column=Column(JSON))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -45,17 +45,16 @@ class AgencyContactDatabase(SQLModel, table=True):
     """
     Agency-level directory entry with primary contact linkage.
     """
+
     __tablename__ = "agency_contact_database"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     agency_name: str = Field(max_length=255, index=True)
-    office: Optional[str] = Field(default=None, max_length=255)
-    address: Optional[str] = Field(default=None, sa_column=Column(Text))
-    website: Optional[str] = Field(default=None, max_length=500)
-    primary_contact_id: Optional[int] = Field(
-        default=None, foreign_key="opportunity_contacts.id"
-    )
+    office: str | None = Field(default=None, max_length=255)
+    address: str | None = Field(default=None, sa_column=Column(Text))
+    website: str | None = Field(default=None, max_length=500)
+    primary_contact_id: int | None = Field(default=None, foreign_key="opportunity_contacts.id")
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

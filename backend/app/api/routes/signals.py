@@ -1,31 +1,31 @@
 """Market signals feed and subscription routes."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.market_signal import MarketSignal, SignalSubscription, SignalType
 from app.schemas.signal import (
     SignalCreate,
-    SignalRead,
     SignalListResponse,
+    SignalRead,
     SubscriptionCreate,
     SubscriptionRead,
 )
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/signals", tags=["Signals"])
 
 
 @router.get("/feed", response_model=SignalListResponse)
 async def get_signal_feed(
-    signal_type: Optional[SignalType] = None,
-    agency: Optional[str] = None,
+    signal_type: SignalType | None = None,
+    agency: str | None = None,
     unread_only: bool = False,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
@@ -59,11 +59,11 @@ async def get_signal_feed(
     )
 
 
-@router.get("", response_model=List[SignalRead])
+@router.get("", response_model=list[SignalRead])
 async def list_signals(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SignalRead]:
+) -> list[SignalRead]:
     result = await session.execute(
         select(MarketSignal)
         .where(MarketSignal.user_id == current_user.id)
@@ -142,11 +142,9 @@ async def delete_signal(
 async def get_subscription(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> Optional[SubscriptionRead]:
+) -> SubscriptionRead | None:
     result = await session.execute(
-        select(SignalSubscription).where(
-            SignalSubscription.user_id == current_user.id
-        )
+        select(SignalSubscription).where(SignalSubscription.user_id == current_user.id)
     )
     sub = result.scalar_one_or_none()
     if not sub:
@@ -161,9 +159,7 @@ async def upsert_subscription(
     session: AsyncSession = Depends(get_session),
 ) -> SubscriptionRead:
     result = await session.execute(
-        select(SignalSubscription).where(
-            SignalSubscription.user_id == current_user.id
-        )
+        select(SignalSubscription).where(SignalSubscription.user_id == current_user.id)
     )
     sub = result.scalar_one_or_none()
 

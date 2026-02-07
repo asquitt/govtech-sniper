@@ -5,21 +5,20 @@ Saved opportunity searches and match evaluation.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.saved_search import SavedSearch
+from app.database import get_session
 from app.models.rfp import RFP, RFPStatus
+from app.models.saved_search import SavedSearch
 from app.schemas.rfp import RFPListItem
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/saved-searches", tags=["Saved Searches"])
 
@@ -31,9 +30,9 @@ class SavedSearchCreate(BaseModel):
 
 
 class SavedSearchUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, max_length=255)
-    filters: Optional[dict] = None
-    is_active: Optional[bool] = None
+    name: str | None = Field(default=None, max_length=255)
+    filters: dict | None = None
+    is_active: bool | None = None
 
 
 class SavedSearchResponse(BaseModel):
@@ -41,7 +40,7 @@ class SavedSearchResponse(BaseModel):
     name: str
     filters: dict
     is_active: bool
-    last_run_at: Optional[datetime]
+    last_run_at: datetime | None
     last_match_count: int
     created_at: datetime
     updated_at: datetime
@@ -52,11 +51,11 @@ class SavedSearchResponse(BaseModel):
 class SavedSearchRunResponse(BaseModel):
     search_id: int
     match_count: int
-    matches: List[RFPListItem]
+    matches: list[RFPListItem]
     ran_at: datetime
 
 
-def _normalize_list(value: Optional[object]) -> List[str]:
+def _normalize_list(value: object | None) -> list[str]:
     if value is None:
         return []
     if isinstance(value, list):
@@ -100,7 +99,9 @@ def _apply_filters(query, filters: dict):
         query = query.where(RFP.set_aside.in_(set_asides))
 
     if statuses:
-        valid_statuses = [RFPStatus(status) for status in statuses if status in RFPStatus._value2member_map_]
+        valid_statuses = [
+            RFPStatus(status) for status in statuses if status in RFPStatus._value2member_map_
+        ]
         if valid_statuses:
             query = query.where(RFP.status.in_(valid_statuses))
 
@@ -124,11 +125,11 @@ def _apply_filters(query, filters: dict):
     return query
 
 
-@router.get("", response_model=List[SavedSearchResponse])
+@router.get("", response_model=list[SavedSearchResponse])
 async def list_saved_searches(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SavedSearchResponse]:
+) -> list[SavedSearchResponse]:
     result = await session.execute(
         select(SavedSearch)
         .where(SavedSearch.user_id == current_user.id)

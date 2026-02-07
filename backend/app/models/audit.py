@@ -5,25 +5,25 @@ Security and compliance audit trail.
 """
 
 from datetime import datetime
-from typing import Optional
 
-from sqlmodel import Field, SQLModel, Column, JSON
+from sqlmodel import JSON, Column, Field, SQLModel
 
 
 class AuditEvent(SQLModel, table=True):
     """
     Audit log entry for sensitive or business-critical actions.
     """
+
     __tablename__ = "audit_events"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
     # Actor
-    user_id: Optional[int] = Field(default=None, foreign_key="users.id", index=True)
+    user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
 
     # Target entity
     entity_type: str = Field(max_length=64, index=True)
-    entity_id: Optional[int] = Field(default=None, index=True)
+    entity_id: int | None = Field(default=None, index=True)
 
     # Action descriptor, e.g., rfp.created, document.uploaded
     action: str = Field(max_length=128, index=True)

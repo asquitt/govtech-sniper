@@ -4,8 +4,7 @@ RFP Sniper - Contract Schemas
 Request/response models for contract tracking.
 """
 
-from datetime import datetime, date
-from typing import Optional, List
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -15,37 +14,37 @@ from app.models.contract import ContractStatus, DeliverableStatus
 class ContractCreate(BaseModel):
     contract_number: str = Field(max_length=255)
     title: str = Field(max_length=500)
-    agency: Optional[str] = None
-    rfp_id: Optional[int] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    value: Optional[float] = None
+    agency: str | None = None
+    rfp_id: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    value: float | None = None
     status: ContractStatus = ContractStatus.ACTIVE
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 class ContractUpdate(BaseModel):
-    title: Optional[str] = None
-    agency: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    value: Optional[float] = None
-    status: Optional[ContractStatus] = None
-    summary: Optional[str] = None
+    title: str | None = None
+    agency: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    value: float | None = None
+    status: ContractStatus | None = None
+    summary: str | None = None
 
 
 class ContractRead(BaseModel):
     id: int
     user_id: int
-    rfp_id: Optional[int]
+    rfp_id: int | None
     contract_number: str
     title: str
-    agency: Optional[str]
-    start_date: Optional[date]
-    end_date: Optional[date]
-    value: Optional[float]
+    agency: str | None
+    start_date: date | None
+    end_date: date | None
+    value: float | None
     status: ContractStatus
-    summary: Optional[str]
+    summary: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -53,34 +52,34 @@ class ContractRead(BaseModel):
 
 
 class ContractListResponse(BaseModel):
-    contracts: List[ContractRead]
+    contracts: list[ContractRead]
     total: int
 
 
 class DeliverableCreate(BaseModel):
     title: str = Field(max_length=500)
-    due_date: Optional[date] = None
+    due_date: date | None = None
     status: DeliverableStatus = DeliverableStatus.PENDING
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class DeliverableUpdate(BaseModel):
-    title: Optional[str] = None
-    due_date: Optional[date] = None
-    status: Optional[DeliverableStatus] = None
-    notes: Optional[str] = None
+    title: str | None = None
+    due_date: date | None = None
+    status: DeliverableStatus | None = None
+    notes: str | None = None
 
 
 class DeliverableRead(BaseModel):
     id: int
     contract_id: int
     title: str
-    due_date: Optional[date]
+    due_date: date | None
     status: DeliverableStatus
-    notes: Optional[str]
+    notes: str | None
     created_at: datetime
     updated_at: datetime
-    risk_flag: Optional[str] = None
+    risk_flag: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -106,24 +105,24 @@ class DeliverableRead(BaseModel):
 
 class TaskCreate(BaseModel):
     title: str = Field(max_length=500)
-    due_date: Optional[date] = None
-    notes: Optional[str] = None
+    due_date: date | None = None
+    notes: str | None = None
 
 
 class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    due_date: Optional[date] = None
-    is_complete: Optional[bool] = None
-    notes: Optional[str] = None
+    title: str | None = None
+    due_date: date | None = None
+    is_complete: bool | None = None
+    notes: str | None = None
 
 
 class TaskRead(BaseModel):
     id: int
     contract_id: int
     title: str
-    due_date: Optional[date]
+    due_date: date | None
     is_complete: bool
-    notes: Optional[str]
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -131,19 +130,19 @@ class TaskRead(BaseModel):
 
 
 class CPARSCreate(BaseModel):
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    overall_rating: Optional[str] = None
-    notes: Optional[str] = None
+    period_start: date | None = None
+    period_end: date | None = None
+    overall_rating: str | None = None
+    notes: str | None = None
 
 
 class CPARSRead(BaseModel):
     id: int
     contract_id: int
-    period_start: Optional[date]
-    period_end: Optional[date]
-    overall_rating: Optional[str]
-    notes: Optional[str]
+    period_start: date | None
+    period_end: date | None
+    overall_rating: str | None
+    notes: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -151,48 +150,48 @@ class CPARSRead(BaseModel):
 
 class CPARSEvidenceCreate(BaseModel):
     document_id: int
-    citation: Optional[str] = None
-    notes: Optional[str] = None
+    citation: str | None = None
+    notes: str | None = None
 
 
 class CPARSEvidenceRead(BaseModel):
     id: int
     cpars_id: int
     document_id: int
-    citation: Optional[str]
-    notes: Optional[str]
+    citation: str | None
+    notes: str | None
     created_at: datetime
-    document_title: Optional[str] = None
-    document_type: Optional[str] = None
+    document_title: str | None = None
+    document_type: str | None = None
 
 
 class StatusReportCreate(BaseModel):
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    summary: Optional[str] = None
-    accomplishments: Optional[str] = None
-    risks: Optional[str] = None
-    next_steps: Optional[str] = None
+    period_start: date | None = None
+    period_end: date | None = None
+    summary: str | None = None
+    accomplishments: str | None = None
+    risks: str | None = None
+    next_steps: str | None = None
 
 
 class StatusReportUpdate(BaseModel):
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    summary: Optional[str] = None
-    accomplishments: Optional[str] = None
-    risks: Optional[str] = None
-    next_steps: Optional[str] = None
+    period_start: date | None = None
+    period_end: date | None = None
+    summary: str | None = None
+    accomplishments: str | None = None
+    risks: str | None = None
+    next_steps: str | None = None
 
 
 class StatusReportRead(BaseModel):
     id: int
     contract_id: int
-    period_start: Optional[date]
-    period_end: Optional[date]
-    summary: Optional[str]
-    accomplishments: Optional[str]
-    risks: Optional[str]
-    next_steps: Optional[str]
+    period_start: date | None
+    period_end: date | None
+    summary: str | None
+    accomplishments: str | None
+    risks: str | None
+    next_steps: str | None
     created_at: datetime
     updated_at: datetime
 

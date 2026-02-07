@@ -5,7 +5,6 @@ Fetches opportunities from the GSA eBuy system via the SAM.gov API.
 GSA eBuy opportunities are published through SAM.gov with specific filters.
 """
 
-from typing import Optional
 
 import httpx
 import structlog
@@ -61,12 +60,12 @@ class GSAEbuyProvider(DataSourceProvider):
         opportunities = data.get("opportunitiesData", [])
         return [_map_sam_to_raw(opp) for opp in opportunities]
 
-    async def get_details(self, opportunity_id: str) -> Optional[RawOpportunity]:
+    async def get_details(self, opportunity_id: str) -> RawOpportunity | None:
         api_key = getattr(settings, "sam_gov_api_key", None)
         if not api_key:
             return None
 
-        url = f"https://api.sam.gov/opportunities/v2/search"
+        url = "https://api.sam.gov/opportunities/v2/search"
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(
@@ -121,9 +120,11 @@ def _map_sam_to_raw(opp: dict) -> RawOpportunity:
 
 def _days_back_date(days: int) -> str:
     from datetime import datetime, timedelta
+
     return (datetime.utcnow() - timedelta(days=days)).strftime("%m/%d/%Y")
 
 
 def _today() -> str:
     from datetime import datetime
+
     return datetime.utcnow().strftime("%m/%d/%Y")

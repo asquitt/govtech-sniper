@@ -4,7 +4,6 @@ USAspending Data Provider
 Fetches federal spending / award data from the USAspending.gov REST API.
 """
 
-from typing import Optional
 
 import httpx
 import structlog
@@ -43,9 +42,7 @@ class USAspendingProvider(DataSourceProvider):
         if params.naics_codes:
             filters["naics_codes"] = [{"code": c} for c in params.naics_codes]
         if params.agency:
-            filters["agencies"] = [
-                {"type": "funding", "tier": "toptier", "name": params.agency}
-            ]
+            filters["agencies"] = [{"type": "funding", "tier": "toptier", "name": params.agency}]
 
         payload = {
             "filters": filters,
@@ -80,7 +77,7 @@ class USAspendingProvider(DataSourceProvider):
         results = data.get("results", [])
         return [_map_award(r) for r in results]
 
-    async def get_details(self, opportunity_id: str) -> Optional[RawOpportunity]:
+    async def get_details(self, opportunity_id: str) -> RawOpportunity | None:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(
@@ -103,7 +100,9 @@ class USAspendingProvider(DataSourceProvider):
             posted_date=data.get("period_of_performance_start_date"),
             response_deadline=None,
             estimated_value=_parse_float(data.get("total_obligation")),
-            naics_code=data.get("naics", {}).get("code") if isinstance(data.get("naics"), dict) else None,
+            naics_code=data.get("naics", {}).get("code")
+            if isinstance(data.get("naics"), dict)
+            else None,
             source_url=f"https://www.usaspending.gov/award/{opportunity_id}",
             source_type="usaspending",
             raw_data=data,
@@ -134,7 +133,7 @@ def _map_award(record: dict) -> RawOpportunity:
     )
 
 
-def _parse_float(val: object) -> Optional[float]:
+def _parse_float(val: object) -> float | None:
     if val is None:
         return None
     try:

@@ -5,28 +5,27 @@ Request/response models for workspaces, invitations, and data sharing.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
 
 
 class WorkspaceCreate(BaseModel):
     name: str
-    rfp_id: Optional[int] = None
-    description: Optional[str] = None
+    rfp_id: int | None = None
+    description: str | None = None
 
 
 class WorkspaceUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
 
 
 class WorkspaceRead(BaseModel):
     id: int
     owner_id: int
-    rfp_id: Optional[int] = None
+    rfp_id: int | None = None
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     member_count: int = 0
     created_at: datetime
     updated_at: datetime
@@ -56,8 +55,8 @@ class MemberRead(BaseModel):
     workspace_id: int
     user_id: int
     role: str
-    user_email: Optional[str] = None
-    user_name: Optional[str] = None
+    user_email: str | None = None
+    user_name: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -80,8 +79,9 @@ class SharedDataRead(BaseModel):
 
 class PortalView(BaseModel):
     """Read-only partner portal view of a workspace."""
+
     workspace_name: str
-    workspace_description: Optional[str] = None
-    rfp_title: Optional[str] = None
-    shared_items: List[SharedDataRead] = []
-    members: List[MemberRead] = []
+    workspace_description: str | None = None
+    rfp_title: str | None = None
+    shared_items: list[SharedDataRead] = []
+    members: list[MemberRead] = []

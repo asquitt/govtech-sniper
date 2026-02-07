@@ -1,27 +1,26 @@
 """Industry events CRUD and calendar routes."""
 
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.event import IndustryEvent
-from app.schemas.event import EventCreate, EventUpdate, EventRead, EventListResponse
+from app.schemas.event import EventCreate, EventRead, EventUpdate
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
 
-@router.get("", response_model=List[EventRead])
+@router.get("", response_model=list[EventRead])
 async def list_events(
     archived: bool = False,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[EventRead]:
+) -> list[EventRead]:
     result = await session.execute(
         select(IndustryEvent)
         .where(
@@ -34,11 +33,11 @@ async def list_events(
     return [EventRead.model_validate(e) for e in events]
 
 
-@router.get("/upcoming", response_model=List[EventRead])
+@router.get("/upcoming", response_model=list[EventRead])
 async def upcoming_events(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[EventRead]:
+) -> list[EventRead]:
     now = datetime.utcnow()
     cutoff = now + timedelta(days=30)
     result = await session.execute(
@@ -55,13 +54,13 @@ async def upcoming_events(
     return [EventRead.model_validate(e) for e in events]
 
 
-@router.get("/calendar", response_model=List[EventRead])
+@router.get("/calendar", response_model=list[EventRead])
 async def calendar_events(
     month: int = Query(..., ge=1, le=12),
     year: int = Query(..., ge=2020, le=2100),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[EventRead]:
+) -> list[EventRead]:
     start = datetime(year, month, 1)
     if month == 12:
         end = datetime(year + 1, 1, 1)

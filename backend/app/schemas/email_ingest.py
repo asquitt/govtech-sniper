@@ -1,7 +1,6 @@
 """Email ingest configuration and history schemas."""
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
 
@@ -17,12 +16,12 @@ class EmailIngestConfigCreate(BaseModel):
 
 
 class EmailIngestConfigUpdate(BaseModel):
-    imap_server: Optional[str] = None
-    imap_port: Optional[int] = None
-    email_address: Optional[str] = None
-    password: Optional[str] = None
-    folder: Optional[str] = None
-    is_enabled: Optional[bool] = None
+    imap_server: str | None = None
+    imap_port: int | None = None
+    email_address: str | None = None
+    password: str | None = None
+    folder: str | None = None
+    is_enabled: bool | None = None
 
 
 class EmailIngestConfigRead(BaseModel):
@@ -34,7 +33,7 @@ class EmailIngestConfigRead(BaseModel):
     encrypted_password: str
     folder: str
     is_enabled: bool
-    last_checked_at: Optional[datetime]
+    last_checked_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -53,13 +52,13 @@ class IngestedEmailRead(BaseModel):
     sender: str
     received_at: datetime
     processing_status: ProcessingStatus
-    created_rfp_id: Optional[int]
-    error_message: Optional[str]
+    created_rfp_id: int | None
+    error_message: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
 
 class EmailIngestListResponse(BaseModel):
-    items: List[IngestedEmailRead]
+    items: list[IngestedEmailRead]
     total: int

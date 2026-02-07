@@ -5,7 +5,6 @@ Request/response models for Salesforce integration endpoints.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
 
@@ -14,7 +13,7 @@ class SalesforceFieldMappingCreate(BaseModel):
     sniper_field: str
     salesforce_field: str
     direction: str = "both"
-    transform: Optional[str] = None
+    transform: str | None = None
 
 
 class SalesforceFieldMappingRead(BaseModel):
@@ -23,7 +22,7 @@ class SalesforceFieldMappingRead(BaseModel):
     sniper_field: str
     salesforce_field: str
     direction: str
-    transform: Optional[str] = None
+    transform: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -32,14 +31,14 @@ class SalesforceFieldMappingRead(BaseModel):
 class SalesforceOpportunityRead(BaseModel):
     sf_id: str
     name: str
-    amount: Optional[float] = None
-    stage: Optional[str] = None
-    close_date: Optional[str] = None
+    amount: float | None = None
+    stage: str | None = None
+    close_date: str | None = None
 
 
 class SalesforceSyncResult(BaseModel):
     status: str  # success | failed
     pushed: int = 0
     pulled: int = 0
-    errors: List[str] = []
+    errors: list[str] = []
     completed_at: datetime

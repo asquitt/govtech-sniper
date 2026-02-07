@@ -1,24 +1,23 @@
 """Email ingestion configuration and history routes."""
 
 from datetime import datetime
-from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.email_ingest import EmailIngestConfig, IngestedEmail, ProcessingStatus
 from app.schemas.email_ingest import (
     EmailIngestConfigCreate,
     EmailIngestConfigRead,
     EmailIngestConfigUpdate,
-    IngestedEmailRead,
     EmailIngestListResponse,
+    IngestedEmailRead,
 )
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/email-ingest", tags=["email-ingest"])
 
@@ -46,20 +45,18 @@ async def create_config(
     return EmailIngestConfigRead.model_validate(config).mask_password()
 
 
-@router.get("/config", response_model=List[EmailIngestConfigRead])
+@router.get("/config", response_model=list[EmailIngestConfigRead])
 async def list_configs(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[EmailIngestConfigRead]:
+) -> list[EmailIngestConfigRead]:
     result = await session.execute(
         select(EmailIngestConfig)
         .where(EmailIngestConfig.user_id == current_user.id)
         .order_by(EmailIngestConfig.created_at.desc())
     )
     configs = result.scalars().all()
-    return [
-        EmailIngestConfigRead.model_validate(c).mask_password() for c in configs
-    ]
+    return [EmailIngestConfigRead.model_validate(c).mask_password() for c in configs]
 
 
 @router.patch("/config/{config_id}", response_model=EmailIngestConfigRead)
@@ -137,8 +134,8 @@ async def test_connection(
 
 @router.get("/history", response_model=EmailIngestListResponse)
 async def list_history(
-    config_id: Optional[int] = None,
-    status: Optional[ProcessingStatus] = None,
+    config_id: int | None = None,
+    status: ProcessingStatus | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: UserAuth = Depends(get_current_user),
@@ -146,18 +143,14 @@ async def list_history(
 ) -> EmailIngestListResponse:
     # Get user's config IDs for authorization
     config_result = await session.execute(
-        select(EmailIngestConfig.id).where(
-            EmailIngestConfig.user_id == current_user.id
-        )
+        select(EmailIngestConfig.id).where(EmailIngestConfig.user_id == current_user.id)
     )
     user_config_ids = [row[0] for row in config_result.fetchall()]
 
     if not user_config_ids:
         return EmailIngestListResponse(items=[], total=0)
 
-    query = select(IngestedEmail).where(
-        IngestedEmail.config_id.in_(user_config_ids)
-    )
+    query = select(IngestedEmail).where(IngestedEmail.config_id.in_(user_config_ids))
 
     if config_id is not None:
         if config_id not in user_config_ids:
@@ -187,9 +180,7 @@ async def reprocess_email(
     session: AsyncSession = Depends(get_session),
 ) -> IngestedEmailRead:
     # Verify ownership through config
-    result = await session.execute(
-        select(IngestedEmail).where(IngestedEmail.id == email_id)
-    )
+    result = await session.execute(select(IngestedEmail).where(IngestedEmail.id == email_id))
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")

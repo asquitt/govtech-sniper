@@ -2,25 +2,24 @@
 Draft Routes - Section Generation & Status
 """
 
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import desc
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user_optional, resolve_user_id
-from app.services.auth_service import UserAuth
+from app.config import settings
+from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection
 from app.models.rfp import ComplianceMatrix
 from app.schemas.proposal import DraftRequest, DraftResponse
+from app.services.auth_service import UserAuth
 from app.tasks.generation_tasks import (
-    generate_proposal_section,
     generate_all_sections,
+    generate_proposal_section,
     refresh_context_cache,
 )
-from app.config import settings
 
 router = APIRouter()
 
@@ -36,9 +35,7 @@ async def generate_sections_from_matrix(
     Creates a section for each mandatory and evaluated requirement.
     """
     # Get proposal and RFP
-    result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
 
     if not proposal:
@@ -84,8 +81,8 @@ async def generate_sections_from_matrix(
 async def generate_section_draft(
     requirement_id: str = Path(..., description="Requirement ID from compliance matrix"),
     request: DraftRequest = None,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> DraftResponse:
     """
@@ -152,10 +149,10 @@ async def generate_section_draft(
 @router.post("/proposals/{proposal_id}/generate-all")
 async def generate_all_proposal_sections(
     proposal_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
     max_words: int = Query(500, ge=100, le=2000),
     tone: str = Query("professional", pattern="^(professional|technical|executive)$"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
@@ -167,9 +164,7 @@ async def generate_all_proposal_sections(
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
 
     # Verify proposal exists
-    result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
 
     if not proposal:
@@ -195,9 +190,9 @@ async def generate_all_proposal_sections(
 
 @router.post("/refresh-cache")
 async def trigger_cache_refresh(
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
     ttl_hours: int = Query(24, ge=1, le=168, description="Cache TTL in hours"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
 ) -> dict:
     """
     Refresh the Gemini context cache for a user's Knowledge Base.
@@ -225,6 +220,7 @@ async def get_generation_status(task_id: str) -> dict:
     Get the status of a generation task.
     """
     from celery.result import AsyncResult
+
     from app.tasks.celery_app import celery_app
 
     def normalize_status(result: AsyncResult) -> str:

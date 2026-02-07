@@ -5,85 +5,84 @@ CRUD for award intelligence records.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.award import AwardRecord
 from app.models.rfp import RFP
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/awards", tags=["Awards"])
 
 
 class AwardCreate(BaseModel):
-    rfp_id: Optional[int] = None
-    notice_id: Optional[str] = None
-    solicitation_number: Optional[str] = None
-    contract_number: Optional[str] = None
-    agency: Optional[str] = None
+    rfp_id: int | None = None
+    notice_id: str | None = None
+    solicitation_number: str | None = None
+    contract_number: str | None = None
+    agency: str | None = None
     awardee_name: str
-    award_amount: Optional[int] = None
-    award_date: Optional[datetime] = None
-    contract_vehicle: Optional[str] = None
-    naics_code: Optional[str] = None
-    set_aside: Optional[str] = None
-    place_of_performance: Optional[str] = None
-    description: Optional[str] = None
-    source_url: Optional[str] = None
+    award_amount: int | None = None
+    award_date: datetime | None = None
+    contract_vehicle: str | None = None
+    naics_code: str | None = None
+    set_aside: str | None = None
+    place_of_performance: str | None = None
+    description: str | None = None
+    source_url: str | None = None
 
 
 class AwardUpdate(BaseModel):
-    notice_id: Optional[str] = None
-    solicitation_number: Optional[str] = None
-    contract_number: Optional[str] = None
-    agency: Optional[str] = None
-    awardee_name: Optional[str] = None
-    award_amount: Optional[int] = None
-    award_date: Optional[datetime] = None
-    contract_vehicle: Optional[str] = None
-    naics_code: Optional[str] = None
-    set_aside: Optional[str] = None
-    place_of_performance: Optional[str] = None
-    description: Optional[str] = None
-    source_url: Optional[str] = None
+    notice_id: str | None = None
+    solicitation_number: str | None = None
+    contract_number: str | None = None
+    agency: str | None = None
+    awardee_name: str | None = None
+    award_amount: int | None = None
+    award_date: datetime | None = None
+    contract_vehicle: str | None = None
+    naics_code: str | None = None
+    set_aside: str | None = None
+    place_of_performance: str | None = None
+    description: str | None = None
+    source_url: str | None = None
 
 
 class AwardResponse(BaseModel):
     id: int
-    rfp_id: Optional[int]
-    notice_id: Optional[str]
-    solicitation_number: Optional[str]
-    contract_number: Optional[str]
-    agency: Optional[str]
+    rfp_id: int | None
+    notice_id: str | None
+    solicitation_number: str | None
+    contract_number: str | None
+    agency: str | None
     awardee_name: str
-    award_amount: Optional[int]
-    award_date: Optional[datetime]
-    contract_vehicle: Optional[str]
-    naics_code: Optional[str]
-    set_aside: Optional[str]
-    place_of_performance: Optional[str]
-    description: Optional[str]
-    source_url: Optional[str]
+    award_amount: int | None
+    award_date: datetime | None
+    contract_vehicle: str | None
+    naics_code: str | None
+    set_aside: str | None
+    place_of_performance: str | None
+    description: str | None
+    source_url: str | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-@router.get("", response_model=List[AwardResponse])
+@router.get("", response_model=list[AwardResponse])
 async def list_awards(
-    rfp_id: Optional[int] = Query(None),
+    rfp_id: int | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[AwardResponse]:
+) -> list[AwardResponse]:
     query = select(AwardRecord).where(AwardRecord.user_id == current_user.id)
     if rfp_id:
         query = query.where(AwardRecord.rfp_id == rfp_id)

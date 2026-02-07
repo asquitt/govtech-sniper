@@ -5,28 +5,28 @@ Request/response models for teaming board and partner discovery.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
 
 
 class TeamingPartnerExtended(BaseModel):
     """Full partner profile with all discovery fields."""
+
     id: int
     user_id: int
     name: str
-    partner_type: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_email: Optional[str] = None
-    notes: Optional[str] = None
-    company_duns: Optional[str] = None
-    cage_code: Optional[str] = None
-    naics_codes: List[str] = []
-    set_asides: List[str] = []
-    capabilities: List[str] = []
-    clearance_level: Optional[str] = None
-    past_performance_summary: Optional[str] = None
-    website: Optional[str] = None
+    partner_type: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    notes: str | None = None
+    company_duns: str | None = None
+    cage_code: str | None = None
+    naics_codes: list[str] = []
+    set_asides: list[str] = []
+    capabilities: list[str] = []
+    clearance_level: str | None = None
+    past_performance_summary: str | None = None
+    website: str | None = None
     is_public: bool = False
     created_at: datetime
     updated_at: datetime
@@ -36,37 +36,38 @@ class TeamingPartnerExtended(BaseModel):
 
 class TeamingPartnerPublicProfile(BaseModel):
     """Public-facing partner profile (excludes internal notes and user_id)."""
+
     id: int
     name: str
-    partner_type: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_email: Optional[str] = None
-    company_duns: Optional[str] = None
-    cage_code: Optional[str] = None
-    naics_codes: List[str] = []
-    set_asides: List[str] = []
-    capabilities: List[str] = []
-    clearance_level: Optional[str] = None
-    past_performance_summary: Optional[str] = None
-    website: Optional[str] = None
+    partner_type: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    company_duns: str | None = None
+    cage_code: str | None = None
+    naics_codes: list[str] = []
+    set_asides: list[str] = []
+    capabilities: list[str] = []
+    clearance_level: str | None = None
+    past_performance_summary: str | None = None
+    website: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class TeamingRequestCreate(BaseModel):
     to_partner_id: int
-    rfp_id: Optional[int] = None
-    message: Optional[str] = None
+    rfp_id: int | None = None
+    message: str | None = None
 
 
 class TeamingRequestRead(BaseModel):
     id: int
     from_user_id: int
     to_partner_id: int
-    rfp_id: Optional[int] = None
-    message: Optional[str] = None
+    rfp_id: int | None = None
+    message: str | None = None
     status: str
-    partner_name: Optional[str] = None
+    partner_name: str | None = None
     created_at: datetime
     updated_at: datetime
 

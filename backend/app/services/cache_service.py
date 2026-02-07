@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -21,7 +21,7 @@ class MemoryCache:
     def __init__(self):
         self._store: dict[str, tuple[float, Any]] = {}
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         item = self._store.get(key)
         if not item:
             return None
@@ -53,7 +53,7 @@ class RedisCache:
 
         self._redis = redis.from_url(redis_url)
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         value = await self._redis.get(key)
         if value is None:
             return None
@@ -94,12 +94,12 @@ def get_cache_backend():
     return _cache_backend
 
 
-async def cache_get(key: str) -> Optional[Any]:
+async def cache_get(key: str) -> Any | None:
     backend = get_cache_backend()
     return await backend.get(key)
 
 
-async def cache_set(key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
+async def cache_set(key: str, value: Any, ttl_seconds: int | None = None) -> None:
     backend = get_cache_backend()
     ttl = ttl_seconds if ttl_seconds is not None else settings.cache_ttl_seconds
     await backend.set(key, value, ttl)

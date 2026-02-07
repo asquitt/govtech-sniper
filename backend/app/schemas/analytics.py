@@ -4,14 +4,13 @@ RFP Sniper - Analytics Schemas
 Request/response models for analytics reporting endpoints.
 """
 
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
-
 
 # =============================================================================
 # Win Rate
 # =============================================================================
+
 
 class WinRateTrend(BaseModel):
     month: str
@@ -24,12 +23,13 @@ class WinRateResponse(BaseModel):
     win_rate: float
     total_won: int
     total_lost: int
-    trend: List[WinRateTrend]
+    trend: list[WinRateTrend]
 
 
 # =============================================================================
 # Pipeline by Stage
 # =============================================================================
+
 
 class PipelineStage(BaseModel):
     stage: str
@@ -38,13 +38,14 @@ class PipelineStage(BaseModel):
 
 
 class PipelineByStageResponse(BaseModel):
-    stages: List[PipelineStage]
+    stages: list[PipelineStage]
     total_pipeline_value: float
 
 
 # =============================================================================
 # Conversion Rates
 # =============================================================================
+
 
 class StageConversion(BaseModel):
     from_stage: str
@@ -55,13 +56,14 @@ class StageConversion(BaseModel):
 
 
 class ConversionRatesResponse(BaseModel):
-    conversions: List[StageConversion]
+    conversions: list[StageConversion]
     overall_rate: float
 
 
 # =============================================================================
 # Proposal Turnaround
 # =============================================================================
+
 
 class TurnaroundPoint(BaseModel):
     month: str
@@ -71,12 +73,13 @@ class TurnaroundPoint(BaseModel):
 
 class ProposalTurnaroundResponse(BaseModel):
     overall_avg_days: float
-    trend: List[TurnaroundPoint]
+    trend: list[TurnaroundPoint]
 
 
 # =============================================================================
 # NAICS Performance
 # =============================================================================
+
 
 class NAICSPerformance(BaseModel):
     naics_code: str
@@ -87,12 +90,13 @@ class NAICSPerformance(BaseModel):
 
 
 class NAICSPerformanceResponse(BaseModel):
-    entries: List[NAICSPerformance]
+    entries: list[NAICSPerformance]
 
 
 # =============================================================================
 # Export
 # =============================================================================
+
 
 class ExportRequest(BaseModel):
     report_type: str = Field(

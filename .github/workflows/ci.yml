@@ -20,6 +20,12 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - name: Install backend dependencies
         run: pip install -r requirements.txt
+      - name: Install linting tools
+        run: pip install ruff
+      - name: Lint Python (ruff)
+        run: ruff check app/
+      - name: Format check (ruff)
+        run: ruff format --check app/
       - name: Run backend tests
         env:
           DATABASE_URL: sqlite+aiosqlite:///./test.db
@@ -41,6 +47,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
+      - name: Type check (tsc)
+        run: npx tsc --noEmit
       - name: Lint frontend
         run: npm run lint
       - name: Run frontend tests

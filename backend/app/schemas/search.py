@@ -1,6 +1,5 @@
 """Search schemas."""
 
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -9,7 +8,7 @@ class SearchRequest(BaseModel):
     """Semantic search request."""
 
     query: str = Field(min_length=1, max_length=500)
-    entity_types: Optional[list[str]] = None
+    entity_types: list[str] | None = None
     limit: int = Field(default=10, ge=1, le=50)
 
 

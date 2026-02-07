@@ -3,34 +3,33 @@ Procurement forecast CRUD and matching routes.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.forecast import ProcurementForecast, ForecastAlert
+from app.database import get_session
+from app.models.forecast import ForecastAlert, ProcurementForecast
 from app.models.rfp import RFP
 from app.schemas.forecast import (
-    ForecastCreate,
-    ForecastUpdate,
-    ForecastRead,
     ForecastAlertRead,
+    ForecastCreate,
+    ForecastRead,
+    ForecastUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.forecast_matcher import run_forecast_matching
 
 router = APIRouter(prefix="/forecasts", tags=["Forecasts"])
 
 
-@router.get("", response_model=List[ForecastRead])
+@router.get("", response_model=list[ForecastRead])
 async def list_forecasts(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ForecastRead]:
+) -> list[ForecastRead]:
     result = await session.execute(
         select(ProcurementForecast)
         .where(ProcurementForecast.user_id == current_user.id)
@@ -168,11 +167,11 @@ async def trigger_matching(
     return {"new_alerts": len(new_alerts)}
 
 
-@router.get("/alerts", response_model=List[ForecastAlertRead])
+@router.get("/alerts", response_model=list[ForecastAlertRead])
 async def list_alerts(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ForecastAlertRead]:
+) -> list[ForecastAlertRead]:
     result = await session.execute(
         select(ForecastAlert, ProcurementForecast.title, RFP.title)
         .join(

@@ -6,22 +6,22 @@ Minimal SCIM 2.0 endpoints for user provisioning and group role mapping.
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List, Optional, Dict, Any
 import json
 import secrets
+from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.api.routes.teams import Team, TeamMember, TeamRole
 from app.config import settings
 from app.database import get_session
 from app.models.user import User, UserTier
-from app.api.routes.teams import Team, TeamMember, TeamRole
-from app.services.auth_service import hash_password
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import hash_password
 
 router = APIRouter(prefix="/scim/v2", tags=["SCIM"])
 
@@ -30,7 +30,8 @@ router = APIRouter(prefix="/scim/v2", tags=["SCIM"])
 # Auth Dependency
 # =============================================================================
 
-def require_scim_token(authorization: Optional[str] = Header(default=None)) -> None:
+
+def require_scim_token(authorization: str | None = Header(default=None)) -> None:
     expected = settings.scim_bearer_token
     if not expected:
         raise HTTPException(status_code=503, detail="SCIM not configured")
@@ -42,47 +43,49 @@ def require_scim_token(authorization: Optional[str] = Header(default=None)) -> N
 # SCIM Schemas (Minimal)
 # =============================================================================
 
+
 class ScimEmail(BaseModel):
     value: EmailStr
-    primary: Optional[bool] = None
+    primary: bool | None = None
 
 
 class ScimName(BaseModel):
-    givenName: Optional[str] = None
-    familyName: Optional[str] = None
+    givenName: str | None = None
+    familyName: str | None = None
 
 
 class ScimUserCreate(BaseModel):
     userName: EmailStr
-    active: Optional[bool] = True
-    name: Optional[ScimName] = None
-    emails: Optional[List[ScimEmail]] = None
-    externalId: Optional[str] = None
-    groups: Optional[List[Dict[str, Any]]] = None
+    active: bool | None = True
+    name: ScimName | None = None
+    emails: list[ScimEmail] | None = None
+    externalId: str | None = None
+    groups: list[dict[str, Any]] | None = None
 
 
 class ScimUserPatch(BaseModel):
-    active: Optional[bool] = None
+    active: bool | None = None
 
 
 class ScimGroupCreate(BaseModel):
     displayName: str
-    members: Optional[List[Dict[str, Any]]] = None
+    members: list[dict[str, Any]] | None = None
 
 
 class ScimListResponse(BaseModel):
-    schemas: List[str]
+    schemas: list[str]
     totalResults: int
     startIndex: int
     itemsPerPage: int
-    Resources: List[Dict[str, Any]]
+    Resources: list[dict[str, Any]]
 
 
 # =============================================================================
 # Helpers
 # =============================================================================
 
-def _parse_group_role_map() -> Dict[str, str]:
+
+def _parse_group_role_map() -> dict[str, str]:
     if not settings.scim_group_role_map:
         return {}
     try:
@@ -91,7 +94,7 @@ def _parse_group_role_map() -> Dict[str, str]:
         return {}
 
 
-def _resolve_role(groups: Optional[List[Dict[str, Any]]]) -> TeamRole:
+def _resolve_role(groups: list[dict[str, Any]] | None) -> TeamRole:
     mapping = _parse_group_role_map()
     try:
         default_role = TeamRole(settings.scim_default_role)
@@ -101,7 +104,7 @@ def _resolve_role(groups: Optional[List[Dict[str, Any]]]) -> TeamRole:
         return default_role
 
     role_priority = [TeamRole.OWNER, TeamRole.ADMIN, TeamRole.MEMBER, TeamRole.VIEWER]
-    resolved: Optional[TeamRole] = None
+    resolved: TeamRole | None = None
     for group in groups:
         name = group.get("display") or group.get("value")
         if not name or name not in mapping:
@@ -119,9 +122,7 @@ async def _get_or_create_default_team(
     session: AsyncSession,
     owner_id: int,
 ) -> Team:
-    result = await session.execute(
-        select(Team).where(Team.name == settings.scim_default_team_name)
-    )
+    result = await session.execute(select(Team).where(Team.name == settings.scim_default_team_name))
     team = result.scalar_one_or_none()
     if team:
         return team
@@ -140,7 +141,7 @@ async def _get_or_create_default_team(
     return team
 
 
-def _scim_user_resource(user: User) -> Dict[str, Any]:
+def _scim_user_resource(user: User) -> dict[str, Any]:
     return {
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
         "id": str(user.id),
@@ -155,7 +156,7 @@ def _scim_user_resource(user: User) -> Dict[str, Any]:
     }
 
 
-def _scim_group_resource(team: Team) -> Dict[str, Any]:
+def _scim_group_resource(team: Team) -> dict[str, Any]:
     return {
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
         "id": str(team.id),
@@ -167,6 +168,7 @@ def _scim_group_resource(team: Team) -> Dict[str, Any]:
 # =============================================================================
 # SCIM Endpoints
 # =============================================================================
+
 
 @router.get("/Users", response_model=ScimListResponse, dependencies=[Depends(require_scim_token)])
 async def list_scim_users(
@@ -184,11 +186,13 @@ async def list_scim_users(
     )
 
 
-@router.post("/Users", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_scim_token)])
+@router.post(
+    "/Users", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_scim_token)]
+)
 async def create_scim_user(
     payload: ScimUserCreate,
     session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     email = payload.userName.lower()
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -200,7 +204,13 @@ async def create_scim_user(
             email=email,
             hashed_password=hash_password(secrets.token_urlsafe(16)),
             full_name=" ".join(
-                filter(None, [payload.name.givenName if payload.name else None, payload.name.familyName if payload.name else None])
+                filter(
+                    None,
+                    [
+                        payload.name.givenName if payload.name else None,
+                        payload.name.familyName if payload.name else None,
+                    ],
+                )
             )
             or None,
             company_name=None,
@@ -252,7 +262,7 @@ async def update_scim_user(
     user_id: int,
     payload: ScimUserPatch,
     session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
@@ -290,11 +300,13 @@ async def list_scim_groups(
     )
 
 
-@router.post("/Groups", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_scim_token)])
+@router.post(
+    "/Groups", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_scim_token)]
+)
 async def create_scim_group(
     payload: ScimGroupCreate,
     session: AsyncSession = Depends(get_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if not payload.members:
         raise HTTPException(status_code=400, detail="Group members required")
 

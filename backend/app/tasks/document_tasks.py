@@ -5,21 +5,22 @@ Celery tasks for extracting text and chunking knowledge base documents.
 """
 
 import asyncio
+import hashlib
 import io
 import os
-import hashlib
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
+
 import structlog
 
-from app.tasks.celery_app import celery_app
 from app.database import get_celery_session_context
 from app.models.knowledge_base import (
-    KnowledgeBaseDocument,
     DocumentChunk,
+    KnowledgeBaseDocument,
     ProcessingStatus,
 )
 from app.services.pdf_processor import get_pdf_processor
+from app.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
@@ -67,8 +68,8 @@ def process_document(self, document_id: int) -> dict:
 
     async def _process() -> dict:
         async with get_celery_session_context() as session:
-            from sqlmodel import select
             from sqlalchemy import delete
+            from sqlmodel import select
 
             result = await session.execute(
                 select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == document_id)
@@ -95,8 +96,8 @@ def process_document(self, document_id: int) -> dict:
 
                 full_text = ""
                 page_count = None
-                extracted_metadata: Dict[str, Any] = {}
-                chunks: List[Dict[str, Any]] = []
+                extracted_metadata: dict[str, Any] = {}
+                chunks: list[dict[str, Any]] = []
 
                 if mime_type == "application/pdf" or extension == ".pdf":
                     pdf_processor = get_pdf_processor()
@@ -113,29 +114,37 @@ def process_document(self, document_id: int) -> dict:
                     full_text = file_bytes.decode("utf-8", errors="ignore").strip()
                     page_count = 1
                     extracted_metadata = {"source": "text"}
-                    chunks = [{
-                        "chunk_index": 0,
-                        "text": full_text,
-                        "start_page": 1,
-                        "end_page": 1,
-                        "char_count": len(full_text),
-                        "word_count": len(full_text.split()),
-                    }]
+                    chunks = [
+                        {
+                            "chunk_index": 0,
+                            "text": full_text,
+                            "start_page": 1,
+                            "end_page": 1,
+                            "char_count": len(full_text),
+                            "word_count": len(full_text.split()),
+                        }
+                    ]
 
-                elif mime_type in {
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                } or extension == ".docx":
+                elif (
+                    mime_type
+                    in {
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    }
+                    or extension == ".docx"
+                ):
                     full_text = _extract_docx_text(file_bytes)
                     page_count = 1
                     extracted_metadata = {"source": "docx"}
-                    chunks = [{
-                        "chunk_index": 0,
-                        "text": full_text,
-                        "start_page": 1,
-                        "end_page": 1,
-                        "char_count": len(full_text),
-                        "word_count": len(full_text.split()),
-                    }]
+                    chunks = [
+                        {
+                            "chunk_index": 0,
+                            "text": full_text,
+                            "start_page": 1,
+                            "end_page": 1,
+                            "char_count": len(full_text),
+                            "word_count": len(full_text.split()),
+                        }
+                    ]
 
                 elif extension == ".doc":
                     raise ValueError("Legacy .doc files are not supported. Upload .docx or PDF.")
@@ -158,16 +167,18 @@ def process_document(self, document_id: int) -> dict:
                     end_char = cursor + len(text)
                     cursor = end_char
 
-                    session.add(DocumentChunk(
-                        document_id=document.id,
-                        content=text,
-                        page_number=int(chunk.get("start_page", 1) or 1),
-                        start_char=start_char,
-                        end_char=end_char,
-                        chunk_index=int(chunk.get("chunk_index", 0) or 0),
-                        word_count=int(chunk.get("word_count", len(text.split())) or 0),
-                        content_hash=_hash_content(text),
-                    ))
+                    session.add(
+                        DocumentChunk(
+                            document_id=document.id,
+                            content=text,
+                            page_number=int(chunk.get("start_page", 1) or 1),
+                            start_char=start_char,
+                            end_char=end_char,
+                            chunk_index=int(chunk.get("chunk_index", 0) or 0),
+                            word_count=int(chunk.get("word_count", len(text.split())) or 0),
+                            content_hash=_hash_content(text),
+                        )
+                    )
 
                 # Update document
                 document.full_text = full_text

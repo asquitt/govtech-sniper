@@ -5,7 +5,6 @@ Dispatch webhook events and store delivery logs.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,9 +12,9 @@ from sqlmodel import select
 
 from app.config import settings
 from app.models.webhook import (
-    WebhookSubscription,
     WebhookDelivery,
     WebhookDeliveryStatus,
+    WebhookSubscription,
 )
 
 
@@ -25,7 +24,7 @@ async def dispatch_webhook_event(
     user_id: int,
     event_type: str,
     payload: dict,
-) -> List[WebhookDelivery]:
+) -> list[WebhookDelivery]:
     """
     Dispatch a webhook event to all matching subscriptions.
     Always records a delivery entry.
@@ -37,7 +36,7 @@ async def dispatch_webhook_event(
         )
     )
     subscriptions = result.scalars().all()
-    deliveries: List[WebhookDelivery] = []
+    deliveries: list[WebhookDelivery] = []
 
     for subscription in subscriptions:
         if subscription.event_types and event_type not in subscription.event_types:

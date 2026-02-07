@@ -5,23 +5,22 @@ Request/response models for color team reviews, assignments, and comments.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
-
 
 # ---------------------------------------------------------------------------
 # Review
 # ---------------------------------------------------------------------------
 
+
 class ReviewCreate(BaseModel):
     review_type: str  # pink | red | gold
-    scheduled_date: Optional[datetime] = None
+    scheduled_date: datetime | None = None
 
 
 class ReviewUpdate(BaseModel):
-    status: Optional[str] = None
-    scheduled_date: Optional[datetime] = None
+    status: str | None = None
+    scheduled_date: datetime | None = None
 
 
 class ReviewRead(BaseModel):
@@ -29,10 +28,10 @@ class ReviewRead(BaseModel):
     proposal_id: int
     review_type: str
     status: str
-    scheduled_date: Optional[datetime] = None
-    completed_date: Optional[datetime] = None
-    overall_score: Optional[float] = None
-    summary: Optional[str] = None
+    scheduled_date: datetime | None = None
+    completed_date: datetime | None = None
+    overall_score: float | None = None
+    summary: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -41,12 +40,13 @@ class ReviewRead(BaseModel):
 
 class ReviewComplete(BaseModel):
     overall_score: float
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 # ---------------------------------------------------------------------------
 # Assignment
 # ---------------------------------------------------------------------------
+
 
 class AssignmentCreate(BaseModel):
     reviewer_user_id: int
@@ -66,26 +66,27 @@ class AssignmentRead(BaseModel):
 # Comment
 # ---------------------------------------------------------------------------
 
+
 class CommentCreate(BaseModel):
-    section_id: Optional[int] = None
+    section_id: int | None = None
     comment_text: str
     severity: str = "minor"  # critical | major | minor | suggestion
 
 
 class CommentUpdate(BaseModel):
-    status: Optional[str] = None  # open | accepted | rejected | resolved
-    resolution_note: Optional[str] = None
+    status: str | None = None  # open | accepted | rejected | resolved
+    resolution_note: str | None = None
 
 
 class CommentRead(BaseModel):
     id: int
     review_id: int
-    section_id: Optional[int] = None
+    section_id: int | None = None
     reviewer_user_id: int
     comment_text: str
     severity: str
     status: str
-    resolution_note: Optional[str] = None
+    resolution_note: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -95,6 +96,7 @@ class CommentRead(BaseModel):
 # List wrapper
 # ---------------------------------------------------------------------------
 
+
 class ReviewListResponse(BaseModel):
-    items: List[ReviewRead]
+    items: list[ReviewRead]
     total: int

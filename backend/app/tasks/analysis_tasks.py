@@ -6,17 +6,15 @@ Celery tasks for RFP analysis using Gemini AI.
 
 import asyncio
 from datetime import datetime
-from typing import Optional
+
 import structlog
 
-from celery import shared_task
-
-from app.tasks.celery_app import celery_app
-from app.services.gemini_service import GeminiService
-from app.services.filters import KillerFilterService
 from app.database import get_celery_session_context
-from app.models.rfp import RFP, RFPStatus, ComplianceMatrix
+from app.models.rfp import RFP, ComplianceMatrix, RFPStatus
 from app.models.user import UserProfile
+from app.services.filters import KillerFilterService
+from app.services.gemini_service import GeminiService
+from app.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
@@ -44,38 +42,36 @@ def analyze_rfp(
 ) -> dict:
     """
     Celery task to perform Deep Read analysis on an RFP.
-    
+
     Uses Gemini 1.5 Pro to extract the compliance matrix.
-    
+
     Args:
         rfp_id: ID of the RFP to analyze
         force_reanalyze: If True, re-analyze even if already done
-        
+
     Returns:
         Analysis results summary
     """
     task_id = self.request.id
     logger.info("Starting RFP analysis", task_id=task_id, rfp_id=rfp_id)
-    
+
     async def _analyze():
         gemini_service = GeminiService()
-        
+
         async with get_celery_session_context() as session:
             from sqlmodel import select
-            
+
             # Get the RFP
-            result = await session.execute(
-                select(RFP).where(RFP.id == rfp_id)
-            )
+            result = await session.execute(select(RFP).where(RFP.id == rfp_id))
             rfp = result.scalar_one_or_none()
-            
+
             if not rfp:
                 return {
                     "task_id": task_id,
                     "status": "error",
                     "error": f"RFP {rfp_id} not found",
                 }
-            
+
             # Check if already analyzed
             if rfp.status == RFPStatus.ANALYZED and not force_reanalyze:
                 return {
@@ -84,11 +80,11 @@ def analyze_rfp(
                     "message": "RFP already analyzed",
                     "rfp_id": rfp_id,
                 }
-            
+
             # Update status
             rfp.status = RFPStatus.ANALYZING
             await session.commit()
-            
+
             # Get text to analyze
             text_to_analyze = rfp.full_text or rfp.description
             if not text_to_analyze:
@@ -99,17 +95,17 @@ def analyze_rfp(
                     "status": "error",
                     "error": "No text content to analyze",
                 }
-            
+
             try:
                 # Run Deep Read
                 analysis = await gemini_service.deep_read(text_to_analyze)
-                
+
                 # Check for existing compliance matrix
                 matrix_result = await session.execute(
                     select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
                 )
                 compliance_matrix = matrix_result.scalar_one_or_none()
-                
+
                 if compliance_matrix:
                     # Update existing
                     compliance_matrix.requirements = [
@@ -117,8 +113,7 @@ def analyze_rfp(
                     ]
                     compliance_matrix.total_requirements = len(analysis["requirements"])
                     compliance_matrix.mandatory_count = sum(
-                        1 for req in analysis["requirements"]
-                        if req.importance.value == "mandatory"
+                        1 for req in analysis["requirements"] if req.importance.value == "mandatory"
                     )
                     compliance_matrix.extraction_confidence = analysis.get("confidence", 0)
                     compliance_matrix.raw_ai_response = analysis.get("raw_response")
@@ -127,32 +122,31 @@ def analyze_rfp(
                     # Create new
                     compliance_matrix = ComplianceMatrix(
                         rfp_id=rfp_id,
-                        requirements=[
-                            req.model_dump() for req in analysis["requirements"]
-                        ],
+                        requirements=[req.model_dump() for req in analysis["requirements"]],
                         total_requirements=len(analysis["requirements"]),
                         mandatory_count=sum(
-                            1 for req in analysis["requirements"]
+                            1
+                            for req in analysis["requirements"]
                             if req.importance.value == "mandatory"
                         ),
                         extraction_confidence=analysis.get("confidence", 0),
                         raw_ai_response=analysis.get("raw_response"),
                     )
                     session.add(compliance_matrix)
-                
+
                 # Update RFP
                 rfp.status = RFPStatus.ANALYZED
                 rfp.summary = analysis.get("summary")
                 rfp.analyzed_at = datetime.utcnow()
-                
+
                 await session.commit()
-                
+
                 logger.info(
                     "RFP analysis complete",
                     rfp_id=rfp_id,
                     requirements_found=len(analysis["requirements"]),
                 )
-                
+
                 return {
                     "task_id": task_id,
                     "status": "completed",
@@ -161,13 +155,13 @@ def analyze_rfp(
                     "mandatory_count": compliance_matrix.mandatory_count,
                     "confidence": analysis.get("confidence", 0),
                 }
-                
+
             except Exception as e:
                 logger.error(f"Analysis failed: {e}", rfp_id=rfp_id)
                 rfp.status = RFPStatus.NEW
                 await session.commit()
                 raise self.retry(exc=e)
-    
+
     return run_async(_analyze())
 
 
@@ -182,50 +176,48 @@ def run_killer_filter(
 ) -> dict:
     """
     Run the Killer Filter on a specific RFP.
-    
+
     Args:
         rfp_id: ID of the RFP to filter
         user_id: ID of the user (for profile lookup)
-        
+
     Returns:
         Filter results
     """
     task_id = self.request.id
     logger.info("Running Killer Filter", task_id=task_id, rfp_id=rfp_id)
-    
+
     async def _filter():
         filter_service = KillerFilterService()
-        
+
         async with get_celery_session_context() as session:
             from sqlmodel import select
-            
+
             # Get RFP and user profile
-            rfp_result = await session.execute(
-                select(RFP).where(RFP.id == rfp_id)
-            )
+            rfp_result = await session.execute(select(RFP).where(RFP.id == rfp_id))
             rfp = rfp_result.scalar_one_or_none()
-            
+
             if not rfp:
                 return {"status": "error", "error": "RFP not found"}
-            
+
             profile_result = await session.execute(
                 select(UserProfile).where(UserProfile.user_id == user_id)
             )
             profile = profile_result.scalar_one_or_none()
-            
+
             if not profile:
                 return {"status": "error", "error": "User profile not found"}
-            
+
             # Run filter
             result = await filter_service.filter_rfp(rfp, profile)
-            
+
             # Update RFP
             rfp.is_qualified = result.is_qualified
             rfp.qualification_reason = result.reason
             rfp.qualification_score = result.confidence * 100
-            
+
             await session.commit()
-            
+
             return {
                 "task_id": task_id,
                 "status": "completed",
@@ -236,7 +228,7 @@ def run_killer_filter(
                 "disqualifying_factors": result.disqualifying_factors,
                 "matching_factors": result.matching_factors,
             }
-    
+
     return run_async(_filter())
 
 
@@ -247,12 +239,13 @@ def cleanup_expired_caches():
     Runs via Celery Beat schedule.
     """
     logger.info("Cleaning up expired context caches")
-    
+
     async def _cleanup():
         async with get_session_context() as session:
             from sqlmodel import select
+
             from app.models.knowledge_base import KnowledgeBaseDocument
-            
+
             # Find documents with expired caches
             now = datetime.utcnow()
             result = await session.execute(
@@ -262,15 +255,15 @@ def cleanup_expired_caches():
                 )
             )
             expired_docs = result.scalars().all()
-            
+
             for doc in expired_docs:
                 doc.gemini_cache_name = None
                 doc.gemini_cache_expires_at = None
                 logger.info(f"Cleared expired cache for document {doc.id}")
-            
+
             if expired_docs:
                 await session.commit()
-            
+
             return {"cleaned": len(expired_docs)}
-    
+
     return run_async(_cleanup())

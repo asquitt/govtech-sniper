@@ -5,21 +5,20 @@ Scaffolding for Word add-in session management.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.word_addin import WordAddinSession, WordAddinEvent, WordAddinSessionStatus
-from app.models.proposal import Proposal, ProposalSection
-from app.services.audit_service import log_audit_event
-from app.services.gemini_service import GeminiService
 from app.config import settings
+from app.database import get_session
+from app.models.proposal import Proposal, ProposalSection
+from app.models.word_addin import WordAddinEvent, WordAddinSession, WordAddinSessionStatus
+from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
+from app.services.gemini_service import GeminiService
 
 router = APIRouter(prefix="/word-addin", tags=["Word Add-in"])
 
@@ -30,9 +29,7 @@ async def _get_section_for_user(
     session: AsyncSession,
 ) -> ProposalSection:
     """Load a proposal section and verify ownership. Raises 404 if not found or not owned."""
-    result = await session.execute(
-        select(ProposalSection).where(ProposalSection.id == section_id)
-    )
+    result = await session.execute(select(ProposalSection).where(ProposalSection.id == section_id))
     section = result.scalar_one_or_none()
     if not section:
         raise HTTPException(status_code=404, detail="Section not found")
@@ -52,13 +49,13 @@ async def _get_section_for_user(
 class WordAddinSessionCreate(BaseModel):
     proposal_id: int
     document_name: str
-    metadata: Optional[dict] = None
+    metadata: dict | None = None
 
 
 class WordAddinSessionUpdate(BaseModel):
-    document_name: Optional[str] = None
-    status: Optional[WordAddinSessionStatus] = None
-    metadata: Optional[dict] = None
+    document_name: str | None = None
+    status: WordAddinSessionStatus | None = None
+    metadata: dict | None = None
 
 
 class WordAddinSessionResponse(BaseModel):
@@ -67,7 +64,7 @@ class WordAddinSessionResponse(BaseModel):
     document_name: str
     status: WordAddinSessionStatus
     metadata: dict = Field(alias="session_metadata")
-    last_synced_at: Optional[datetime]
+    last_synced_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -76,7 +73,7 @@ class WordAddinSessionResponse(BaseModel):
 
 class WordAddinEventCreate(BaseModel):
     event_type: str
-    payload: Optional[dict] = None
+    payload: dict | None = None
 
 
 class WordAddinEventResponse(BaseModel):
@@ -89,12 +86,12 @@ class WordAddinEventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("/sessions", response_model=List[WordAddinSessionResponse])
+@router.get("/sessions", response_model=list[WordAddinSessionResponse])
 async def list_sessions(
-    proposal_id: Optional[int] = Query(None),
+    proposal_id: int | None = Query(None),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[WordAddinSessionResponse]:
+) -> list[WordAddinSessionResponse]:
     query = select(WordAddinSession).where(WordAddinSession.user_id == current_user.id)
     if proposal_id:
         query = query.where(WordAddinSession.proposal_id == proposal_id)
@@ -220,12 +217,12 @@ async def create_event(
     return WordAddinEventResponse.model_validate(event)
 
 
-@router.get("/sessions/{session_id}/events", response_model=List[WordAddinEventResponse])
+@router.get("/sessions/{session_id}/events", response_model=list[WordAddinEventResponse])
 async def list_events(
     session_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[WordAddinEventResponse]:
+) -> list[WordAddinEventResponse]:
     result = await session.execute(
         select(WordAddinSession).where(
             WordAddinSession.id == session_id,
@@ -253,7 +250,7 @@ class SectionPullResponse(BaseModel):
     title: str
     content: str
     requirements: list[str] = []
-    last_modified: Optional[str] = None
+    last_modified: str | None = None
 
 
 class SectionPushPayload(BaseModel):
@@ -412,9 +409,7 @@ async def ai_rewrite(
     mode = payload.mode
 
     if mode not in _REWRITE_PROMPTS:
-        raise HTTPException(
-            status_code=400, detail="Mode must be shorten, expand, or improve"
-        )
+        raise HTTPException(status_code=400, detail="Mode must be shorten, expand, or improve")
 
     prompt = _REWRITE_PROMPTS[mode].format(content=content)
 

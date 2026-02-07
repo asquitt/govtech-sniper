@@ -5,10 +5,9 @@ Capture pipeline, bid decisions, and teaming partners.
 """
 
 from datetime import date, datetime
-from typing import Optional
 from enum import Enum
 
-from sqlmodel import Field, SQLModel, Column, JSON
+from sqlmodel import JSON, Column, Field, SQLModel
 
 
 class CaptureStage(str, Enum):
@@ -31,16 +30,17 @@ class CapturePlan(SQLModel, table=True):
     """
     Capture plan for an opportunity.
     """
+
     __tablename__ = "capture_plans"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     rfp_id: int = Field(foreign_key="rfps.id", index=True, unique=True)
     owner_id: int = Field(foreign_key="users.id", index=True)
 
     stage: CaptureStage = Field(default=CaptureStage.IDENTIFIED)
     bid_decision: BidDecision = Field(default=BidDecision.PENDING)
-    win_probability: Optional[int] = Field(default=None, ge=0, le=100)
-    notes: Optional[str] = None
+    win_probability: int | None = Field(default=None, ge=0, le=100)
+    notes: str | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -50,15 +50,16 @@ class GateReview(SQLModel, table=True):
     """
     Capture gate review record.
     """
+
     __tablename__ = "gate_reviews"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     rfp_id: int = Field(foreign_key="rfps.id", index=True)
     reviewer_id: int = Field(foreign_key="users.id", index=True)
 
     stage: CaptureStage = Field(default=CaptureStage.QUALIFIED)
     decision: BidDecision = Field(default=BidDecision.PENDING)
-    notes: Optional[str] = None
+    notes: str | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -67,26 +68,27 @@ class TeamingPartner(SQLModel, table=True):
     """
     Teaming partner directory.
     """
+
     __tablename__ = "teaming_partners"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
     name: str = Field(max_length=255)
-    partner_type: Optional[str] = Field(default=None, max_length=100)
-    contact_name: Optional[str] = Field(default=None, max_length=255)
-    contact_email: Optional[str] = Field(default=None, max_length=255)
-    notes: Optional[str] = None
+    partner_type: str | None = Field(default=None, max_length=100)
+    contact_name: str | None = Field(default=None, max_length=255)
+    contact_email: str | None = Field(default=None, max_length=255)
+    notes: str | None = None
 
     # Extended fields for teaming board
-    company_duns: Optional[str] = Field(default=None, max_length=20)
-    cage_code: Optional[str] = Field(default=None, max_length=10)
+    company_duns: str | None = Field(default=None, max_length=20)
+    cage_code: str | None = Field(default=None, max_length=10)
     naics_codes: list = Field(default=[], sa_column=Column(JSON))
     set_asides: list = Field(default=[], sa_column=Column(JSON))
     capabilities: list = Field(default=[], sa_column=Column(JSON))
-    clearance_level: Optional[str] = Field(default=None, max_length=50)
-    past_performance_summary: Optional[str] = None
-    website: Optional[str] = Field(default=None, max_length=500)
+    clearance_level: str | None = Field(default=None, max_length=50)
+    past_performance_summary: str | None = None
+    website: str | None = Field(default=None, max_length=500)
     is_public: bool = Field(default=False)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -97,12 +99,13 @@ class RFPTeamingPartner(SQLModel, table=True):
     """
     Link table between RFPs and teaming partners.
     """
+
     __tablename__ = "rfp_teaming_partners"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     rfp_id: int = Field(foreign_key="rfps.id", index=True)
     partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
-    role: Optional[str] = Field(default=None, max_length=255)
+    role: str | None = Field(default=None, max_length=255)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -119,15 +122,16 @@ class CaptureCustomField(SQLModel, table=True):
     """
     Custom fields for capture plans.
     """
+
     __tablename__ = "capture_custom_fields"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
     name: str = Field(max_length=255)
     field_type: CaptureFieldType = Field(default=CaptureFieldType.TEXT)
     options: list = Field(default=[], sa_column=Column(JSON))
-    stage: Optional[CaptureStage] = Field(default=None)
+    stage: CaptureStage | None = Field(default=None)
     is_required: bool = Field(default=False)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -138,9 +142,10 @@ class CaptureFieldValue(SQLModel, table=True):
     """
     Values for custom fields on a capture plan.
     """
+
     __tablename__ = "capture_field_values"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     capture_plan_id: int = Field(foreign_key="capture_plans.id", index=True)
     field_id: int = Field(foreign_key="capture_custom_fields.id", index=True)
 
@@ -154,17 +159,18 @@ class CaptureCompetitor(SQLModel, table=True):
     """
     Competitive intelligence entries for an opportunity.
     """
+
     __tablename__ = "capture_competitors"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     rfp_id: int = Field(foreign_key="rfps.id", index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
     name: str = Field(max_length=255)
     incumbent: bool = Field(default=False)
-    strengths: Optional[str] = None
-    weaknesses: Optional[str] = None
-    notes: Optional[str] = None
+    strengths: str | None = None
+    weaknesses: str | None = None
+    notes: str | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -181,20 +187,19 @@ class CaptureActivity(SQLModel, table=True):
     """
     Timeline activity for a capture plan (Gantt chart items).
     """
+
     __tablename__ = "capture_activities"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     capture_plan_id: int = Field(foreign_key="capture_plans.id", index=True)
 
     title: str = Field(max_length=500)
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    start_date: date | None = None
+    end_date: date | None = None
     is_milestone: bool = Field(default=False)
     status: ActivityStatus = Field(default=ActivityStatus.PLANNED)
     sort_order: int = Field(default=0)
-    depends_on_id: Optional[int] = Field(
-        default=None, foreign_key="capture_activities.id"
-    )
+    depends_on_id: int | None = Field(default=None, foreign_key="capture_activities.id")
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -210,13 +215,14 @@ class TeamingRequest(SQLModel, table=True):
     """
     Teaming request between users and partners.
     """
+
     __tablename__ = "teaming_requests"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     from_user_id: int = Field(foreign_key="users.id", index=True)
     to_partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
-    rfp_id: Optional[int] = Field(default=None, foreign_key="rfps.id", index=True)
-    message: Optional[str] = None
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id", index=True)
+    message: str | None = None
     status: TeamingRequestStatus = Field(default=TeamingRequestStatus.PENDING)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

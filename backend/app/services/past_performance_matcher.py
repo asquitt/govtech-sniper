@@ -1,12 +1,11 @@
 """Past performance matching and narrative generation."""
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.models.knowledge_base import KnowledgeBaseDocument, DocumentType
+from app.models.knowledge_base import DocumentType, KnowledgeBaseDocument
 from app.models.rfp import RFP
 
 
@@ -26,9 +25,7 @@ async def match_past_performances(
     user_id: int,
 ) -> list[PastPerformanceMatch]:
     """Score relevance of past performance docs against RFP requirements."""
-    rfp_result = await session.execute(
-        select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id)
-    )
+    rfp_result = await session.execute(select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id))
     rfp = rfp_result.scalar_one_or_none()
     if not rfp:
         return []
@@ -53,7 +50,10 @@ async def match_past_performances(
 
         # Agency match
         if doc.performing_agency and rfp.agency:
-            if doc.performing_agency.lower() in rfp.agency.lower() or rfp.agency.lower() in doc.performing_agency.lower():
+            if (
+                doc.performing_agency.lower() in rfp.agency.lower()
+                or rfp.agency.lower() in doc.performing_agency.lower()
+            ):
                 score += 25.0
                 criteria.append(f"Agency match: {doc.performing_agency}")
 
@@ -83,12 +83,14 @@ async def match_past_performances(
                 criteria.append("Relevant performance (within 5 years)")
 
         if score > 0:
-            matches.append(PastPerformanceMatch(
-                document_id=doc.id,
-                title=doc.title,
-                score=min(score, 100.0),
-                matching_criteria=criteria,
-            ))
+            matches.append(
+                PastPerformanceMatch(
+                    document_id=doc.id,
+                    title=doc.title,
+                    score=min(score, 100.0),
+                    matching_criteria=criteria,
+                )
+            )
 
     matches.sort(key=lambda m: m.score, reverse=True)
     return matches
@@ -99,7 +101,7 @@ async def generate_narrative(
     doc_id: int,
     rfp_id: int,
     user_id: int,
-) -> Optional[str]:
+) -> str | None:
     """Generate a tailored past performance narrative."""
     doc_result = await session.execute(
         select(KnowledgeBaseDocument).where(
@@ -111,9 +113,7 @@ async def generate_narrative(
     if not doc:
         return None
 
-    rfp_result = await session.execute(
-        select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id)
-    )
+    rfp_result = await session.execute(select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id))
     rfp = rfp_result.scalar_one_or_none()
     if not rfp:
         return None

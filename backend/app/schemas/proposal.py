@@ -5,40 +5,41 @@ Request/Response models for proposal endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.models.proposal import ProposalStatus, SectionStatus, SubmissionPackageStatus, Citation
-
+from app.models.proposal import Citation, ProposalStatus, SectionStatus, SubmissionPackageStatus
 
 # =============================================================================
 # Proposal Schemas
 # =============================================================================
 
+
 class ProposalCreate(BaseModel):
     """Schema for creating a new proposal."""
+
     rfp_id: int
     title: str = Field(max_length=500)
 
 
 class ProposalRead(BaseModel):
     """Schema for reading proposal data."""
+
     id: int
     user_id: int
     rfp_id: int
     title: str
     version: int
     status: ProposalStatus
-    executive_summary: Optional[str]
+    executive_summary: str | None
     total_sections: int
     completed_sections: int
-    compliance_score: Optional[float]
-    docx_export_path: Optional[str]
-    pdf_export_path: Optional[str]
+    compliance_score: float | None
+    docx_export_path: str | None
+    pdf_export_path: str | None
     created_at: datetime
     updated_at: datetime
-    submitted_at: Optional[datetime]
+    submitted_at: datetime | None
     completion_percentage: float = 0.0
 
     model_config = {"from_attributes": True}
@@ -69,30 +70,34 @@ class ProposalRead(BaseModel):
 
 class ProposalUpdate(BaseModel):
     """Schema for updating proposal."""
-    title: Optional[str] = Field(default=None, max_length=500)
-    status: Optional[ProposalStatus] = None
-    executive_summary: Optional[str] = None
+
+    title: str | None = Field(default=None, max_length=500)
+    status: ProposalStatus | None = None
+    executive_summary: str | None = None
 
 
 # =============================================================================
 # Proposal Section Schemas
 # =============================================================================
 
+
 class ProposalSectionCreate(BaseModel):
     """Schema for creating a proposal section."""
+
     title: str = Field(max_length=255)
     section_number: str = Field(max_length=50)
-    requirement_id: Optional[str] = None
-    requirement_text: Optional[str] = None
-    writing_plan: Optional[str] = None
+    requirement_id: str | None = None
+    requirement_text: str | None = None
+    writing_plan: str | None = None
     display_order: int = 0
 
 
 class GeneratedContentRead(BaseModel):
     """Schema for reading generated content."""
+
     raw_text: str
     clean_text: str
-    citations: List[Citation]
+    citations: list[Citation]
     model_used: str
     tokens_used: int
     generation_time_seconds: float
@@ -100,60 +105,65 @@ class GeneratedContentRead(BaseModel):
 
 class ProposalSectionRead(BaseModel):
     """Schema for reading proposal section."""
+
     id: int
     proposal_id: int
     title: str
     section_number: str
-    requirement_id: Optional[str]
-    requirement_text: Optional[str]
-    writing_plan: Optional[str]
+    requirement_id: str | None
+    requirement_text: str | None
+    writing_plan: str | None
     status: SectionStatus
-    generated_content: Optional[GeneratedContentRead]
-    final_content: Optional[str]
-    word_count: Optional[int]
+    generated_content: GeneratedContentRead | None
+    final_content: str | None
+    word_count: int | None
     display_order: int
     created_at: datetime
     updated_at: datetime
-    generated_at: Optional[datetime]
+    generated_at: datetime | None
 
     model_config = {"from_attributes": True}
 
 
 class ProposalSectionUpdate(BaseModel):
     """Schema for updating proposal section."""
-    title: Optional[str] = Field(default=None, max_length=255)
-    section_number: Optional[str] = Field(default=None, max_length=50)
-    requirement_id: Optional[str] = None
-    requirement_text: Optional[str] = None
-    writing_plan: Optional[str] = None
-    final_content: Optional[str] = None
-    status: Optional[SectionStatus] = None
-    display_order: Optional[int] = None
+
+    title: str | None = Field(default=None, max_length=255)
+    section_number: str | None = Field(default=None, max_length=50)
+    requirement_id: str | None = None
+    requirement_text: str | None = None
+    writing_plan: str | None = None
+    final_content: str | None = None
+    status: SectionStatus | None = None
+    display_order: int | None = None
 
 
 # =============================================================================
 # Evidence Schemas
 # =============================================================================
 
+
 class SectionEvidenceCreate(BaseModel):
     """Schema for linking evidence to a section."""
+
     document_id: int
-    chunk_id: Optional[int] = None
-    citation: Optional[str] = None
-    notes: Optional[str] = None
+    chunk_id: int | None = None
+    citation: str | None = None
+    notes: str | None = None
 
 
 class SectionEvidenceRead(BaseModel):
     """Schema for reading evidence links."""
+
     id: int
     section_id: int
     document_id: int
-    chunk_id: Optional[int]
-    citation: Optional[str]
-    notes: Optional[str]
+    chunk_id: int | None
+    citation: str | None
+    notes: str | None
     created_at: datetime
-    document_title: Optional[str] = None
-    document_filename: Optional[str] = None
+    document_title: str | None = None
+    document_filename: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -162,38 +172,42 @@ class SectionEvidenceRead(BaseModel):
 # Submission Package Schemas
 # =============================================================================
 
+
 class SubmissionPackageCreate(BaseModel):
     """Schema for creating a submission package."""
+
     title: str = Field(max_length=255)
-    due_date: Optional[datetime] = None
-    owner_id: Optional[int] = None
-    checklist: Optional[List[dict]] = None
-    notes: Optional[str] = None
+    due_date: datetime | None = None
+    owner_id: int | None = None
+    checklist: list[dict] | None = None
+    notes: str | None = None
 
 
 class SubmissionPackageUpdate(BaseModel):
     """Schema for updating a submission package."""
-    title: Optional[str] = Field(default=None, max_length=255)
-    due_date: Optional[datetime] = None
-    owner_id: Optional[int] = None
-    status: Optional[SubmissionPackageStatus] = None
-    checklist: Optional[List[dict]] = None
-    notes: Optional[str] = None
+
+    title: str | None = Field(default=None, max_length=255)
+    due_date: datetime | None = None
+    owner_id: int | None = None
+    status: SubmissionPackageStatus | None = None
+    checklist: list[dict] | None = None
+    notes: str | None = None
 
 
 class SubmissionPackageRead(BaseModel):
     """Schema for reading a submission package."""
+
     id: int
     proposal_id: int
-    owner_id: Optional[int]
+    owner_id: int | None
     title: str
     status: SubmissionPackageStatus
-    due_date: Optional[datetime]
-    submitted_at: Optional[datetime]
-    checklist: List[dict]
-    notes: Optional[str]
-    docx_export_path: Optional[str]
-    pdf_export_path: Optional[str]
+    due_date: datetime | None
+    submitted_at: datetime | None
+    checklist: list[dict]
+    notes: str | None
+    docx_export_path: str | None
+    pdf_export_path: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -204,10 +218,12 @@ class SubmissionPackageRead(BaseModel):
 # Draft Generation Schemas
 # =============================================================================
 
+
 class DraftRequest(BaseModel):
     """Request to generate draft for a requirement."""
+
     requirement_id: str
-    additional_context: Optional[str] = None
+    additional_context: str | None = None
     max_words: int = Field(default=500, ge=50, le=2000)
     tone: str = Field(default="professional", pattern="^(professional|technical|executive)$")
     include_citations: bool = True
@@ -215,20 +231,22 @@ class DraftRequest(BaseModel):
 
 class DraftResponse(BaseModel):
     """Response from draft generation."""
+
     task_id: str
     requirement_id: str
-    section_id: Optional[int] = None
+    section_id: int | None = None
     message: str
     status: str = "generating"
 
 
 class DraftResult(BaseModel):
     """Final result of draft generation (returned via polling or webhook)."""
+
     section_id: int
     requirement_id: str
     raw_text: str
     clean_text: str
-    citations: List[Citation]
+    citations: list[Citation]
     word_count: int
     model_used: str
     tokens_used: int

@@ -3,33 +3,32 @@ Competitive Intelligence - Competitor tracking and bid match insights.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.rfp import RFP
+from app.database import get_session
 from app.models.capture import CaptureCompetitor
+from app.models.rfp import RFP
 from app.schemas.capture import (
     CaptureCompetitorCreate,
-    CaptureCompetitorUpdate,
     CaptureCompetitorRead,
+    CaptureCompetitorUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter()
 
 
-@router.get("/competitors", response_model=List[CaptureCompetitorRead])
+@router.get("/competitors", response_model=list[CaptureCompetitorRead])
 async def list_competitors(
     rfp_id: int = Query(..., ge=1),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[CaptureCompetitorRead]:
+) -> list[CaptureCompetitorRead]:
     result = await session.execute(
         select(CaptureCompetitor).where(
             CaptureCompetitor.rfp_id == rfp_id,

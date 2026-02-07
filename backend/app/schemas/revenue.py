@@ -2,7 +2,6 @@
 Revenue forecasting schemas.
 """
 
-from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -19,7 +18,7 @@ class PipelineSummaryResponse(BaseModel):
     total_unweighted: float
     total_weighted: float
     won_value: float
-    stages: List[PipelineStageSummary]
+    stages: list[PipelineStageSummary]
 
 
 class RevenueTimelinePoint(BaseModel):
@@ -31,7 +30,7 @@ class RevenueTimelinePoint(BaseModel):
 
 class RevenueTimelineResponse(BaseModel):
     granularity: str
-    points: List[RevenueTimelinePoint]
+    points: list[RevenueTimelinePoint]
 
 
 class AgencyRevenueSummary(BaseModel):
@@ -43,5 +42,5 @@ class AgencyRevenueSummary(BaseModel):
 
 
 class AgencyRevenueResponse(BaseModel):
-    agencies: List[AgencyRevenueSummary]
+    agencies: list[AgencyRevenueSummary]
     total_agencies: int

@@ -7,19 +7,17 @@ Export proposals to DOCX and PDF formats.
 import io
 import re
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import structlog
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-import structlog
 
+from app.api.deps import UserAuth, get_current_user
 from app.database import get_session
-from app.models.proposal import Proposal, ProposalSection, SectionStatus
+from app.models.proposal import Proposal, ProposalSection
 from app.models.rfp import RFP
-from app.api.deps import get_current_user, UserAuth
-from app.config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -101,6 +99,7 @@ def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[na
 # DOCX Export
 # =============================================================================
 
+
 def create_docx_proposal(
     proposal: Proposal,
     sections: list[ProposalSection],
@@ -111,9 +110,9 @@ def create_docx_proposal(
     """
     try:
         from docx import Document
-        from docx.shared import Inches, Pt
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.enum.style import WD_STYLE_TYPE
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Inches, Pt
     except ImportError:
         raise HTTPException(
             status_code=500,
@@ -222,16 +221,14 @@ async def export_proposal_docx(
 
     # Get sections
     sections_result = await session.execute(
-        select(ProposalSection).where(
-            ProposalSection.proposal_id == proposal_id
-        ).order_by(ProposalSection.display_order)
+        select(ProposalSection)
+        .where(ProposalSection.proposal_id == proposal_id)
+        .order_by(ProposalSection.display_order)
     )
     sections = list(sections_result.scalars().all())
 
     # Get RFP
-    rfp_result = await session.execute(
-        select(RFP).where(RFP.id == proposal.rfp_id)
-    )
+    rfp_result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
     rfp = rfp_result.scalar_one_or_none()
 
     if not rfp:
@@ -259,6 +256,7 @@ async def export_proposal_docx(
 # PDF Export
 # =============================================================================
 
+
 def create_pdf_proposal(
     proposal: Proposal,
     sections: list[ProposalSection],
@@ -269,7 +267,7 @@ def create_pdf_proposal(
     Uses weasyprint for HTML to PDF conversion.
     """
     try:
-        from weasyprint import HTML, CSS
+        from weasyprint import CSS, HTML
     except ImportError:
         raise HTTPException(
             status_code=500,
@@ -427,16 +425,14 @@ async def export_proposal_pdf(
 
     # Get sections
     sections_result = await session.execute(
-        select(ProposalSection).where(
-            ProposalSection.proposal_id == proposal_id
-        ).order_by(ProposalSection.display_order)
+        select(ProposalSection)
+        .where(ProposalSection.proposal_id == proposal_id)
+        .order_by(ProposalSection.display_order)
     )
     sections = list(sections_result.scalars().all())
 
     # Get RFP
-    rfp_result = await session.execute(
-        select(RFP).where(RFP.id == proposal.rfp_id)
-    )
+    rfp_result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
     rfp = rfp_result.scalar_one_or_none()
 
     if not rfp:
@@ -464,6 +460,7 @@ async def export_proposal_pdf(
 # Compliance Matrix Export
 # =============================================================================
 
+
 @router.get("/rfps/{rfp_id}/compliance-matrix/xlsx")
 async def export_compliance_matrix_xlsx(
     rfp_id: int,
@@ -475,7 +472,7 @@ async def export_compliance_matrix_xlsx(
     """
     try:
         import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     except ImportError:
         raise HTTPException(
             status_code=500,
@@ -516,10 +513,10 @@ async def export_compliance_matrix_xlsx(
     mandatory_fill = PatternFill(start_color="FFCCCB", end_color="FFCCCB", fill_type="solid")
     addressed_fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
     thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin'),
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
     )
 
     # Headers
@@ -555,20 +552,22 @@ async def export_compliance_matrix_xlsx(
             ws.cell(row=row_num, column=6).fill = addressed_fill
 
     # Set column widths
-    ws.column_dimensions['A'].width = 10
-    ws.column_dimensions['B'].width = 15
-    ws.column_dimensions['C'].width = 60
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 12
-    ws.column_dimensions['F'].width = 10
-    ws.column_dimensions['G'].width = 30
+    ws.column_dimensions["A"].width = 10
+    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["C"].width = 60
+    ws.column_dimensions["D"].width = 15
+    ws.column_dimensions["E"].width = 12
+    ws.column_dimensions["F"].width = 10
+    ws.column_dimensions["G"].width = 30
 
     # Save to bytes
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
 
-    filename = f"compliance_matrix_{rfp.solicitation_number}_{datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+    filename = (
+        f"compliance_matrix_{rfp.solicitation_number}_{datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+    )
 
     return StreamingResponse(
         buffer,

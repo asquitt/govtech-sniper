@@ -4,77 +4,75 @@ RFP Sniper - FastAPI Application Entry Point
 The main application that ties everything together.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-
-from starlette.types import ASGIApp, Receive, Scope, Send
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import structlog
+from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app.api.routes import (
+    analytics_reporting_router,
+    analytics_router,
+    analyze_router,
+    audit_router,
+    auth_router,
+    awards_router,
+    budget_intel_router,
+    capture_router,
+    capture_timeline_router,
+    collaboration_router,
+    compliance_router,
+    contacts_router,
+    contracts_router,
+    dash_router,
+    data_sources_router,
+    documents_router,
+    draft_router,
+    email_ingest_router,
+    events_router,
+    export_router,
+    forecasts_router,
+    graphics_router,
+    health_router,
+    ingest_router,
+    integrations_router,
+    notifications_router,
+    reports_router,
+    revenue_router,
+    reviews_router,
+    rfps_router,
+    salesforce_router,
+    saved_searches_router,
+    scim_router,
+    search_router,
+    secrets_router,
+    sharepoint_router,
+    signals_router,
+    subscription_router,
+    teaming_board_router,
+    teams_router,
+    templates_marketplace_router,
+    templates_router,
+    unanet_router,
+    versions_router,
+    webhooks_router,
+    websocket_router,
+    word_addin_router,
+    workflows_router,
+)
 from app.config import settings
-from app.database import init_db, close_db
+from app.database import close_db, init_db
 from app.observability import (
+    MetricsMiddleware,
+    get_logger,
     init_sentry,
     setup_logging,
-    get_logger,
-    MetricsMiddleware,
 )
-from app.observability.logging import RequestLoggingMiddleware, CorrelationIDMiddleware
-from app.observability.sentry import capture_exception
+from app.observability.logging import CorrelationIDMiddleware, RequestLoggingMiddleware
 from app.observability.metrics import get_metrics
-from app.api.routes import (
-    ingest_router,
-    analyze_router,
-    draft_router,
-    rfps_router,
-    documents_router,
-    health_router,
-    auth_router,
-    websocket_router,
-    analytics_router,
-    templates_router,
-    templates_marketplace_router,
-    export_router,
-    notifications_router,
-    teams_router,
-    versions_router,
-    integrations_router,
-    webhooks_router,
-    dash_router,
-    capture_router,
-    contracts_router,
-    audit_router,
-    saved_searches_router,
-    awards_router,
-    contacts_router,
-    word_addin_router,
-    graphics_router,
-    scim_router,
-    secrets_router,
-    budget_intel_router,
-    revenue_router,
-    capture_timeline_router,
-    forecasts_router,
-    teaming_board_router,
-    collaboration_router,
-    sharepoint_router,
-    salesforce_router,
-    data_sources_router,
-    analytics_reporting_router,
-    reviews_router,
-    subscription_router,
-    search_router,
-    events_router,
-    signals_router,
-    email_ingest_router,
-    workflows_router,
-    compliance_router,
-    unanet_router,
-    reports_router,
-)
+from app.observability.sentry import capture_exception
 
 # Configure structured logging
 setup_logging(
@@ -98,11 +96,12 @@ logger = get_logger(__name__)
 # Application Lifecycle
 # =============================================================================
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
     Application lifespan manager.
-    
+
     Handles startup and shutdown events:
     - Initialize database connection pool
     - Create tables (dev only)
@@ -113,7 +112,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         version=settings.app_version,
         debug=settings.debug,
     )
-    
+
     # Security: reject default secret keys in production
     _defaults = {"CHANGE_ME_IN_PRODUCTION", "CHANGE_ME_AUDIT_SIGNING"}
     if not settings.debug:
@@ -128,9 +127,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
                 "Set a strong AUDIT_EXPORT_SIGNING_KEY env var before running in production."
             )
     elif settings.secret_key in _defaults:
-        logger.warning(
-            "Running with default SECRET_KEY — acceptable in debug mode only"
-        )
+        logger.warning("Running with default SECRET_KEY — acceptable in debug mode only")
 
     # Startup
     try:
@@ -139,9 +136,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down RFP Sniper API")
     await close_db()
@@ -207,7 +204,9 @@ class MaxUploadSizeMiddleware:
             if content_length and int(content_length) > self.max_bytes:
                 response = JSONResponse(
                     status_code=413,
-                    content={"detail": f"Request body too large. Max {self.max_bytes // (1024 * 1024)}MB."},
+                    content={
+                        "detail": f"Request body too large. Max {self.max_bytes // (1024 * 1024)}MB."
+                    },
                 )
                 await response(scope, receive, send)
                 return
@@ -246,6 +245,7 @@ app.add_middleware(CorrelationIDMiddleware)
 # Exception Handlers
 # =============================================================================
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """
@@ -253,11 +253,14 @@ async def global_exception_handler(request: Request, exc: Exception):
     Captures exceptions to Sentry and returns a safe error response.
     """
     # Capture to Sentry
-    error_id = capture_exception(exc, context={
-        "path": request.url.path,
-        "method": request.method,
-        "query_params": str(request.query_params),
-    })
+    error_id = capture_exception(
+        exc,
+        context={
+            "path": request.url.path,
+            "method": request.method,
+            "query_params": str(request.query_params),
+        },
+    )
 
     logger.error(
         "Unhandled exception",
@@ -347,6 +350,7 @@ app.include_router(reports_router, prefix=api_prefix)
 # Root Endpoint
 # =============================================================================
 
+
 @app.get("/", tags=["Root"])
 async def root():
     """
@@ -389,7 +393,7 @@ async def metrics():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

@@ -12,10 +12,10 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.audit import AuditEvent
+from app.services.auth_service import UserAuth
 from app.services.cmmc_checker import get_compliance_score, get_nist_overview
 
 router = APIRouter(prefix="/compliance", tags=["Compliance"])
@@ -84,15 +84,23 @@ async def audit_summary(
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
 
     # Total events for user
-    total_q = select(func.count()).select_from(AuditEvent).where(
-        AuditEvent.user_id == current_user.id,
+    total_q = (
+        select(func.count())
+        .select_from(AuditEvent)
+        .where(
+            AuditEvent.user_id == current_user.id,
+        )
     )
     total_events = (await session.execute(total_q)).scalar() or 0
 
     # Events in last 30 days
-    recent_q = select(func.count()).select_from(AuditEvent).where(
-        AuditEvent.user_id == current_user.id,
-        AuditEvent.created_at >= thirty_days_ago,
+    recent_q = (
+        select(func.count())
+        .select_from(AuditEvent)
+        .where(
+            AuditEvent.user_id == current_user.id,
+            AuditEvent.created_at >= thirty_days_ago,
+        )
     )
     events_last_30 = (await session.execute(recent_q)).scalar() or 0
 

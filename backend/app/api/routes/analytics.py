@@ -5,24 +5,28 @@ Dashboard metrics and reporting.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, case
-from sqlmodel import select
 import structlog
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import case, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
-from app.database import get_session
-from app.models.rfp import RFP, RFPStatus, ComplianceMatrix
-from app.models.proposal import Proposal, ProposalSection, SectionStatus, ProposalStatus
-from app.models.knowledge_base import KnowledgeBaseDocument
-from app.models.audit import AuditEvent
-from app.models.integration import IntegrationConfig, IntegrationSyncRun, IntegrationSyncStatus, IntegrationWebhookEvent
-from app.observability.metrics import get_metrics
+from app.api.deps import UserAuth, get_current_user
 from app.config import settings
+from app.database import get_session
+from app.models.audit import AuditEvent
+from app.models.integration import (
+    IntegrationConfig,
+    IntegrationSyncRun,
+    IntegrationSyncStatus,
+    IntegrationWebhookEvent,
+)
+from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.proposal import Proposal, ProposalSection, SectionStatus
+from app.models.rfp import RFP, ComplianceMatrix, RFPStatus
+from app.observability.metrics import get_metrics
 from app.services.alert_service import get_alert_counts
-from app.api.deps import get_current_user, UserAuth
 
 logger = structlog.get_logger(__name__)
 
@@ -32,6 +36,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 # =============================================================================
 # Dashboard Overview
 # =============================================================================
+
 
 @router.get("/dashboard")
 async def get_dashboard_metrics(
@@ -48,7 +53,8 @@ async def get_dashboard_metrics(
         select(
             RFP.status,
             func.count(RFP.id).label("count"),
-        ).where(RFP.user_id == user_id)
+        )
+        .where(RFP.user_id == user_id)
         .group_by(RFP.status)
     )
     rfp_by_status = {row.status.value: row.count for row in rfp_counts.all()}
@@ -70,7 +76,8 @@ async def get_dashboard_metrics(
         select(
             Proposal.status,
             func.count(Proposal.id).label("count"),
-        ).where(Proposal.user_id == user_id)
+        )
+        .where(Proposal.user_id == user_id)
         .group_by(Proposal.status)
     )
     proposals_by_status = {row.status.value: row.count for row in proposal_counts.all()}
@@ -78,9 +85,7 @@ async def get_dashboard_metrics(
 
     # Documents in knowledge base
     docs_result = await session.execute(
-        select(func.count(KnowledgeBaseDocument.id)).where(
-            KnowledgeBaseDocument.user_id == user_id
-        )
+        select(func.count(KnowledgeBaseDocument.id)).where(KnowledgeBaseDocument.user_id == user_id)
     )
     total_documents = docs_result.scalar() or 0
 
@@ -114,6 +119,7 @@ async def get_dashboard_metrics(
 # RFP Analytics
 # =============================================================================
 
+
 @router.get("/rfps")
 async def get_rfp_analytics(
     days: int = Query(30, ge=7, le=365),
@@ -131,10 +137,12 @@ async def get_rfp_analytics(
         select(
             func.date(RFP.created_at).label("date"),
             func.count(RFP.id).label("count"),
-        ).where(
+        )
+        .where(
             RFP.user_id == user_id,
             RFP.created_at >= start_date,
-        ).group_by(func.date(RFP.created_at))
+        )
+        .group_by(func.date(RFP.created_at))
         .order_by(func.date(RFP.created_at))
     )
     timeline = [{"date": str(row.date), "count": row.count} for row in rfps_over_time.all()]
@@ -144,10 +152,12 @@ async def get_rfp_analytics(
         select(
             RFP.agency,
             func.count(RFP.id).label("count"),
-        ).where(
+        )
+        .where(
             RFP.user_id == user_id,
             RFP.created_at >= start_date,
-        ).group_by(RFP.agency)
+        )
+        .group_by(RFP.agency)
         .order_by(func.count(RFP.id).desc())
         .limit(10)
     )
@@ -158,11 +168,13 @@ async def get_rfp_analytics(
         select(
             RFP.naics_code,
             func.count(RFP.id).label("count"),
-        ).where(
+        )
+        .where(
             RFP.user_id == user_id,
             RFP.naics_code != None,
             RFP.created_at >= start_date,
-        ).group_by(RFP.naics_code)
+        )
+        .group_by(RFP.naics_code)
         .order_by(func.count(RFP.id).desc())
         .limit(10)
     )
@@ -204,6 +216,7 @@ async def get_rfp_analytics(
 # Proposal Analytics
 # =============================================================================
 
+
 @router.get("/proposals")
 async def get_proposal_analytics(
     days: int = Query(30, ge=7, le=365),
@@ -220,9 +233,14 @@ async def get_proposal_analytics(
     sections_result = await session.execute(
         select(
             func.count(ProposalSection.id).label("total"),
-            func.count(case((ProposalSection.status == SectionStatus.GENERATED, 1))).label("generated"),
-            func.count(case((ProposalSection.status == SectionStatus.APPROVED, 1))).label("approved"),
-        ).join(Proposal, ProposalSection.proposal_id == Proposal.id)
+            func.count(case((ProposalSection.status == SectionStatus.GENERATED, 1))).label(
+                "generated"
+            ),
+            func.count(case((ProposalSection.status == SectionStatus.APPROVED, 1))).label(
+                "approved"
+            ),
+        )
+        .join(Proposal, ProposalSection.proposal_id == Proposal.id)
         .where(
             Proposal.user_id == user_id,
             ProposalSection.created_at >= start_date,
@@ -235,9 +253,11 @@ async def get_proposal_analytics(
         select(
             func.avg(
                 case(
-                    (Proposal.total_sections > 0,
-                     Proposal.completed_sections * 100.0 / Proposal.total_sections),
-                    else_=0
+                    (
+                        Proposal.total_sections > 0,
+                        Proposal.completed_sections * 100.0 / Proposal.total_sections,
+                    ),
+                    else_=0,
                 )
             ).label("avg_completion"),
         ).where(
@@ -252,7 +272,8 @@ async def get_proposal_analytics(
         select(
             func.sum(ProposalSection.word_count).label("total_words"),
             func.avg(ProposalSection.word_count).label("avg_words"),
-        ).join(Proposal, ProposalSection.proposal_id == Proposal.id)
+        )
+        .join(Proposal, ProposalSection.proposal_id == Proposal.id)
         .where(
             Proposal.user_id == user_id,
             ProposalSection.word_count != None,
@@ -266,10 +287,12 @@ async def get_proposal_analytics(
         select(
             func.date(Proposal.created_at).label("date"),
             func.count(Proposal.id).label("count"),
-        ).where(
+        )
+        .where(
             Proposal.user_id == user_id,
             Proposal.created_at >= start_date,
-        ).group_by(func.date(Proposal.created_at))
+        )
+        .group_by(func.date(Proposal.created_at))
         .order_by(func.date(Proposal.created_at))
     )
     timeline = [{"date": str(row.date), "count": row.count} for row in proposals_over_time.all()]
@@ -294,6 +317,7 @@ async def get_proposal_analytics(
 # Document Analytics
 # =============================================================================
 
+
 @router.get("/documents")
 async def get_document_analytics(
     current_user: UserAuth = Depends(get_current_user),
@@ -309,7 +333,8 @@ async def get_document_analytics(
         select(
             KnowledgeBaseDocument.document_type,
             func.count(KnowledgeBaseDocument.id).label("count"),
-        ).where(KnowledgeBaseDocument.user_id == user_id)
+        )
+        .where(KnowledgeBaseDocument.user_id == user_id)
         .group_by(KnowledgeBaseDocument.document_type)
     )
     doc_types = [{"type": row.document_type.value, "count": row.count} for row in by_type.all()]
@@ -320,10 +345,12 @@ async def get_document_analytics(
             KnowledgeBaseDocument.original_filename,
             KnowledgeBaseDocument.times_cited,
             KnowledgeBaseDocument.document_type,
-        ).where(
+        )
+        .where(
             KnowledgeBaseDocument.user_id == user_id,
             KnowledgeBaseDocument.times_cited > 0,
-        ).order_by(KnowledgeBaseDocument.times_cited.desc())
+        )
+        .order_by(KnowledgeBaseDocument.times_cited.desc())
         .limit(10)
     )
     cited = [
@@ -365,6 +392,7 @@ async def get_document_analytics(
 # AI Usage Analytics
 # =============================================================================
 
+
 @router.get("/ai-usage")
 async def get_ai_usage(
     days: int = Query(30, ge=7, le=365),
@@ -383,15 +411,13 @@ async def get_ai_usage(
         select(
             func.sum(
                 func.cast(
-                    func.coalesce(
-                        ProposalSection.generated_content['tokens_used'].astext,
-                        '0'
-                    ),
-                    type_=int
+                    func.coalesce(ProposalSection.generated_content["tokens_used"].astext, "0"),
+                    type_=int,
                 )
             ).label("total_tokens"),
             func.count(ProposalSection.id).label("generations"),
-        ).join(Proposal, ProposalSection.proposal_id == Proposal.id)
+        )
+        .join(Proposal, ProposalSection.proposal_id == Proposal.id)
         .where(
             Proposal.user_id == user_id,
             ProposalSection.generated_content != None,
@@ -410,9 +436,11 @@ async def get_ai_usage(
 
     # Analysis operations
     matrices_result = await session.execute(
-        select(func.count(ComplianceMatrix.id)).where(
+        select(func.count(ComplianceMatrix.id))
+        .where(
             ComplianceMatrix.created_at >= start_date,
-        ).join(RFP, ComplianceMatrix.rfp_id == RFP.id)
+        )
+        .join(RFP, ComplianceMatrix.rfp_id == RFP.id)
         .where(RFP.user_id == user_id)
     )
     analyses = matrices_result.scalar() or 0
@@ -423,13 +451,16 @@ async def get_ai_usage(
         "total_generations": generations,
         "total_analyses": analyses,
         "estimated_cost_usd": round(estimated_cost, 2),
-        "average_tokens_per_generation": round(total_tokens / generations, 0) if generations > 0 else 0,
+        "average_tokens_per_generation": round(total_tokens / generations, 0)
+        if generations > 0
+        else 0,
     }
 
 
 # =============================================================================
 # Observability & Ops Metrics
 # =============================================================================
+
 
 @router.get("/observability")
 async def get_observability_metrics(
@@ -500,9 +531,7 @@ async def get_observability_metrics(
         )
         .group_by(IntegrationWebhookEvent.provider)
     )
-    webhook_by_provider = {
-        row.provider.value: row.count for row in webhook_counts.all()
-    }
+    webhook_by_provider = {row.provider.value: row.count for row in webhook_counts.all()}
     webhook_total = sum(webhook_by_provider.values())
 
     return {
@@ -526,6 +555,7 @@ async def get_observability_metrics(
 # SLO & Alerting
 # =============================================================================
 
+
 @router.get("/slo")
 async def get_slo_metrics(
     days: int = Query(7, ge=1, le=90),
@@ -537,12 +567,8 @@ async def get_slo_metrics(
     counters = metrics.get("counters", {})
     histograms = metrics.get("histograms", {})
 
-    request_total = sum(
-        value for key, value in counters.items() if key.startswith("http.requests")
-    )
-    error_total = sum(
-        value for key, value in counters.items() if key.startswith("http.5xx_errors")
-    )
+    request_total = sum(value for key, value in counters.items() if key.startswith("http.requests"))
+    error_total = sum(value for key, value in counters.items() if key.startswith("http.5xx_errors"))
     error_rate = (error_total / request_total) if request_total else 0.0
 
     latency_p95_values = [
@@ -569,9 +595,7 @@ async def get_slo_metrics(
             sync_totals["failed"] += row.count
 
     sync_failure_rate = (
-        sync_totals["failed"] / sync_totals["total"]
-        if sync_totals["total"]
-        else 0.0
+        sync_totals["failed"] / sync_totals["total"] if sync_totals["total"] else 0.0
     )
 
     return {
@@ -609,19 +633,25 @@ async def get_operational_alerts(
             "type": "integration_sync_failures",
             "count": sync_failed_count,
             "threshold": settings.alert_sync_failures_threshold,
-            "status": "triggered" if sync_failed_count >= settings.alert_sync_failures_threshold else "ok",
+            "status": "triggered"
+            if sync_failed_count >= settings.alert_sync_failures_threshold
+            else "ok",
         },
         {
             "type": "webhook_failures",
             "count": webhook_failed_count,
             "threshold": settings.alert_webhook_failures_threshold,
-            "status": "triggered" if webhook_failed_count >= settings.alert_webhook_failures_threshold else "ok",
+            "status": "triggered"
+            if webhook_failed_count >= settings.alert_webhook_failures_threshold
+            else "ok",
         },
         {
             "type": "auth_failures",
             "count": auth_failed_count,
             "threshold": settings.alert_auth_failures_threshold,
-            "status": "triggered" if auth_failed_count >= settings.alert_auth_failures_threshold else "ok",
+            "status": "triggered"
+            if auth_failed_count >= settings.alert_auth_failures_threshold
+            else "ok",
         },
     ]
 

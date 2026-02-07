@@ -3,35 +3,34 @@ Custom Fields - Per-stage custom field definitions and values.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
+from app.models.capture import CaptureCustomField, CaptureFieldValue, CapturePlan
 from app.models.rfp import RFP
-from app.models.capture import CapturePlan, CaptureCustomField, CaptureFieldValue
 from app.schemas.capture import (
     CaptureFieldCreate,
-    CaptureFieldUpdate,
     CaptureFieldRead,
-    CaptureFieldValueUpdate,
-    CaptureFieldValueRead,
+    CaptureFieldUpdate,
     CaptureFieldValueList,
+    CaptureFieldValueRead,
+    CaptureFieldValueUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter()
 
 
-@router.get("/fields", response_model=List[CaptureFieldRead])
+@router.get("/fields", response_model=list[CaptureFieldRead])
 async def list_capture_fields(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[CaptureFieldRead]:
+) -> list[CaptureFieldRead]:
     result = await session.execute(
         select(CaptureCustomField).where(CaptureCustomField.user_id == current_user.id)
     )
@@ -144,9 +143,7 @@ async def list_capture_plan_fields(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> CaptureFieldValueList:
-    plan_result = await session.execute(
-        select(CapturePlan).where(CapturePlan.id == plan_id)
-    )
+    plan_result = await session.execute(select(CapturePlan).where(CapturePlan.id == plan_id))
     plan = plan_result.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Capture plan not found")
@@ -183,13 +180,11 @@ async def list_capture_plan_fields(
 @router.put("/plans/{plan_id}/fields", response_model=CaptureFieldValueList)
 async def update_capture_plan_fields(
     plan_id: int,
-    payload: List[CaptureFieldValueUpdate],
+    payload: list[CaptureFieldValueUpdate],
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> CaptureFieldValueList:
-    plan_result = await session.execute(
-        select(CapturePlan).where(CapturePlan.id == plan_id)
-    )
+    plan_result = await session.execute(select(CapturePlan).where(CapturePlan.id == plan_id))
     plan = plan_result.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Capture plan not found")

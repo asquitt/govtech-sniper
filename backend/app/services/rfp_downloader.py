@@ -4,17 +4,17 @@ RFP Sniper - RFP Document Downloader
 Automatically download RFP PDFs and attachments from SAM.gov.
 """
 
-import os
 import asyncio
-import mimetypes
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
-from pathlib import Path
-import structlog
 import hashlib
+import mimetypes
+import os
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import httpx
+import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import settings
@@ -26,13 +26,14 @@ logger = structlog.get_logger(__name__)
 @dataclass
 class DownloadedDocument:
     """Result of a document download."""
+
     filename: str
     file_path: str
     file_size: int
     mime_type: str
     content_hash: str
-    extracted_text: Optional[str] = None
-    page_count: Optional[int] = None
+    extracted_text: str | None = None
+    page_count: int | None = None
 
 
 class RFPDownloader:
@@ -49,7 +50,7 @@ class RFPDownloader:
     # SAM.gov attachment API endpoint
     ATTACHMENTS_URL = "https://api.sam.gov/prod/opportunities/v1/search"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize the RFP downloader.
 
@@ -71,7 +72,7 @@ class RFPDownloader:
     async def get_opportunity_attachments(
         self,
         notice_id: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get list of attachments for a SAM.gov opportunity.
 
@@ -153,36 +154,41 @@ class RFPDownloader:
                 for link in resource_links:
                     if isinstance(link, str):
                         # Simple URL
-                        attachments.append({
-                            "url": link,
-                            "filename": link.split("/")[-1],
-                            "type": "unknown",
-                        })
+                        attachments.append(
+                            {
+                                "url": link,
+                                "filename": link.split("/")[-1],
+                                "type": "unknown",
+                            }
+                        )
                     elif isinstance(link, dict):
-                        attachments.append({
-                            "url": link.get("url", ""),
-                            "filename": link.get("name", "attachment"),
-                            "type": link.get("type", "unknown"),
-                            "description": link.get("description", ""),
-                        })
+                        attachments.append(
+                            {
+                                "url": link.get("url", ""),
+                                "filename": link.get("name", "attachment"),
+                                "type": link.get("type", "unknown"),
+                                "description": link.get("description", ""),
+                            }
+                        )
 
                 # Also check for attachments in description links
                 description = opp.get("description", "")
                 if description:
                     # Extract URLs from description
                     import re
+
                     urls = re.findall(
-                        r'https?://[^\s<>"{}|\\^`\[\]]+\.pdf',
-                        description,
-                        re.IGNORECASE
+                        r'https?://[^\s<>"{}|\\^`\[\]]+\.pdf', description, re.IGNORECASE
                     )
                     for url in urls:
                         if url not in [a["url"] for a in attachments]:
-                            attachments.append({
-                                "url": url,
-                                "filename": url.split("/")[-1],
-                                "type": "pdf",
-                            })
+                            attachments.append(
+                                {
+                                    "url": url,
+                                    "filename": url.split("/")[-1],
+                                    "type": "pdf",
+                                }
+                            )
 
                 logger.info(
                     "Found attachments",
@@ -204,8 +210,8 @@ class RFPDownloader:
         self,
         url: str,
         rfp_id: int,
-        filename: Optional[str] = None,
-    ) -> Optional[DownloadedDocument]:
+        filename: str | None = None,
+    ) -> DownloadedDocument | None:
         """
         Download an attachment from a URL.
 
@@ -222,7 +228,7 @@ class RFPDownloader:
             mime_type: str
 
             if url.startswith("file://"):
-                local_path = url[len("file://"):]
+                local_path = url[len("file://") :]
                 logger.info("Loading attachment from file", path=local_path)
                 with open(local_path, "rb") as f:
                     content = f.read()
@@ -243,6 +249,7 @@ class RFPDownloader:
                         content_disposition = response.headers.get("Content-Disposition", "")
                         if "filename=" in content_disposition:
                             import re
+
                             match = re.search(r'filename="?([^";\n]+)"?', content_disposition)
                             if match:
                                 filename = match.group(1)
@@ -324,7 +331,7 @@ class RFPDownloader:
         notice_id: str,
         rfp_id: int,
         max_attachments: int = 10,
-    ) -> List[DownloadedDocument]:
+    ) -> list[DownloadedDocument]:
         """
         Download all attachments for an opportunity.
 
@@ -374,6 +381,7 @@ class RFPDownloader:
 # Win Probability Scoring
 # =============================================================================
 
+
 class WinProbabilityScorer:
     """
     Calculate win probability based on various factors.
@@ -389,10 +397,10 @@ class WinProbabilityScorer:
 
     @staticmethod
     async def calculate_score(
-        rfp_data: Dict[str, Any],
-        user_profile: Dict[str, Any],
-        past_performance: List[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        rfp_data: dict[str, Any],
+        user_profile: dict[str, Any],
+        past_performance: list[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         """
         Calculate win probability score.
 
@@ -517,11 +525,7 @@ class WinProbabilityScorer:
             scores["deadline_feasibility"] = 70  # Unknown
 
         # Calculate weighted total
-        total_score = sum(
-            scores[key] * weights[key]
-            for key in weights
-            if key in scores
-        )
+        total_score = sum(scores[key] * weights[key] for key in weights if key in scores)
 
         # Determine rating
         if total_score >= 80:
@@ -547,8 +551,8 @@ class WinProbabilityScorer:
 
 
 # Singleton instances
-_downloader: Optional[RFPDownloader] = None
-_scorer: Optional[WinProbabilityScorer] = None
+_downloader: RFPDownloader | None = None
+_scorer: WinProbabilityScorer | None = None
 
 
 def get_rfp_downloader() -> RFPDownloader:

@@ -5,9 +5,8 @@ JWT-based authentication with secure password hashing.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
-import structlog
 
+import structlog
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
@@ -24,8 +23,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # Token Models
 # =============================================================================
 
+
 class TokenData(BaseModel):
     """Data encoded in JWT token."""
+
     user_id: int
     email: str
     tier: str
@@ -34,6 +35,7 @@ class TokenData(BaseModel):
 
 class TokenPair(BaseModel):
     """Access and refresh token pair."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
@@ -42,10 +44,11 @@ class TokenPair(BaseModel):
 
 class UserAuth(BaseModel):
     """User authentication data."""
+
     id: int
     email: EmailStr
-    full_name: Optional[str]
-    company_name: Optional[str]
+    full_name: str | None
+    company_name: str | None
     tier: str
     is_active: bool
 
@@ -53,6 +56,7 @@ class UserAuth(BaseModel):
 # =============================================================================
 # Password Utilities
 # =============================================================================
+
 
 def hash_password(password: str) -> str:
     """
@@ -89,11 +93,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT Token Utilities
 # =============================================================================
 
+
 def create_access_token(
     user_id: int,
     email: str,
     tier: str,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """
     Create a JWT access token.
@@ -132,7 +137,7 @@ def create_access_token(
 
 def create_refresh_token(
     user_id: int,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """
     Create a JWT refresh token (longer-lived).
@@ -189,7 +194,7 @@ def create_token_pair(user_id: int, email: str, tier: str) -> TokenPair:
     )
 
 
-def decode_token(token: str) -> Optional[TokenData]:
+def decode_token(token: str) -> TokenData | None:
     """
     Decode and validate a JWT token.
 
@@ -226,7 +231,7 @@ def decode_token(token: str) -> Optional[TokenData]:
         return None
 
 
-def decode_access_token(token: str) -> Optional[TokenData]:
+def decode_access_token(token: str) -> TokenData | None:
     """
     Decode and validate an access token.
 
@@ -262,7 +267,7 @@ def decode_access_token(token: str) -> Optional[TokenData]:
         return None
 
 
-def decode_refresh_token(token: str) -> Optional[int]:
+def decode_refresh_token(token: str) -> int | None:
     """
     Decode a refresh token and return user_id.
 
@@ -307,7 +312,8 @@ def is_token_expired(token_data: TokenData) -> bool:
 # Password Validation
 # =============================================================================
 
-def validate_password_strength(password: str) -> Tuple[bool, str]:
+
+def validate_password_strength(password: str) -> tuple[bool, str]:
     """
     Validate password meets security requirements.
 

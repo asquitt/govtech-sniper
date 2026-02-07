@@ -8,18 +8,18 @@ import csv
 import io
 from datetime import datetime, timedelta
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import case, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, case
 from sqlmodel import select
-import structlog
 
+from app.api.deps import UserAuth, get_current_user
 from app.database import get_session
-from app.models.rfp import RFP
-from app.models.proposal import Proposal, ProposalStatus
 from app.models.capture import CapturePlan, CaptureStage
-from app.api.deps import get_current_user, UserAuth
+from app.models.proposal import Proposal, ProposalStatus
+from app.models.rfp import RFP
 from app.schemas.analytics import ExportRequest
 
 logger = structlog.get_logger(__name__)
@@ -30,6 +30,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics Reporting"])
 # =============================================================================
 # Win Rate
 # =============================================================================
+
 
 @router.get("/win-rate")
 async def get_win_rate(
@@ -43,10 +44,12 @@ async def get_win_rate(
         select(
             CapturePlan.stage,
             func.count(CapturePlan.id).label("count"),
-        ).where(
+        )
+        .where(
             CapturePlan.owner_id == user_id,
             CapturePlan.stage.in_([CaptureStage.WON, CaptureStage.LOST]),
-        ).group_by(CapturePlan.stage)
+        )
+        .group_by(CapturePlan.stage)
     )
     counts_map = {row.stage: row.count for row in stage_counts.all()}
     total_won = counts_map.get(CaptureStage.WON, 0)
@@ -58,17 +61,20 @@ async def get_win_rate(
     twelve_months_ago = datetime.utcnow() - timedelta(days=365)
     trend_rows = await session.execute(
         select(
-            func.to_char(CapturePlan.updated_at, 'YYYY-MM').label("month"),
+            func.to_char(CapturePlan.updated_at, "YYYY-MM").label("month"),
             CapturePlan.stage,
             func.count(CapturePlan.id).label("count"),
-        ).where(
+        )
+        .where(
             CapturePlan.owner_id == user_id,
             CapturePlan.stage.in_([CaptureStage.WON, CaptureStage.LOST]),
             CapturePlan.updated_at >= twelve_months_ago,
-        ).group_by(
-            func.to_char(CapturePlan.updated_at, 'YYYY-MM'),
+        )
+        .group_by(
+            func.to_char(CapturePlan.updated_at, "YYYY-MM"),
             CapturePlan.stage,
-        ).order_by(func.to_char(CapturePlan.updated_at, 'YYYY-MM'))
+        )
+        .order_by(func.to_char(CapturePlan.updated_at, "YYYY-MM"))
     )
     monthly: dict[str, dict[str, int]] = {}
     for row in trend_rows.all():
@@ -96,6 +102,7 @@ async def get_win_rate(
 # Pipeline by Stage
 # =============================================================================
 
+
 @router.get("/pipeline-by-stage")
 async def get_pipeline_by_stage(
     current_user: UserAuth = Depends(get_current_user),
@@ -119,11 +126,13 @@ async def get_pipeline_by_stage(
     total_pipeline = 0.0
     for row in results.all():
         val = float(row.total_value)
-        stages.append({
-            "stage": row.stage.value,
-            "count": row.count,
-            "total_value": val,
-        })
+        stages.append(
+            {
+                "stage": row.stage.value,
+                "count": row.count,
+                "total_value": val,
+            }
+        )
         total_pipeline += val
 
     return {"stages": stages, "total_pipeline_value": total_pipeline}
@@ -132,6 +141,7 @@ async def get_pipeline_by_stage(
 # =============================================================================
 # Conversion Rates
 # =============================================================================
+
 
 @router.get("/conversion-rates")
 async def get_conversion_rates(
@@ -155,7 +165,8 @@ async def get_conversion_rates(
         select(
             CapturePlan.stage,
             func.count(CapturePlan.id).label("count"),
-        ).where(CapturePlan.owner_id == user_id)
+        )
+        .where(CapturePlan.owner_id == user_id)
         .group_by(CapturePlan.stage)
     )
     raw_counts: dict[str, int] = {}
@@ -167,14 +178,10 @@ async def get_conversion_rates(
     for stage in ordered_stages:
         idx = stage_index[stage]
         cumulative[stage.value] = sum(
-            raw_counts.get(s.value, 0)
-            for s in ordered_stages
-            if stage_index[s] >= idx
+            raw_counts.get(s.value, 0) for s in ordered_stages if stage_index[s] >= idx
         )
     # Lost items entered at identified
-    cumulative[CaptureStage.IDENTIFIED.value] += raw_counts.get(
-        CaptureStage.LOST.value, 0
-    )
+    cumulative[CaptureStage.IDENTIFIED.value] += raw_counts.get(CaptureStage.LOST.value, 0)
 
     conversions = []
     for i in range(len(ordered_stages) - 1):
@@ -183,13 +190,15 @@ async def get_conversion_rates(
         cf = cumulative.get(fs.value, 0)
         ct = cumulative.get(ts.value, 0)
         rate = round((ct / cf * 100) if cf > 0 else 0.0, 1)
-        conversions.append({
-            "from_stage": fs.value,
-            "to_stage": ts.value,
-            "count_from": cf,
-            "count_to": ct,
-            "rate": rate,
-        })
+        conversions.append(
+            {
+                "from_stage": fs.value,
+                "to_stage": ts.value,
+                "count_from": cf,
+                "count_to": ct,
+                "rate": rate,
+            }
+        )
 
     total_id = cumulative.get(CaptureStage.IDENTIFIED.value, 0)
     total_won = cumulative.get(CaptureStage.WON.value, 0)
@@ -202,6 +211,7 @@ async def get_conversion_rates(
 # Proposal Turnaround
 # =============================================================================
 
+
 @router.get("/proposal-turnaround")
 async def get_proposal_turnaround(
     current_user: UserAuth = Depends(get_current_user),
@@ -213,9 +223,9 @@ async def get_proposal_turnaround(
 
     overall_result = await session.execute(
         select(
-            func.avg(
-                func.extract('epoch', Proposal.created_at - RFP.created_at) / 86400
-            ).label("avg_days"),
+            func.avg(func.extract("epoch", Proposal.created_at - RFP.created_at) / 86400).label(
+                "avg_days"
+            ),
         )
         .join(RFP, RFP.id == Proposal.rfp_id)
         .where(
@@ -228,10 +238,10 @@ async def get_proposal_turnaround(
     twelve_months_ago = datetime.utcnow() - timedelta(days=365)
     monthly_result = await session.execute(
         select(
-            func.to_char(Proposal.created_at, 'YYYY-MM').label("month"),
-            func.avg(
-                func.extract('epoch', Proposal.created_at - RFP.created_at) / 86400
-            ).label("avg_days"),
+            func.to_char(Proposal.created_at, "YYYY-MM").label("month"),
+            func.avg(func.extract("epoch", Proposal.created_at - RFP.created_at) / 86400).label(
+                "avg_days"
+            ),
             func.count(Proposal.id).label("count"),
         )
         .join(RFP, RFP.id == Proposal.rfp_id)
@@ -240,8 +250,8 @@ async def get_proposal_turnaround(
             Proposal.status.in_(submitted_statuses),
             Proposal.created_at >= twelve_months_ago,
         )
-        .group_by(func.to_char(Proposal.created_at, 'YYYY-MM'))
-        .order_by(func.to_char(Proposal.created_at, 'YYYY-MM'))
+        .group_by(func.to_char(Proposal.created_at, "YYYY-MM"))
+        .order_by(func.to_char(Proposal.created_at, "YYYY-MM"))
     )
 
     trend = [
@@ -259,6 +269,7 @@ async def get_proposal_turnaround(
 # =============================================================================
 # NAICS Performance
 # =============================================================================
+
 
 @router.get("/naics-performance")
 async def get_naics_performance(
@@ -290,13 +301,15 @@ async def get_naics_performance(
     for row in results.all():
         denom = row.won + row.lost
         rate = round((row.won / denom * 100) if denom > 0 else 0.0, 1)
-        entries.append({
-            "naics_code": row.naics_code,
-            "total": row.total,
-            "won": row.won,
-            "lost": row.lost,
-            "win_rate": rate,
-        })
+        entries.append(
+            {
+                "naics_code": row.naics_code,
+                "total": row.total,
+                "won": row.won,
+                "lost": row.lost,
+                "win_rate": rate,
+            }
+        )
 
     return {"entries": entries}
 
@@ -304,6 +317,7 @@ async def get_naics_performance(
 # =============================================================================
 # Export
 # =============================================================================
+
 
 @router.post("/export")
 async def export_analytics(
@@ -346,7 +360,5 @@ async def export_analytics(
     return Response(
         content=output.getvalue(),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="{report_type}_export.csv"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{report_type}_export.csv"'},
     )

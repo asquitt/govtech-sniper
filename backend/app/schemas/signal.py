@@ -1,33 +1,32 @@
 """Market signal and subscription schemas."""
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
 
-from app.models.market_signal import SignalType, DigestFrequency
+from app.models.market_signal import DigestFrequency, SignalType
 
 
 class SignalCreate(BaseModel):
     title: str
     signal_type: SignalType = SignalType.NEWS
-    agency: Optional[str] = None
-    content: Optional[str] = None
-    source_url: Optional[str] = None
+    agency: str | None = None
+    content: str | None = None
+    source_url: str | None = None
     relevance_score: float = 0.0
-    published_at: Optional[datetime] = None
+    published_at: datetime | None = None
 
 
 class SignalRead(BaseModel):
     id: int
-    user_id: Optional[int]
+    user_id: int | None
     title: str
     signal_type: SignalType
-    agency: Optional[str]
-    content: Optional[str]
-    source_url: Optional[str]
+    agency: str | None
+    content: str | None
+    source_url: str | None
     relevance_score: float
-    published_at: Optional[datetime]
+    published_at: datetime | None
     is_read: bool
     created_at: datetime
 
@@ -35,14 +34,14 @@ class SignalRead(BaseModel):
 
 
 class SignalListResponse(BaseModel):
-    signals: List[SignalRead]
+    signals: list[SignalRead]
     total: int
 
 
 class SubscriptionCreate(BaseModel):
-    agencies: List[str] = []
-    naics_codes: List[str] = []
-    keywords: List[str] = []
+    agencies: list[str] = []
+    naics_codes: list[str] = []
+    keywords: list[str] = []
     email_digest_enabled: bool = False
     digest_frequency: DigestFrequency = DigestFrequency.DAILY
 
@@ -50,9 +49,9 @@ class SubscriptionCreate(BaseModel):
 class SubscriptionRead(BaseModel):
     id: int
     user_id: int
-    agencies: List[str]
-    naics_codes: List[str]
-    keywords: List[str]
+    agencies: list[str]
+    naics_codes: list[str]
+    keywords: list[str]
     email_digest_enabled: bool
     digest_frequency: DigestFrequency
     created_at: datetime

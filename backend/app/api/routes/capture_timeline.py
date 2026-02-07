@@ -3,34 +3,33 @@ Capture timeline (Gantt) routes.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.capture import CapturePlan, CaptureActivity
+from app.database import get_session
+from app.models.capture import CaptureActivity, CapturePlan
 from app.models.rfp import RFP
 from app.schemas.capture_activity import (
     ActivityCreate,
-    ActivityUpdate,
     ActivityRead,
+    ActivityUpdate,
     GanttPlanRow,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/capture/timeline", tags=["Capture Timeline"])
 
 
-@router.get("/{plan_id}/activities", response_model=List[ActivityRead])
+@router.get("/{plan_id}/activities", response_model=list[ActivityRead])
 async def list_activities(
     plan_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ActivityRead]:
+) -> list[ActivityRead]:
     plan_result = await session.execute(
         select(CapturePlan).where(
             CapturePlan.id == plan_id,
@@ -178,11 +177,11 @@ async def delete_activity(
     return {"message": "Activity deleted"}
 
 
-@router.get("/overview", response_model=List[GanttPlanRow])
+@router.get("/overview", response_model=list[GanttPlanRow])
 async def get_timeline_overview(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[GanttPlanRow]:
+) -> list[GanttPlanRow]:
     """All capture plans with their activities for the Gantt overview."""
     plans_result = await session.execute(
         select(CapturePlan, RFP)
@@ -192,7 +191,7 @@ async def get_timeline_overview(
     )
     plans = plans_result.all()
 
-    rows: List[GanttPlanRow] = []
+    rows: list[GanttPlanRow] = []
     for plan, rfp in plans:
         activities_result = await session.execute(
             select(CaptureActivity)

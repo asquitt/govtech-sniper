@@ -5,16 +5,14 @@ Real-time updates for long-running tasks and collaborative editing.
 """
 
 import asyncio
-import json
-from typing import Dict, Set, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
-from celery.result import AsyncResult
 import structlog
+from celery.result import AsyncResult
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app.tasks.celery_app import celery_app
 from app.services.auth_service import decode_token
+from app.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
@@ -34,6 +32,7 @@ def normalize_status(result: AsyncResult) -> str:
 # Connection Manager
 # =============================================================================
 
+
 class ConnectionManager:
     """
     Manages WebSocket connections for real-time updates and collaborative editing.
@@ -41,13 +40,13 @@ class ConnectionManager:
 
     def __init__(self):
         # Map of user_id -> set of WebSocket connections
-        self.active_connections: Dict[int, Set[WebSocket]] = {}
+        self.active_connections: dict[int, set[WebSocket]] = {}
         # Map of task_id -> set of user_ids watching
-        self.task_watchers: Dict[str, Set[int]] = {}
+        self.task_watchers: dict[str, set[int]] = {}
         # Document presence: proposal_id -> set of {user_id, user_name, ...}
-        self.document_presence: Dict[int, Dict[int, dict]] = {}
+        self.document_presence: dict[int, dict[int, dict]] = {}
         # Section locks: section_id -> {user_id, user_name, locked_at}
-        self.section_locks: Dict[int, dict] = {}
+        self.section_locks: dict[int, dict] = {}
 
     async def connect(self, websocket: WebSocket, user_id: int):
         """Accept and register a new connection."""
@@ -162,9 +161,7 @@ class ConnectionManager:
     # Section Locking
     # -------------------------------------------------------------------------
 
-    def lock_section(
-        self, section_id: int, user_id: int, user_name: str
-    ) -> Optional[dict]:
+    def lock_section(self, section_id: int, user_id: int, user_name: str) -> dict | None:
         """
         Attempt to lock a section. Returns the lock if successful, None if already locked.
         """
@@ -190,7 +187,7 @@ class ConnectionManager:
         del self.section_locks[section_id]
         return True
 
-    def get_lock(self, section_id: int) -> Optional[dict]:
+    def get_lock(self, section_id: int) -> dict | None:
         """Get the current lock on a section."""
         return self.section_locks.get(section_id)
 
@@ -206,6 +203,7 @@ manager = ConnectionManager()
 # =============================================================================
 # WebSocket Endpoints
 # =============================================================================
+
 
 @router.websocket("/ws")
 async def websocket_endpoint(
@@ -244,18 +242,20 @@ async def websocket_endpoint(
 
     try:
         # Send initial connection confirmation
-        await websocket.send_json({
-            "type": "connected",
-            "user_id": user_id,
-            "message": "WebSocket connection established",
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "user_id": user_id,
+                "message": "WebSocket connection established",
+            }
+        )
 
         while True:
             try:
                 # Wait for messages from client
                 data = await asyncio.wait_for(
                     websocket.receive_json(),
-                    timeout=30.0  # Ping timeout
+                    timeout=30.0,  # Ping timeout
                 )
 
                 msg_type = data.get("type")
@@ -269,11 +269,13 @@ async def websocket_endpoint(
                         manager.watch_task(task_id, user_id)
                         # Send current task status
                         result = AsyncResult(task_id, app=celery_app)
-                        await websocket.send_json({
-                            "type": "task_status",
-                            "task_id": task_id,
-                            "status": normalize_status(result),
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "task_status",
+                                "task_id": task_id,
+                                "status": normalize_status(result),
+                            }
+                        )
 
                 elif msg_type == "unwatch_task":
                     task_id = data.get("task_id")
@@ -303,21 +305,25 @@ async def websocket_endpoint(
                                 await manager._broadcast_presence(proposal_id)
                         else:
                             existing = manager.get_lock(section_id)
-                            await websocket.send_json({
-                                "type": "lock_denied",
-                                "section_id": section_id,
-                                "held_by": existing,
-                            })
+                            await websocket.send_json(
+                                {
+                                    "type": "lock_denied",
+                                    "section_id": section_id,
+                                    "held_by": existing,
+                                }
+                            )
 
                 elif msg_type == "unlock_section":
                     section_id = data.get("section_id")
                     proposal_id = data.get("proposal_id")
                     if section_id:
                         manager.unlock_section(section_id, user_id)
-                        await websocket.send_json({
-                            "type": "lock_released",
-                            "section_id": section_id,
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "lock_released",
+                                "section_id": section_id,
+                            }
+                        )
                         if proposal_id:
                             await manager._broadcast_presence(proposal_id)
 
@@ -336,7 +342,7 @@ async def websocket_endpoint(
                             if uid != user_id:
                                 await manager.send_to_user(uid, cursor_msg)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send ping to keep connection alive
                 try:
                     await websocket.send_json({"type": "ping"})
@@ -360,6 +366,7 @@ async def websocket_endpoint(
 # =============================================================================
 # Task Status Endpoint (Fallback HTTP)
 # =============================================================================
+
 
 @router.get("/ws/task/{task_id}/status")
 async def get_task_status_http(task_id: str) -> dict:
@@ -386,6 +393,7 @@ async def get_task_status_http(task_id: str) -> dict:
 # =============================================================================
 # Utility Functions for Other Modules
 # =============================================================================
+
 
 async def notify_user(user_id: int, notification_type: str, data: dict):
     """

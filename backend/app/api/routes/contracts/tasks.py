@@ -3,28 +3,27 @@ Contract task CRUD operations.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.contract import ContractAward, ContractTask
-from app.schemas.contract import TaskCreate, TaskUpdate, TaskRead
+from app.schemas.contract import TaskCreate, TaskRead, TaskUpdate
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter()
 
 
-@router.get("/{contract_id}/tasks", response_model=List[TaskRead])
+@router.get("/{contract_id}/tasks", response_model=list[TaskRead])
 async def list_tasks(
     contract_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[TaskRead]:
+) -> list[TaskRead]:
     contract_result = await session.execute(
         select(ContractAward).where(
             ContractAward.id == contract_id,
@@ -87,9 +86,7 @@ async def update_task(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TaskRead:
-    result = await session.execute(
-        select(ContractTask).where(ContractTask.id == task_id)
-    )
+    result = await session.execute(select(ContractTask).where(ContractTask.id == task_id))
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -128,9 +125,7 @@ async def delete_task(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    result = await session.execute(
-        select(ContractTask).where(ContractTask.id == task_id)
-    )
+    result = await session.execute(select(ContractTask).where(ContractTask.id == task_id))
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

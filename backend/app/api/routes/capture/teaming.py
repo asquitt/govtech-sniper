@@ -3,26 +3,25 @@ Teaming Partners - Partner CRUD and RFP linking.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
+from app.models.capture import RFPTeamingPartner, TeamingPartner
 from app.models.rfp import RFP
-from app.models.capture import TeamingPartner, RFPTeamingPartner
 from app.schemas.capture import (
     TeamingPartnerCreate,
-    TeamingPartnerUpdate,
-    TeamingPartnerRead,
     TeamingPartnerLinkCreate,
     TeamingPartnerLinkList,
     TeamingPartnerLinkRead,
+    TeamingPartnerRead,
+    TeamingPartnerUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
@@ -59,11 +58,11 @@ async def create_teaming_partner(
     return TeamingPartnerRead.model_validate(partner)
 
 
-@router.get("/partners", response_model=List[TeamingPartnerRead])
+@router.get("/partners", response_model=list[TeamingPartnerRead])
 async def list_teaming_partners(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[TeamingPartnerRead]:
+) -> list[TeamingPartnerRead]:
     result = await session.execute(
         select(TeamingPartner).where(TeamingPartner.user_id == current_user.id)
     )

@@ -7,19 +7,17 @@ Handles bidirectional sync between capture plans and SF Opportunities.
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.models.capture import CapturePlan
 from app.models.integration import (
-    IntegrationConfig,
+    IntegrationProvider,
     IntegrationSyncRun,
     IntegrationSyncStatus,
-    IntegrationProvider,
 )
-from app.models.capture import CapturePlan
 from app.models.rfp import RFP
 
 logger = logging.getLogger(__name__)
@@ -43,8 +41,8 @@ class SalesforceService:
         self.client_secret = client_secret
         self.username = username
         self.security_token = security_token
-        self._access_token: Optional[str] = None
-        self._token_instance_url: Optional[str] = None
+        self._access_token: str | None = None
+        self._token_instance_url: str | None = None
 
     async def _get_token(self) -> str:
         """Acquire access token via OAuth2 password flow."""
@@ -101,7 +99,7 @@ class SalesforceService:
         self,
         capture_plan: CapturePlan,
         rfp: RFP,
-        sf_id: Optional[str] = None,
+        sf_id: str | None = None,
     ) -> dict:
         """Create or update a Salesforce Opportunity from a capture plan."""
         token = await self._get_token()
@@ -172,15 +170,11 @@ class SalesforceService:
         errors: list[str] = []
 
         # Push: send capture plans to SF
-        result = await session.execute(
-            select(CapturePlan).where(CapturePlan.owner_id == user_id)
-        )
+        result = await session.execute(select(CapturePlan).where(CapturePlan.owner_id == user_id))
         plans = result.scalars().all()
 
         for plan in plans:
-            rfp_result = await session.execute(
-                select(RFP).where(RFP.id == plan.rfp_id)
-            )
+            rfp_result = await session.execute(select(RFP).where(RFP.id == plan.rfp_id))
             rfp = rfp_result.scalar_one_or_none()
             if not rfp:
                 continue
@@ -199,8 +193,7 @@ class SalesforceService:
 
         # Finalize sync run
         sync_run.status = (
-            IntegrationSyncStatus.SUCCESS if not errors
-            else IntegrationSyncStatus.FAILED
+            IntegrationSyncStatus.SUCCESS if not errors else IntegrationSyncStatus.FAILED
         )
         sync_run.items_synced = pushed + pulled
         sync_run.error = "; ".join(errors) if errors else None

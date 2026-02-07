@@ -5,7 +5,6 @@ Uses Gemini to generate SVG/Mermaid diagrams from proposal content.
 """
 
 import logging
-from typing import Optional
 
 from app.config import settings
 
@@ -51,7 +50,7 @@ TEMPLATE_PROMPTS = {
 async def generate_graphic(
     content: str,
     template_type: str,
-    title: Optional[str] = None,
+    title: str | None = None,
 ) -> dict:
     """
     Generate a Mermaid diagram from proposal content using Gemini.
@@ -107,7 +106,7 @@ async def generate_graphic(
         }
 
 
-def _placeholder_mermaid(template_type: str, title: Optional[str]) -> str:
+def _placeholder_mermaid(template_type: str, title: str | None) -> str:
     """Placeholder Mermaid code when Gemini is unavailable."""
     label = title or template_type.replace("_", " ").title()
     if template_type in ("timeline", "staffing_plan"):

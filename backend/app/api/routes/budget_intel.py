@@ -5,60 +5,59 @@ CRUD endpoints for budget intel records.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.budget_intel import BudgetIntelligence
 from app.models.rfp import RFP
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/budget-intel", tags=["Budget Intelligence"])
 
 
 class BudgetIntelCreate(BaseModel):
-    rfp_id: Optional[int] = None
+    rfp_id: int | None = None
     title: str = Field(max_length=255)
-    fiscal_year: Optional[int] = None
-    amount: Optional[float] = None
-    source_url: Optional[str] = None
-    notes: Optional[str] = None
+    fiscal_year: int | None = None
+    amount: float | None = None
+    source_url: str | None = None
+    notes: str | None = None
 
 
 class BudgetIntelUpdate(BaseModel):
-    title: Optional[str] = None
-    fiscal_year: Optional[int] = None
-    amount: Optional[float] = None
-    source_url: Optional[str] = None
-    notes: Optional[str] = None
+    title: str | None = None
+    fiscal_year: int | None = None
+    amount: float | None = None
+    source_url: str | None = None
+    notes: str | None = None
 
 
 class BudgetIntelRead(BaseModel):
     id: int
-    rfp_id: Optional[int]
+    rfp_id: int | None
     title: str
-    fiscal_year: Optional[int]
-    amount: Optional[float]
-    source_url: Optional[str]
-    notes: Optional[str]
+    fiscal_year: int | None
+    amount: float | None
+    source_url: str | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-@router.get("", response_model=List[BudgetIntelRead])
+@router.get("", response_model=list[BudgetIntelRead])
 async def list_budget_intel(
-    rfp_id: Optional[int] = Query(None),
+    rfp_id: int | None = Query(None),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[BudgetIntelRead]:
+) -> list[BudgetIntelRead]:
     query = select(BudgetIntelligence).where(BudgetIntelligence.user_id == current_user.id)
     if rfp_id:
         query = query.where(BudgetIntelligence.rfp_id == rfp_id)

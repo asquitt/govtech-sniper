@@ -9,16 +9,16 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.report import SavedReport, ReportType, ScheduleFrequency
+from app.database import get_session
+from app.models.report import ReportType, SavedReport, ScheduleFrequency
 from app.schemas.report import (
+    ReportDataResponse,
     SavedReportCreate,
     SavedReportRead,
     SavedReportUpdate,
-    ReportDataResponse,
 )
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -29,23 +29,52 @@ MOCK_DATA: dict[str, ReportDataResponse] = {
     ReportType.PIPELINE: ReportDataResponse(
         columns=["opportunity", "agency", "stage", "value", "due_date"],
         rows=[
-            {"opportunity": "IT Modernization", "agency": "DoD", "stage": "Capture", "value": 2500000, "due_date": "2026-04-15"},
-            {"opportunity": "Cloud Migration", "agency": "GSA", "stage": "Draft", "value": 1200000, "due_date": "2026-05-01"},
+            {
+                "opportunity": "IT Modernization",
+                "agency": "DoD",
+                "stage": "Capture",
+                "value": 2500000,
+                "due_date": "2026-04-15",
+            },
+            {
+                "opportunity": "Cloud Migration",
+                "agency": "GSA",
+                "stage": "Draft",
+                "value": 1200000,
+                "due_date": "2026-05-01",
+            },
         ],
         total_rows=2,
     ),
     ReportType.PROPOSALS: ReportDataResponse(
         columns=["proposal", "rfp", "status", "score", "submitted_at"],
         rows=[
-            {"proposal": "Technical Volume", "rfp": "W911-24-001", "status": "Submitted", "score": 92, "submitted_at": "2026-01-20"},
-            {"proposal": "Management Volume", "rfp": "FA8750-24-003", "status": "Draft", "score": 78, "submitted_at": None},
+            {
+                "proposal": "Technical Volume",
+                "rfp": "W911-24-001",
+                "status": "Submitted",
+                "score": 92,
+                "submitted_at": "2026-01-20",
+            },
+            {
+                "proposal": "Management Volume",
+                "rfp": "FA8750-24-003",
+                "status": "Draft",
+                "score": 78,
+                "submitted_at": None,
+            },
         ],
         total_rows=2,
     ),
     ReportType.REVENUE: ReportDataResponse(
         columns=["contract", "agency", "monthly_revenue", "period"],
         rows=[
-            {"contract": "STARS III", "agency": "GSA", "monthly_revenue": 450000, "period": "2026-01"},
+            {
+                "contract": "STARS III",
+                "agency": "GSA",
+                "monthly_revenue": 450000,
+                "period": "2026-01",
+            },
             {"contract": "OASIS+", "agency": "DoD", "monthly_revenue": 320000, "period": "2026-01"},
         ],
         total_rows=2,
@@ -53,8 +82,18 @@ MOCK_DATA: dict[str, ReportDataResponse] = {
     ReportType.ACTIVITY: ReportDataResponse(
         columns=["user", "action", "target", "timestamp"],
         rows=[
-            {"user": "admin@company.com", "action": "Created proposal", "target": "Technical Volume", "timestamp": "2026-02-05T14:30:00"},
-            {"user": "admin@company.com", "action": "Analyzed RFP", "target": "W911-24-001", "timestamp": "2026-02-04T09:15:00"},
+            {
+                "user": "admin@company.com",
+                "action": "Created proposal",
+                "target": "Technical Volume",
+                "timestamp": "2026-02-05T14:30:00",
+            },
+            {
+                "user": "admin@company.com",
+                "action": "Analyzed RFP",
+                "target": "W911-24-001",
+                "timestamp": "2026-02-04T09:15:00",
+            },
         ],
         total_rows=2,
     ),

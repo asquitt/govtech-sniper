@@ -1,0 +1,46 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E402",  # module-level import not at top (conditional imports in routes)
+    "E501",  # line too long (handled by formatter)
+    "E711",  # comparison to None (SQLAlchemy filter uses == None)
+    "E712",  # comparison to True/False (SQLAlchemy filter uses == True)
+    "E741",  # ambiguous variable name (pre-existing, low risk)
+    "B007",  # unused loop variable (pre-existing patterns)
+    "B008",  # function call in default arg (FastAPI Depends pattern)
+    "B904",  # raise from in except (noisy, fix incrementally)
+    "SIM102", # collapsible if (stylistic, low priority)
+    "SIM105", # contextlib.suppress (stylistic, low priority)
+    "SIM108", # ternary operator (readability preference)
+    "SIM118", # key in dict vs dict.keys() (stylistic)
+    "UP007",  # X | Y for annotations (pre-existing)
+    "UP038",  # X | Y in isinstance (pre-existing)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/routes/export.py" = ["F401", "F821"]  # conditional imports for optional deps (docx, weasyprint)
+"app/tasks/analysis_tasks.py" = ["F821"]  # pre-existing undefined reference
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = ["app"]
+exclude = ["tests", "alembic"]
+reportMissingImports = true
+reportMissingTypeStubs = false

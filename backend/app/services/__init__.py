@@ -4,9 +4,9 @@ RFP Sniper - Services Layer
 Business logic and external integrations.
 """
 
-from app.services.ingest_service import SAMGovService
-from app.services.filters import KillerFilterService, FilterResult
+from app.services.filters import FilterResult, KillerFilterService
 from app.services.gemini_service import GeminiService
+from app.services.ingest_service import SAMGovService
 
 __all__ = [
     "SAMGovService",
@@ -14,4 +14,3 @@ __all__ = [
     "FilterResult",
     "GeminiService",
 ]
-

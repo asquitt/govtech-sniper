@@ -1,24 +1,23 @@
 """Workflow automation rules and execution routes."""
 
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.workflow import WorkflowRule, WorkflowExecution, ExecutionStatus
+from app.database import get_session
+from app.models.workflow import WorkflowExecution, WorkflowRule
 from app.schemas.workflow import (
+    WorkflowExecutionRead,
     WorkflowRuleCreate,
+    WorkflowRuleListResponse,
     WorkflowRuleRead,
     WorkflowRuleUpdate,
-    WorkflowRuleListResponse,
-    WorkflowExecutionRead,
 )
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/workflows", tags=["Workflows"])
 
@@ -103,9 +102,13 @@ async def update_rule(
 
     update_data = payload.model_dump(exclude_unset=True)
     if "conditions" in update_data and update_data["conditions"] is not None:
-        update_data["conditions"] = [c.model_dump() if hasattr(c, "model_dump") else c for c in update_data["conditions"]]
+        update_data["conditions"] = [
+            c.model_dump() if hasattr(c, "model_dump") else c for c in update_data["conditions"]
+        ]
     if "actions" in update_data and update_data["actions"] is not None:
-        update_data["actions"] = [a.model_dump() if hasattr(a, "model_dump") else a for a in update_data["actions"]]
+        update_data["actions"] = [
+            a.model_dump() if hasattr(a, "model_dump") else a for a in update_data["actions"]
+        ]
 
     for field, value in update_data.items():
         setattr(rule, field, value)
@@ -166,7 +169,7 @@ async def test_rule(
 
 @router.get("/executions", response_model=dict)
 async def list_executions(
-    rule_id: Optional[int] = None,
+    rule_id: int | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: UserAuth = Depends(get_current_user),

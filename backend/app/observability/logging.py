@@ -6,7 +6,6 @@ Production-ready structured logging with structlog.
 
 import logging
 import sys
-from typing import Optional
 
 import structlog
 
@@ -38,7 +37,9 @@ def setup_logging(
     shared_processors = [
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
-        structlog.processors.TimeStamper(fmt="iso") if include_timestamps else lambda *args, **kwargs: args[2],
+        structlog.processors.TimeStamper(fmt="iso")
+        if include_timestamps
+        else lambda *args, **kwargs: args[2],
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
     ]
@@ -64,7 +65,7 @@ def setup_logging(
     )
 
 
-def get_logger(name: Optional[str] = None) -> structlog.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.BoundLogger:
     """
     Get a structured logger instance.
 
@@ -82,7 +83,7 @@ class RequestLoggingMiddleware:
     Middleware for logging HTTP requests with structured data.
     """
 
-    def __init__(self, app, logger: Optional[structlog.BoundLogger] = None):
+    def __init__(self, app, logger: structlog.BoundLogger | None = None):
         self.app = app
         self.logger = logger or get_logger("http")
 
@@ -91,6 +92,7 @@ class RequestLoggingMiddleware:
             return await self.app(scope, receive, send)
 
         import time
+
         from starlette.requests import Request
 
         request = Request(scope)
@@ -151,6 +153,7 @@ class CorrelationIDMiddleware:
             return await self.app(scope, receive, send)
 
         import uuid
+
         from starlette.requests import Request
 
         request = Request(scope)

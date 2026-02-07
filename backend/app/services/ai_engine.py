@@ -9,15 +9,14 @@ Features:
 - The Writer: Generate proposal sections with strict citation enforcement
 """
 
-import re
 import json
-from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Tuple
+import re
 from dataclasses import dataclass
-import structlog
-import hashlib
+from datetime import datetime, timedelta
+from typing import Any
 
 import google.generativeai as genai
+import structlog
 from google.generativeai import caching
 
 from app.config import settings
@@ -29,22 +28,25 @@ logger = structlog.get_logger(__name__)
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class ExtractedRequirement:
     """Single requirement extracted from RFP."""
+
     id: str
     section: str
     text: str
     requirement_type: str  # "Technical", "Management", "Past Performance", etc.
     importance: str  # "Mandatory", "Evaluated", "Optional"
-    page_reference: Optional[int] = None
+    page_reference: int | None = None
 
 
 @dataclass
 class Citation:
     """Parsed citation from generated text."""
+
     source_file: str
-    page_number: Optional[int]
+    page_number: int | None
     start_pos: int
     end_pos: int
     raw_text: str
@@ -53,9 +55,10 @@ class Citation:
 @dataclass
 class GeneratedDraft:
     """Result of section generation."""
+
     raw_text: str
     clean_text: str
-    citations: List[Citation]
+    citations: list[Citation]
     requirement_id: str
     model: str
     tokens_used: int
@@ -66,19 +69,20 @@ class GeneratedDraft:
 # AI Engine Class
 # =============================================================================
 
+
 class AIEngine:
     """
     Core AI engine for RFP analysis and proposal generation.
-    
+
     Uses Google Gemini 1.5 Pro with:
     - 1M token context window for full document analysis
     - Context Caching API for Knowledge Base
     - Structured output for requirement extraction
     """
-    
+
     # Citation pattern: [[Source: filename.pdf, Page XX]]
-    CITATION_PATTERN = r'\[\[Source:\s*([^,\]]+)(?:,\s*[Pp]age\s*(\d+))?\]\]'
-    
+    CITATION_PATTERN = r"\[\[Source:\s*([^,\]]+)(?:,\s*[Pp]age\s*(\d+))?\]\]"
+
     # System prompts
     MATRIX_EXTRACTOR_PROMPT = """You are an expert government contracting analyst specializing in RFP compliance analysis.
 
@@ -148,23 +152,23 @@ EXAMPLE OUTPUT:
 
 Remember: NO claim without a citation. The government evaluator must be able to verify every statement."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize the AI Engine.
-        
+
         Args:
             api_key: Gemini API key. Falls back to settings.
         """
         self.api_key = api_key or settings.gemini_api_key
-        
+
         if not self.api_key:
             logger.warning("Gemini API key not configured")
             self._initialized = False
             return
-        
+
         genai.configure(api_key=self.api_key)
         self._initialized = True
-        
+
         # Initialize models
         self.pro_model = genai.GenerativeModel(
             settings.gemini_model_pro,
@@ -173,7 +177,7 @@ Remember: NO claim without a citation. The government evaluator must be able to 
                 max_output_tokens=8192,
             ),
         )
-        
+
         self.flash_model = genai.GenerativeModel(
             settings.gemini_model_flash,
             generation_config=genai.GenerationConfig(
@@ -181,37 +185,37 @@ Remember: NO claim without a citation. The government evaluator must be able to 
                 max_output_tokens=4096,
             ),
         )
-        
+
         logger.info("AI Engine initialized", model_pro=settings.gemini_model_pro)
-    
+
     def _ensure_initialized(self) -> None:
         """Raise error if not initialized."""
         if not self._initialized:
             raise RuntimeError("AI Engine not initialized. Check GEMINI_API_KEY.")
-    
+
     # =========================================================================
     # Context Caching - Knowledge Base Upload
     # =========================================================================
-    
+
     async def create_knowledge_cache(
         self,
-        files: List[Dict[str, Any]],
+        files: list[dict[str, Any]],
         cache_name: str,
         ttl_minutes: int = 60,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Upload user Knowledge Base files to Gemini's Context Caching API.
-        
+
         This enables efficient reuse of context across multiple generation calls.
-        
+
         Args:
             files: List of dicts with 'filename', 'content', and optional 'mime_type'
             cache_name: Unique identifier for this cache
             ttl_minutes: Cache time-to-live (default 60 minutes)
-            
+
         Returns:
             Cache resource name for use in generation, or None if failed
-            
+
         Example:
             cache = await engine.create_knowledge_cache([
                 {"filename": "resume.pdf", "content": pdf_text},
@@ -219,30 +223,30 @@ Remember: NO claim without a citation. The government evaluator must be able to 
             ], cache_name="user_123_kb")
         """
         self._ensure_initialized()
-        
+
         if not files:
             logger.warning("No files provided for caching")
             return None
-        
+
         try:
             # Build combined content with clear document boundaries
             combined_content = []
             combined_content.append("=== KNOWLEDGE BASE DOCUMENTS ===\n")
             combined_content.append("Use these documents to cite sources in your responses.\n")
             combined_content.append("Always cite using: [[Source: Filename, Page X]]\n\n")
-            
+
             for i, file_info in enumerate(files, 1):
                 filename = file_info.get("filename", f"document_{i}.txt")
                 content = file_info.get("content", "")
-                
+
                 combined_content.append(f"{'='*60}\n")
                 combined_content.append(f"DOCUMENT {i}: {filename}\n")
                 combined_content.append(f"{'='*60}\n\n")
                 combined_content.append(content)
                 combined_content.append("\n\n")
-            
+
             full_content = "".join(combined_content)
-            
+
             # Create the cache
             logger.info(
                 "Creating Gemini context cache",
@@ -250,7 +254,7 @@ Remember: NO claim without a citation. The government evaluator must be able to 
                 file_count=len(files),
                 content_length=len(full_content),
             )
-            
+
             cache = caching.CachedContent.create(
                 model=settings.gemini_model_pro,
                 display_name=cache_name,
@@ -258,46 +262,46 @@ Remember: NO claim without a citation. The government evaluator must be able to 
                 ttl=timedelta(minutes=ttl_minutes),
                 system_instruction=self.WRITER_SYSTEM_PROMPT,
             )
-            
+
             logger.info(
                 "Context cache created",
                 cache_resource=cache.name,
                 expires_at=(datetime.utcnow() + timedelta(minutes=ttl_minutes)).isoformat(),
             )
-            
+
             return cache.name
-            
+
         except Exception as e:
             logger.error(f"Failed to create context cache: {e}")
             return None
-    
-    def get_cached_model(self, cache_name: str) -> Optional[genai.GenerativeModel]:
+
+    def get_cached_model(self, cache_name: str) -> genai.GenerativeModel | None:
         """
         Get a GenerativeModel instance using cached context.
-        
+
         Args:
             cache_name: The cache resource name from create_knowledge_cache
-            
+
         Returns:
             GenerativeModel with cached context, or None if not found
         """
         self._ensure_initialized()
-        
+
         try:
             cache = caching.CachedContent.get(cache_name)
             return genai.GenerativeModel.from_cached_content(cache)
         except Exception as e:
             logger.error(f"Failed to get cached model: {e}")
             return None
-    
+
     async def refresh_cache(self, cache_name: str, ttl_minutes: int = 60) -> bool:
         """
         Extend the TTL of an existing cache.
-        
+
         Args:
             cache_name: The cache resource name
             ttl_minutes: New TTL in minutes
-            
+
         Returns:
             True if successful
         """
@@ -309,31 +313,31 @@ Remember: NO claim without a citation. The government evaluator must be able to 
         except Exception as e:
             logger.error(f"Failed to refresh cache: {e}")
             return False
-    
+
     # =========================================================================
     # Matrix Extractor - RFP Requirement Extraction
     # =========================================================================
-    
+
     async def extract_compliance_matrix(
         self,
         rfp_text: str,
-        rfp_title: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        rfp_title: str | None = None,
+    ) -> dict[str, Any]:
         """
         Extract compliance requirements from RFP text.
-        
+
         Uses Gemini 1.5 Pro to analyze the full RFP document and
         extract structured requirements.
-        
+
         Args:
             rfp_text: Full text content of the RFP
             rfp_title: Optional title for context
-            
+
         Returns:
             Dictionary with requirements list and metadata
         """
         self._ensure_initialized()
-        
+
         # Prepare the prompt
         context = f"RFP Title: {rfp_title}\n\n" if rfp_title else ""
         prompt = f"""{self.MATRIX_EXTRACTOR_PROMPT}
@@ -348,9 +352,9 @@ Extract all requirements and return as JSON."""
             text_length=len(rfp_text),
             title=rfp_title,
         )
-        
+
         start_time = datetime.utcnow()
-        
+
         try:
             response = await self.pro_model.generate_content_async(
                 prompt,
@@ -359,12 +363,12 @@ Extract all requirements and return as JSON."""
                     response_mime_type="application/json",
                 ),
             )
-            
+
             elapsed = (datetime.utcnow() - start_time).total_seconds()
-            
+
             # Parse response
             result = json.loads(response.text)
-            
+
             # Convert to dataclass objects
             requirements = []
             for req_data in result.get("requirements", []):
@@ -377,14 +381,14 @@ Extract all requirements and return as JSON."""
                     page_reference=req_data.get("page_reference"),
                 )
                 requirements.append(req)
-            
+
             logger.info(
                 "Matrix extraction complete",
                 requirements_found=len(requirements),
                 mandatory_count=result.get("total_mandatory", 0),
                 elapsed_seconds=elapsed,
             )
-            
+
             return {
                 "requirements": requirements,
                 "summary": result.get("document_summary", ""),
@@ -394,33 +398,33 @@ Extract all requirements and return as JSON."""
                 "raw_response": response.text,
                 "extraction_time": elapsed,
             }
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse extraction response: {e}")
             raise ValueError(f"Invalid JSON response from AI: {e}")
         except Exception as e:
             logger.error(f"Matrix extraction failed: {e}")
             raise
-    
+
     # =========================================================================
     # The Writer - Proposal Section Generation
     # =========================================================================
-    
+
     async def draft_section(
         self,
         requirement: ExtractedRequirement,
-        cache_name: Optional[str] = None,
-        knowledge_base_text: Optional[str] = None,
-        additional_context: Optional[str] = None,
+        cache_name: str | None = None,
+        knowledge_base_text: str | None = None,
+        additional_context: str | None = None,
         max_words: int = 500,
         tone: str = "professional",
     ) -> GeneratedDraft:
         """
         Generate a proposal section response to a requirement.
-        
+
         Uses either cached context or inline knowledge base text.
         Enforces strict citation format: [[Source: Filename, Page X]]
-        
+
         Args:
             requirement: The requirement to address
             cache_name: Gemini cache resource name (preferred)
@@ -428,14 +432,14 @@ Extract all requirements and return as JSON."""
             additional_context: Extra context to include
             max_words: Target word count
             tone: Writing tone
-            
+
         Returns:
             GeneratedDraft with text and parsed citations
         """
         self._ensure_initialized()
-        
+
         start_time = datetime.utcnow()
-        
+
         # Get the model (cached or fresh)
         if cache_name:
             model = self.get_cached_model(cache_name)
@@ -444,16 +448,17 @@ Extract all requirements and return as JSON."""
                 model = self.pro_model
         else:
             model = self.pro_model
-        
+
         # Build the generation prompt
         prompt_parts = []
-        
+
         if knowledge_base_text and not cache_name:
             prompt_parts.append("=== KNOWLEDGE BASE FOR CITATIONS ===")
             prompt_parts.append(knowledge_base_text[:200000])  # Limit size
-            prompt_parts.append("\n" + "="*50 + "\n")
-        
-        prompt_parts.append(f"""
+            prompt_parts.append("\n" + "=" * 50 + "\n")
+
+        prompt_parts.append(
+            f"""
 REQUIREMENT TO ADDRESS:
 Section: {requirement.section}
 Importance: {requirement.importance}
@@ -468,15 +473,16 @@ INSTRUCTIONS:
 3. EVERY factual claim MUST have a citation: [[Source: Filename, Page X]]
 4. If you cannot find a source, write [NEEDS SOURCE]
 5. Be specific with metrics, dates, and examples
-""")
-        
+"""
+        )
+
         if additional_context:
             prompt_parts.append(f"\nADDITIONAL CONTEXT:\n{additional_context}")
-        
+
         prompt_parts.append("\n\nWrite the proposal section now:")
-        
+
         prompt = "\n".join(prompt_parts)
-        
+
         try:
             response = await model.generate_content_async(
                 prompt,
@@ -485,22 +491,22 @@ INSTRUCTIONS:
                     max_output_tokens=max_words * 3,
                 ),
             )
-            
+
             elapsed = (datetime.utcnow() - start_time).total_seconds()
             raw_text = response.text
-            
+
             # Parse citations
             citations = self._extract_citations(raw_text)
-            
+
             # Create clean text (without citation markers)
-            clean_text = re.sub(self.CITATION_PATTERN, '', raw_text)
-            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-            
+            clean_text = re.sub(self.CITATION_PATTERN, "", raw_text)
+            clean_text = re.sub(r"\s+", " ", clean_text).strip()
+
             # Get token count
             tokens = 0
-            if hasattr(response, 'usage_metadata'):
+            if hasattr(response, "usage_metadata"):
                 tokens = response.usage_metadata.total_token_count
-            
+
             logger.info(
                 "Draft generated",
                 requirement_id=requirement.id,
@@ -508,7 +514,7 @@ INSTRUCTIONS:
                 citations=len(citations),
                 elapsed=elapsed,
             )
-            
+
             return GeneratedDraft(
                 raw_text=raw_text,
                 clean_text=clean_text,
@@ -518,108 +524,109 @@ INSTRUCTIONS:
                 tokens_used=tokens,
                 generation_time=elapsed,
             )
-            
+
         except Exception as e:
             logger.error(f"Draft generation failed: {e}")
             raise
-    
-    def _extract_citations(self, text: str) -> List[Citation]:
+
+    def _extract_citations(self, text: str) -> list[Citation]:
         """
         Extract all citations from generated text.
-        
+
         Args:
             text: Generated text with [[Source: ...]] markers
-            
+
         Returns:
             List of Citation objects
         """
         citations = []
-        
+
         for match in re.finditer(self.CITATION_PATTERN, text):
             source_file = match.group(1).strip()
             page_str = match.group(2)
             page_num = int(page_str) if page_str else None
-            
-            citations.append(Citation(
-                source_file=source_file,
-                page_number=page_num,
-                start_pos=match.start(),
-                end_pos=match.end(),
-                raw_text=match.group(0),
-            ))
-        
+
+            citations.append(
+                Citation(
+                    source_file=source_file,
+                    page_number=page_num,
+                    start_pos=match.start(),
+                    end_pos=match.end(),
+                    raw_text=match.group(0),
+                )
+            )
+
         return citations
-    
+
     # =========================================================================
     # Utility Methods
     # =========================================================================
-    
+
     async def validate_citations(
         self,
         text: str,
-        available_sources: List[str],
-    ) -> Tuple[List[Citation], List[Citation]]:
+        available_sources: list[str],
+    ) -> tuple[list[Citation], list[Citation]]:
         """
         Validate citations against available sources.
-        
+
         Args:
             text: Generated text with citations
             available_sources: List of valid source filenames
-            
+
         Returns:
             Tuple of (valid_citations, invalid_citations)
         """
         citations = self._extract_citations(text)
-        
+
         valid = []
         invalid = []
-        
+
         # Normalize source names for comparison
         normalized_sources = {s.lower().strip(): s for s in available_sources}
-        
+
         for citation in citations:
             normalized_cite = citation.source_file.lower().strip()
-            
+
             # Check exact match
-            if normalized_cite in normalized_sources:
-                valid.append(citation)
-            # Check partial match (filename without path)
-            elif any(normalized_cite in src for src in normalized_sources):
+            if normalized_cite in normalized_sources or any(
+                normalized_cite in src for src in normalized_sources
+            ):
                 valid.append(citation)
             else:
                 invalid.append(citation)
-        
+
         return valid, invalid
-    
+
     async def count_tokens(self, text: str) -> int:
         """
         Count tokens in text using Gemini's tokenizer.
-        
+
         Args:
             text: Text to count
-            
+
         Returns:
             Token count
         """
         if not self._initialized:
             return len(text) // 4  # Rough estimate
-        
+
         try:
             result = await self.pro_model.count_tokens_async(text)
             return result.total_tokens
         except Exception:
             return len(text) // 4
-    
+
     async def health_check(self) -> bool:
         """
         Verify Gemini API is accessible.
-        
+
         Returns:
             True if healthy
         """
         if not self._initialized:
             return False
-        
+
         try:
             response = await self.flash_model.generate_content_async(
                 "Respond with only: OK",
@@ -635,20 +642,19 @@ INSTRUCTIONS:
 # Singleton Instance
 # =============================================================================
 
-_engine_instance: Optional[AIEngine] = None
+_engine_instance: AIEngine | None = None
 
 
 def get_ai_engine() -> AIEngine:
     """
     Get or create the AI Engine singleton.
-    
+
     Returns:
         AIEngine instance
     """
     global _engine_instance
-    
+
     if _engine_instance is None:
         _engine_instance = AIEngine()
-    
-    return _engine_instance
 
+    return _engine_instance

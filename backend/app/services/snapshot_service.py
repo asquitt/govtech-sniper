@@ -6,13 +6,13 @@ Extract summaries and diffs from raw SAM.gov payloads.
 
 import hashlib
 import json
-from typing import Dict, Any, List, Optional
+from typing import Any
 
-from app.schemas.rfp import SAMOpportunitySnapshotSummary, SAMOpportunityFieldChange
+from app.schemas.rfp import SAMOpportunityFieldChange, SAMOpportunitySnapshotSummary
 
 
-def _normalize_resource_links(resource_links: List[Any]) -> List[str]:
-    normalized: List[str] = []
+def _normalize_resource_links(resource_links: list[Any]) -> list[str]:
+    normalized: list[str] = []
     for link in resource_links:
         if isinstance(link, str):
             if link:
@@ -28,7 +28,7 @@ def _hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def build_snapshot_summary(raw_payload: Dict[str, Any]) -> SAMOpportunitySnapshotSummary:
+def build_snapshot_summary(raw_payload: dict[str, Any]) -> SAMOpportunitySnapshotSummary:
     org_hierarchy = raw_payload.get("organizationHierarchy", []) or []
     agency = org_hierarchy[0].get("name") if org_hierarchy else None
     sub_agency = org_hierarchy[1].get("name") if len(org_hierarchy) > 1 else None
@@ -37,7 +37,9 @@ def build_snapshot_summary(raw_payload: Dict[str, Any]) -> SAMOpportunitySnapsho
     description_hash = _hash_text(description) if description else None
 
     resource_links = _normalize_resource_links(raw_payload.get("resourceLinks") or [])
-    resource_links_hash = _hash_text(json.dumps(resource_links, sort_keys=True)) if resource_links else None
+    resource_links_hash = (
+        _hash_text(json.dumps(resource_links, sort_keys=True)) if resource_links else None
+    )
 
     return SAMOpportunitySnapshotSummary(
         notice_id=raw_payload.get("noticeId") or raw_payload.get("noticeID"),
@@ -61,8 +63,8 @@ def build_snapshot_summary(raw_payload: Dict[str, Any]) -> SAMOpportunitySnapsho
 def diff_snapshot_summaries(
     before: SAMOpportunitySnapshotSummary,
     after: SAMOpportunitySnapshotSummary,
-) -> List[SAMOpportunityFieldChange]:
-    changes: List[SAMOpportunityFieldChange] = []
+) -> list[SAMOpportunityFieldChange]:
+    changes: list[SAMOpportunityFieldChange] = []
     fields = before.model_fields.keys()
     for field in fields:
         old_val = getattr(before, field)

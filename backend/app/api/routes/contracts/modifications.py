@@ -2,28 +2,27 @@
 Contract modification CRUD operations.
 """
 
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.contract import ContractAward, ContractModification
 from app.schemas.contract_modifications import ModificationCreate, ModificationRead
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter()
 
 
-@router.get("/{contract_id}/modifications", response_model=List[ModificationRead])
+@router.get("/{contract_id}/modifications", response_model=list[ModificationRead])
 async def list_modifications(
     contract_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ModificationRead]:
+) -> list[ModificationRead]:
     contract_result = await session.execute(
         select(ContractAward).where(
             ContractAward.id == contract_id,

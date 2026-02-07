@@ -5,9 +5,10 @@ Check proposals for compliance with Federal Acquisition Regulations.
 """
 
 import re
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -15,31 +16,34 @@ logger = structlog.get_logger(__name__)
 
 class ComplianceLevel(str, Enum):
     """Compliance check severity levels."""
-    CRITICAL = "critical"    # Must fix - will cause rejection
-    WARNING = "warning"      # Should fix - may cause issues
-    INFO = "info"           # Suggestion for improvement
+
+    CRITICAL = "critical"  # Must fix - will cause rejection
+    WARNING = "warning"  # Should fix - may cause issues
+    INFO = "info"  # Suggestion for improvement
 
 
 @dataclass
 class ComplianceIssue:
     """A compliance issue found in the proposal."""
+
     rule_id: str
     rule_name: str
     level: ComplianceLevel
     description: str
-    section: Optional[str] = None
-    suggestion: Optional[str] = None
-    far_reference: Optional[str] = None
+    section: str | None = None
+    suggestion: str | None = None
+    far_reference: str | None = None
 
 
 @dataclass
 class ComplianceReport:
     """Full compliance check report."""
+
     total_issues: int
     critical_count: int
     warning_count: int
     info_count: int
-    issues: List[ComplianceIssue]
+    issues: list[ComplianceIssue]
     compliance_score: float  # 0-100
     passed: bool
 
@@ -97,9 +101,9 @@ class FARComplianceChecker:
             "id": "CERT-001",
             "name": "Representations and Certifications",
             "level": ComplianceLevel.CRITICAL,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "certif", "represent", "attest", "affirm"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower() for kw in ["certif", "represent", "attest", "affirm"]
+            ),
             "description": "Proposal should include required certifications and representations",
             "suggestion": "Add a section explicitly addressing required FAR certifications",
             "far_reference": "FAR 52.204-8",
@@ -108,9 +112,10 @@ class FARComplianceChecker:
             "id": "KEY-001",
             "name": "Key Personnel Identification",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "key personnel", "project manager", "program manager", "key staff"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower()
+                for kw in ["key personnel", "project manager", "program manager", "key staff"]
+            ),
             "description": "Key personnel should be clearly identified with qualifications",
             "suggestion": "Include resumes and qualifications for all key personnel",
             "far_reference": "FAR 15.305(a)(2)",
@@ -119,9 +124,10 @@ class FARComplianceChecker:
             "id": "PP-001",
             "name": "Past Performance References",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "past performance", "contract reference", "cpars", "prior experience"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower()
+                for kw in ["past performance", "contract reference", "cpars", "prior experience"]
+            ),
             "description": "Past performance should include verifiable references",
             "suggestion": "Include contract numbers, POCs, and CPARS ratings",
             "far_reference": "FAR 15.305(a)(2)",
@@ -130,9 +136,9 @@ class FARComplianceChecker:
             "id": "PRICE-001",
             "name": "Price/Cost Information",
             "level": ComplianceLevel.CRITICAL,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "price", "cost", "labor rate", "pricing"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower() for kw in ["price", "cost", "labor rate", "pricing"]
+            ),
             "description": "Price/cost volume should be clearly separated and formatted",
             "suggestion": "Ensure pricing follows solicitation format requirements",
             "far_reference": "FAR 15.403",
@@ -141,9 +147,10 @@ class FARComplianceChecker:
             "id": "TECH-001",
             "name": "Technical Approach",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "technical approach", "methodology", "approach", "solution"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower()
+                for kw in ["technical approach", "methodology", "approach", "solution"]
+            ),
             "description": "Technical approach should address all SOW requirements",
             "suggestion": "Ensure technical approach maps to each SOW requirement",
             "far_reference": "FAR 15.305(a)(3)",
@@ -152,9 +159,9 @@ class FARComplianceChecker:
             "id": "SUB-001",
             "name": "Subcontracting Plan",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "subcontract", "teaming", "subcontracting plan"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower() for kw in ["subcontract", "teaming", "subcontracting plan"]
+            ),
             "description": "Subcontracting plan may be required for contracts > $750K",
             "suggestion": "Include small business subcontracting goals if applicable",
             "far_reference": "FAR 19.702",
@@ -163,9 +170,10 @@ class FARComplianceChecker:
             "id": "OCI-001",
             "name": "Organizational Conflict of Interest",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "conflict of interest", "oci", "organizational conflict"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower()
+                for kw in ["conflict of interest", "oci", "organizational conflict"]
+            ),
             "description": "Address potential organizational conflicts of interest",
             "suggestion": "Include OCI mitigation plan if applicable",
             "far_reference": "FAR 9.5",
@@ -174,9 +182,9 @@ class FARComplianceChecker:
             "id": "SEC-001",
             "name": "Security Requirements",
             "level": ComplianceLevel.CRITICAL,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "clearance", "security", "classified", "cui"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower() for kw in ["clearance", "security", "classified", "cui"]
+            ),
             "description": "Security requirements should be clearly addressed",
             "suggestion": "Document clearance levels and security compliance",
             "far_reference": "FAR 4.4",
@@ -185,9 +193,9 @@ class FARComplianceChecker:
             "id": "DEL-001",
             "name": "Deliverables Schedule",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "deliverable", "milestone", "schedule", "timeline"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower() for kw in ["deliverable", "milestone", "schedule", "timeline"]
+            ),
             "description": "Deliverables should include clear schedules",
             "suggestion": "Provide specific dates or durations for all deliverables",
             "far_reference": "FAR 11.4",
@@ -196,9 +204,10 @@ class FARComplianceChecker:
             "id": "QA-001",
             "name": "Quality Assurance",
             "level": ComplianceLevel.WARNING,
-            "check": lambda text: any(kw in text.lower() for kw in [
-                "quality", "qa", "quality assurance", "quality control"
-            ]),
+            "check": lambda text: any(
+                kw in text.lower()
+                for kw in ["quality", "qa", "quality assurance", "quality control"]
+            ),
             "description": "Quality assurance plan should be included",
             "suggestion": "Document QA processes and metrics",
             "far_reference": "FAR 46.2",
@@ -208,7 +217,7 @@ class FARComplianceChecker:
     def check_proposal(
         self,
         proposal_text: str,
-        rfp_clauses: List[str] = None,
+        rfp_clauses: list[str] = None,
         contract_value: int = None,
     ) -> ComplianceReport:
         """
@@ -231,14 +240,16 @@ class FARComplianceChecker:
 
             # If check returns False, there's a potential issue
             if not check_func(proposal_text):
-                issues.append(ComplianceIssue(
-                    rule_id=check["id"],
-                    rule_name=check["name"],
-                    level=check["level"],
-                    description=check["description"],
-                    suggestion=check.get("suggestion"),
-                    far_reference=check.get("far_reference"),
-                ))
+                issues.append(
+                    ComplianceIssue(
+                        rule_id=check["id"],
+                        rule_name=check["name"],
+                        level=check["level"],
+                        description=check["description"],
+                        suggestion=check.get("suggestion"),
+                        far_reference=check.get("far_reference"),
+                    )
+                )
 
         # Check for specific FAR clause references if provided
         if rfp_clauses:
@@ -248,40 +259,46 @@ class FARComplianceChecker:
                     # Check if clause is addressed
                     keywords = clause_info.get("keywords", [])
                     if not any(kw in text_lower for kw in keywords):
-                        issues.append(ComplianceIssue(
-                            rule_id=f"FAR-{clause}",
-                            rule_name=clause_info["name"],
-                            level=ComplianceLevel.WARNING,
-                            description=f"FAR clause {clause} may not be addressed",
-                            suggestion=clause_info["requirement"],
-                            far_reference=f"FAR {clause}",
-                        ))
+                        issues.append(
+                            ComplianceIssue(
+                                rule_id=f"FAR-{clause}",
+                                rule_name=clause_info["name"],
+                                level=ComplianceLevel.WARNING,
+                                description=f"FAR clause {clause} may not be addressed",
+                                suggestion=clause_info["requirement"],
+                                far_reference=f"FAR {clause}",
+                            )
+                        )
 
         # Additional checks based on contract value
         if contract_value:
             # Subcontracting plan required for > $750K
             if contract_value > 750000:
                 if "subcontracting plan" not in text_lower:
-                    issues.append(ComplianceIssue(
-                        rule_id="SUB-002",
-                        rule_name="Small Business Subcontracting Plan Required",
-                        level=ComplianceLevel.CRITICAL,
-                        description=f"Contracts over $750K require small business subcontracting plan",
-                        suggestion="Include a detailed subcontracting plan with goals",
-                        far_reference="FAR 19.702",
-                    ))
+                    issues.append(
+                        ComplianceIssue(
+                            rule_id="SUB-002",
+                            rule_name="Small Business Subcontracting Plan Required",
+                            level=ComplianceLevel.CRITICAL,
+                            description="Contracts over $750K require small business subcontracting plan",
+                            suggestion="Include a detailed subcontracting plan with goals",
+                            far_reference="FAR 19.702",
+                        )
+                    )
 
             # Cost/pricing data for > $2M
             if contract_value > 2000000:
                 if not any(kw in text_lower for kw in ["cost accounting", "cas", "dcaa"]):
-                    issues.append(ComplianceIssue(
-                        rule_id="COST-001",
-                        rule_name="Cost Accounting Standards",
-                        level=ComplianceLevel.WARNING,
-                        description="Contracts over $2M may require CAS compliance",
-                        suggestion="Address Cost Accounting Standards applicability",
-                        far_reference="FAR 30.201-4",
-                    ))
+                    issues.append(
+                        ComplianceIssue(
+                            rule_id="COST-001",
+                            rule_name="Cost Accounting Standards",
+                            level=ComplianceLevel.WARNING,
+                            description="Contracts over $2M may require CAS compliance",
+                            suggestion="Address Cost Accounting Standards applicability",
+                            far_reference="FAR 30.201-4",
+                        )
+                    )
 
         # Count by severity
         critical_count = len([i for i in issues if i.level == ComplianceLevel.CRITICAL])
@@ -308,7 +325,7 @@ class FARComplianceChecker:
             passed=passed,
         )
 
-    def get_required_clauses(self, rfp_text: str) -> List[str]:
+    def get_required_clauses(self, rfp_text: str) -> list[str]:
         """
         Extract FAR clause references from RFP text.
 
@@ -319,14 +336,11 @@ class FARComplianceChecker:
             List of FAR clause numbers
         """
         # Pattern for FAR clauses: FAR 52.xxx-xx or 52.xxx-xx
-        pattern = r'(?:FAR\s+)?52\.\d{3}-\d+'
+        pattern = r"(?:FAR\s+)?52\.\d{3}-\d+"
         matches = re.findall(pattern, rfp_text, re.IGNORECASE)
 
         # Clean and deduplicate
-        clauses = list(set(
-            m.replace("FAR ", "").replace("far ", "").strip()
-            for m in matches
-        ))
+        clauses = list(set(m.replace("FAR ", "").replace("far ", "").strip() for m in matches))
 
         logger.info(f"Found {len(clauses)} FAR clause references")
         return clauses
@@ -345,20 +359,45 @@ class AIQualityScorer:
 
     # Vague phrases that should be avoided
     VAGUE_PHRASES = [
-        "various", "many", "some", "several",
-        "significant", "substantial", "considerable",
-        "best-in-class", "world-class", "cutting-edge",
-        "state-of-the-art", "innovative", "robust",
-        "leverage", "synergy", "paradigm",
-        "as needed", "if required", "when necessary",
+        "various",
+        "many",
+        "some",
+        "several",
+        "significant",
+        "substantial",
+        "considerable",
+        "best-in-class",
+        "world-class",
+        "cutting-edge",
+        "state-of-the-art",
+        "innovative",
+        "robust",
+        "leverage",
+        "synergy",
+        "paradigm",
+        "as needed",
+        "if required",
+        "when necessary",
     ]
 
     # Strong verbs for proposals
     STRONG_VERBS = [
-        "achieved", "delivered", "implemented", "completed",
-        "reduced", "increased", "improved", "saved",
-        "developed", "created", "designed", "built",
-        "managed", "led", "directed", "supervised",
+        "achieved",
+        "delivered",
+        "implemented",
+        "completed",
+        "reduced",
+        "increased",
+        "improved",
+        "saved",
+        "developed",
+        "created",
+        "designed",
+        "built",
+        "managed",
+        "led",
+        "directed",
+        "supervised",
     ]
 
     def score_content(
@@ -366,7 +405,7 @@ class AIQualityScorer:
         content: str,
         requirement_text: str = None,
         expected_citations: int = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Score AI-generated content quality.
 
@@ -381,12 +420,12 @@ class AIQualityScorer:
         scores = {}
 
         # Citation Analysis
-        citation_pattern = r'\[\[Source:\s*[^\]]+\]\]'
+        citation_pattern = r"\[\[Source:\s*[^\]]+\]\]"
         citations = re.findall(citation_pattern, content)
         citation_count = len(citations)
 
         # Sentences vs citations ratio
-        sentences = len(re.findall(r'[.!?]+', content))
+        sentences = len(re.findall(r"[.!?]+", content))
         citation_ratio = citation_count / max(sentences, 1)
 
         if citation_ratio >= 0.3:
@@ -420,7 +459,7 @@ class AIQualityScorer:
             scores["specificity"] = 40
 
         # Check for numbers/metrics (specific is better)
-        numbers = len(re.findall(r'\d+(?:\.\d+)?%?', content))
+        numbers = len(re.findall(r"\d+(?:\.\d+)?%?", content))
         if numbers >= 5:
             scores["specificity"] = min(100, scores["specificity"] + 20)
         elif numbers >= 3:
@@ -449,7 +488,8 @@ class AIQualityScorer:
         if requirement_text:
             # Extract key terms from requirement
             req_words = set(
-                word.lower() for word in requirement_text.split()
+                word.lower()
+                for word in requirement_text.split()
                 if len(word) > 4 and word.isalpha()
             )
 
@@ -529,8 +569,8 @@ class AIQualityScorer:
 
 
 # Singleton instances
-_compliance_checker: Optional[FARComplianceChecker] = None
-_quality_scorer: Optional[AIQualityScorer] = None
+_compliance_checker: FARComplianceChecker | None = None
+_quality_scorer: AIQualityScorer | None = None
 
 
 def get_compliance_checker() -> FARComplianceChecker:

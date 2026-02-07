@@ -6,26 +6,24 @@ Knowledge Base document upload and management.
 
 import os
 from datetime import datetime
-from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, UploadFile, File, Form
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
+from app.config import settings
 from app.database import get_session
-from app.api.deps import get_current_user_optional, get_current_user, resolve_user_id
-from app.services.auth_service import UserAuth
-from app.models.knowledge_base import KnowledgeBaseDocument, DocumentType, ProcessingStatus
+from app.models.knowledge_base import DocumentType, KnowledgeBaseDocument, ProcessingStatus
 from app.schemas.knowledge_base import (
-    DocumentCreate,
+    DocumentListItem,
+    DocumentListResponse,
     DocumentRead,
     DocumentUpdate,
     DocumentUploadResponse,
-    DocumentListItem,
-    DocumentListResponse,
 )
-from app.config import settings
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/documents", tags=["Knowledge Base"])
@@ -33,30 +31,26 @@ router = APIRouter(prefix="/documents", tags=["Knowledge Base"])
 
 @router.get("", response_model=DocumentListResponse)
 async def list_documents(
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    document_type: Optional[DocumentType] = Query(None, description="Filter by type"),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    document_type: DocumentType | None = Query(None, description="Filter by type"),
     ready_only: bool = Query(False, description="Only show processed documents"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentListResponse:
     """
     List all Knowledge Base documents for a user.
     """
     resolved_user_id = resolve_user_id(user_id, current_user)
-    query = select(KnowledgeBaseDocument).where(
-        KnowledgeBaseDocument.user_id == resolved_user_id
-    )
-    
+    query = select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.user_id == resolved_user_id)
+
     if document_type:
         query = query.where(KnowledgeBaseDocument.document_type == document_type)
-    
+
     if ready_only:
-        query = query.where(
-            KnowledgeBaseDocument.processing_status == ProcessingStatus.READY
-        )
-    
+        query = query.where(KnowledgeBaseDocument.processing_status == ProcessingStatus.READY)
+
     query = query.order_by(KnowledgeBaseDocument.created_at.desc())
-    
+
     result = await session.execute(query)
     documents = result.scalars().all()
 
@@ -65,19 +59,16 @@ async def list_documents(
 
 
 @router.get("/types/list")
-async def list_document_types() -> List[dict]:
+async def list_document_types() -> list[dict]:
     """
     Get all available document types.
     """
-    return [
-        {"value": t.value, "label": t.value.replace("_", " ").title()}
-        for t in DocumentType
-    ]
+    return [{"value": t.value, "label": t.value.replace("_", " ").title()} for t in DocumentType]
 
 
 @router.get("/stats")
 async def get_document_stats(
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
@@ -108,8 +99,6 @@ async def get_document_stats(
     return {"total_documents": total, "by_type": by_type}
 
 
-
-
 @router.get("/{document_id}", response_model=DocumentRead)
 async def get_document(
     document_id: int = Path(..., description="Document ID"),
@@ -123,28 +112,28 @@ async def get_document(
         select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == document_id)
     )
     document = result.scalar_one_or_none()
-    
+
     if not document or document.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
-    
+
     return DocumentRead.from_orm_with_status(document)
 
 
 @router.post("", response_model=DocumentUploadResponse)
 async def upload_document(
     file: UploadFile = File(..., description="PDF or text file to upload"),
-    user_id: Optional[int] = Form(None, description="User ID (optional if authenticated)"),
+    user_id: int | None = Form(None, description="User ID (optional if authenticated)"),
     title: str = Form(..., description="Document title"),
     document_type: DocumentType = Form(DocumentType.OTHER, description="Document type"),
-    description: Optional[str] = Form(None, description="Document description"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    description: str | None = Form(None, description="Document description"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentUploadResponse:
     """
     Upload a document to the Knowledge Base.
-    
+
     Supported formats: PDF, TXT, DOC, DOCX
-    
+
     After upload, the document will be processed:
     1. Text extraction (for PDFs)
     2. Chunking for citation tracking
@@ -157,37 +146,37 @@ async def upload_document(
         "application/msword": ".doc",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
     }
-    
+
     if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type: {file.content_type}. Allowed: PDF, TXT, DOC, DOCX",
         )
-    
+
     # Check file size
     file_content = await file.read()
     file_size = len(file_content)
     max_size = settings.max_upload_size_mb * 1024 * 1024
-    
+
     if file_size > max_size:
         raise HTTPException(
             status_code=400,
             detail=f"File too large. Maximum size: {settings.max_upload_size_mb}MB",
         )
-    
+
     # Save file
     resolved_user_id = resolve_user_id(user_id, current_user)
     upload_dir = os.path.join(settings.upload_dir, str(resolved_user_id))
     os.makedirs(upload_dir, exist_ok=True)
-    
+
     # Generate unique filename
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     safe_filename = f"{timestamp}_{file.filename}"
     file_path = os.path.join(upload_dir, safe_filename)
-    
+
     with open(file_path, "wb") as f:
         f.write(file_content)
-    
+
     # Create database record
     document = KnowledgeBaseDocument(
         user_id=resolved_user_id,
@@ -222,11 +211,12 @@ async def upload_document(
     )
     await session.commit()
     await session.refresh(document)
-    
+
     # Queue processing task
     from app.tasks.document_tasks import process_document
+
     process_document.delay(document.id)
-    
+
     return DocumentUploadResponse(
         id=document.id,
         title=document.title,
@@ -251,17 +241,17 @@ async def update_document(
         select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == document_id)
     )
     document = result.scalar_one_or_none()
-    
+
     if not document or document.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
-    
+
     # Apply updates
     update_dict = update_data.model_dump(exclude_unset=True)
     for field, value in update_dict.items():
         setattr(document, field, value)
-    
+
     document.updated_at = datetime.utcnow()
-    
+
     await log_audit_event(
         session,
         user_id=document.user_id,
@@ -281,7 +271,7 @@ async def update_document(
     )
     await session.commit()
     await session.refresh(document)
-    
+
     return DocumentRead.from_orm_with_status(document)
 
 
@@ -298,14 +288,14 @@ async def delete_document(
         select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == document_id)
     )
     document = result.scalar_one_or_none()
-    
+
     if not document or document.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Document {document_id} not found")
-    
+
     # Delete file from disk
     if os.path.exists(document.file_path):
         os.remove(document.file_path)
-    
+
     await log_audit_event(
         session,
         user_id=document.user_id,
@@ -325,24 +315,26 @@ async def delete_document(
     )
     await session.delete(document)
     await session.commit()
-    
+
     return {"message": f"Document {document_id} deleted"}
 
 
 # === Past Performance Endpoints ===
 
 from app.schemas.past_performance import (
+    MatchResponse,
+    MatchResult,
+    NarrativeResponse,
+    PastPerformanceListResponse,
     PastPerformanceMetadata,
     PastPerformanceRead,
-    PastPerformanceListResponse,
-    MatchResult,
-    MatchResponse,
-    NarrativeResponse,
 )
-from app.services.past_performance_matcher import match_past_performances, generate_narrative
+from app.services.past_performance_matcher import generate_narrative, match_past_performances
 
 
-@router.post("/documents/{document_id}/past-performance-metadata", response_model=PastPerformanceRead)
+@router.post(
+    "/documents/{document_id}/past-performance-metadata", response_model=PastPerformanceRead
+)
 async def add_past_performance_metadata(
     document_id: int,
     payload: PastPerformanceMetadata,
@@ -410,7 +402,10 @@ async def match_past_performance(
     )
 
 
-@router.post("/documents/past-performances/{document_id}/narrative/{rfp_id}", response_model=NarrativeResponse)
+@router.post(
+    "/documents/past-performances/{document_id}/narrative/{rfp_id}",
+    response_model=NarrativeResponse,
+)
 async def generate_past_performance_narrative(
     document_id: int,
     rfp_id: int,

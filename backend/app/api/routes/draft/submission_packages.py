@@ -2,16 +2,14 @@
 Draft Routes - Submission Package CRUD
 """
 
-from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user_optional, resolve_user_id
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.proposal import (
     Proposal,
     SubmissionPackage,
@@ -23,26 +21,27 @@ from app.schemas.proposal import (
     SubmissionPackageUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
 
 
-@router.get("/proposals/{proposal_id}/submission-packages", response_model=List[SubmissionPackageRead])
+@router.get(
+    "/proposals/{proposal_id}/submission-packages", response_model=list[SubmissionPackageRead]
+)
 async def list_submission_packages(
     proposal_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
-) -> List[SubmissionPackageRead]:
+) -> list[SubmissionPackageRead]:
     """
     List submission packages for a proposal.
     """
     resolved_user_id = resolve_user_id(user_id, current_user)
 
-    proposal_result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    proposal_result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = proposal_result.scalar_one_or_none()
     if not proposal or proposal.user_id != resolved_user_id:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -60,8 +59,8 @@ async def list_submission_packages(
 async def create_submission_package(
     proposal_id: int,
     payload: SubmissionPackageCreate,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionPackageRead:
     """
@@ -69,9 +68,7 @@ async def create_submission_package(
     """
     resolved_user_id = resolve_user_id(user_id, current_user)
 
-    proposal_result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    proposal_result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = proposal_result.scalar_one_or_none()
     if not proposal or proposal.user_id != resolved_user_id:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -112,8 +109,8 @@ async def create_submission_package(
 async def update_submission_package(
     package_id: int,
     payload: SubmissionPackageUpdate,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionPackageRead:
     """
@@ -165,8 +162,8 @@ async def update_submission_package(
 @router.post("/submission-packages/{package_id}/submit", response_model=SubmissionPackageRead)
 async def submit_submission_package(
     package_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> SubmissionPackageRead:
     """

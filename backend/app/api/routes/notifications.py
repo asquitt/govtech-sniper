@@ -4,22 +4,20 @@ RFP Sniper - Notifications Routes
 Email notifications and deadline reminders.
 """
 
-import asyncio
 from datetime import datetime, timedelta
-from typing import Optional, List
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, Field, SQLModel, Column, Text, JSON
-from pydantic import BaseModel, EmailStr
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import JSON, Column, Field, SQLModel, Text, select
 
-from app.database import get_session
-from app.models.user import User
-from app.models.rfp import RFP
-from app.api.deps import get_current_user, UserAuth
+from app.api.deps import UserAuth, get_current_user
 from app.config import settings
+from app.database import get_session
+from app.models.rfp import RFP
+from app.models.user import User
 
 logger = structlog.get_logger(__name__)
 
@@ -30,8 +28,10 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 # Notification Models
 # =============================================================================
 
+
 class NotificationType(str, Enum):
     """Types of notifications."""
+
     DEADLINE_REMINDER = "deadline_reminder"
     RFP_MATCH = "rfp_match"
     ANALYSIS_COMPLETE = "analysis_complete"
@@ -43,6 +43,7 @@ class NotificationType(str, Enum):
 
 class NotificationChannel(str, Enum):
     """Delivery channels."""
+
     EMAIL = "email"
     IN_APP = "in_app"
     SLACK = "slack"
@@ -53,9 +54,10 @@ class Notification(SQLModel, table=True):
     """
     Notification record.
     """
+
     __tablename__ = "notifications"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
     # Notification content
@@ -64,14 +66,14 @@ class Notification(SQLModel, table=True):
     message: str = Field(sa_column=Column(Text))
 
     # Delivery
-    channels: List[str] = Field(default=["in_app"], sa_column=Column(JSON))
+    channels: list[str] = Field(default=["in_app"], sa_column=Column(JSON))
     is_read: bool = Field(default=False)
     is_sent: bool = Field(default=False)
-    sent_at: Optional[datetime] = None
+    sent_at: datetime | None = None
 
     # Related entities
-    rfp_id: Optional[int] = Field(default=None, foreign_key="rfps.id")
-    proposal_id: Optional[int] = Field(default=None, foreign_key="proposals.id")
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id")
+    proposal_id: int | None = Field(default=None, foreign_key="proposals.id")
 
     # Metadata
     meta: dict = Field(default={}, sa_column=Column("metadata", JSON))
@@ -84,18 +86,19 @@ class NotificationPreferences(SQLModel, table=True):
     """
     User notification preferences.
     """
+
     __tablename__ = "notification_preferences"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", unique=True)
 
     # Email preferences
     email_enabled: bool = Field(default=True)
-    email_address: Optional[str] = Field(default=None, max_length=255)
+    email_address: str | None = Field(default=None, max_length=255)
 
     # Notification types
     deadline_reminders: bool = Field(default=True)
-    deadline_days_before: List[int] = Field(default=[7, 3, 1], sa_column=Column(JSON))
+    deadline_days_before: list[int] = Field(default=[7, 3, 1], sa_column=Column(JSON))
     rfp_matches: bool = Field(default=True)
     analysis_complete: bool = Field(default=True)
     generation_complete: bool = Field(default=True)
@@ -103,12 +106,12 @@ class NotificationPreferences(SQLModel, table=True):
 
     # Slack integration
     slack_enabled: bool = Field(default=False)
-    slack_webhook_url: Optional[str] = Field(default=None, max_length=500)
+    slack_webhook_url: str | None = Field(default=None, max_length=500)
 
     # Quiet hours (no notifications)
     quiet_hours_enabled: bool = Field(default=False)
-    quiet_hours_start: Optional[str] = Field(default=None, max_length=5)  # "22:00"
-    quiet_hours_end: Optional[str] = Field(default=None, max_length=5)    # "08:00"
+    quiet_hours_start: str | None = Field(default=None, max_length=5)  # "22:00"
+    quiet_hours_end: str | None = Field(default=None, max_length=5)  # "08:00"
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -119,38 +122,42 @@ class NotificationPreferences(SQLModel, table=True):
 # Request/Response Schemas
 # =============================================================================
 
+
 class NotificationResponse(BaseModel):
     """Notification response."""
+
     id: int
     notification_type: str
     title: str
     message: str
     is_read: bool
-    rfp_id: Optional[int]
-    proposal_id: Optional[int]
+    rfp_id: int | None
+    proposal_id: int | None
     created_at: datetime
 
 
 class PreferencesUpdate(BaseModel):
     """Update notification preferences."""
-    email_enabled: Optional[bool] = None
-    email_address: Optional[EmailStr] = None
-    deadline_reminders: Optional[bool] = None
-    deadline_days_before: Optional[List[int]] = None
-    rfp_matches: Optional[bool] = None
-    analysis_complete: Optional[bool] = None
-    generation_complete: Optional[bool] = None
-    team_activity: Optional[bool] = None
-    slack_enabled: Optional[bool] = None
-    slack_webhook_url: Optional[str] = None
-    quiet_hours_enabled: Optional[bool] = None
-    quiet_hours_start: Optional[str] = None
-    quiet_hours_end: Optional[str] = None
+
+    email_enabled: bool | None = None
+    email_address: EmailStr | None = None
+    deadline_reminders: bool | None = None
+    deadline_days_before: list[int] | None = None
+    rfp_matches: bool | None = None
+    analysis_complete: bool | None = None
+    generation_complete: bool | None = None
+    team_activity: bool | None = None
+    slack_enabled: bool | None = None
+    slack_webhook_url: str | None = None
+    quiet_hours_enabled: bool | None = None
+    quiet_hours_start: str | None = None
+    quiet_hours_end: str | None = None
 
 
 # =============================================================================
 # Email Service
 # =============================================================================
+
 
 class EmailService:
     """
@@ -205,7 +212,9 @@ class EmailService:
 
         Returns: (subject, html_body, text_body)
         """
-        subject = f"⏰ RFP Deadline in {days_until} day{'s' if days_until != 1 else ''}: {rfp.title[:50]}"
+        subject = (
+            f"⏰ RFP Deadline in {days_until} day{'s' if days_until != 1 else ''}: {rfp.title[:50]}"
+        )
 
         html_body = f"""
         <html>
@@ -265,6 +274,7 @@ email_service = EmailService()
 # Slack Service
 # =============================================================================
 
+
 class SlackService:
     """
     Slack webhook notification service.
@@ -311,7 +321,10 @@ class SlackService:
                         {"type": "mrkdwn", "text": f"*Title:*\n{rfp.title[:100]}"},
                         {"type": "mrkdwn", "text": f"*Agency:*\n{rfp.agency}"},
                         {"type": "mrkdwn", "text": f"*Solicitation:*\n{rfp.solicitation_number}"},
-                        {"type": "mrkdwn", "text": f"*Deadline:*\n{rfp.response_deadline.strftime('%B %d, %Y') if rfp.response_deadline else 'TBD'}"},
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Deadline:*\n{rfp.response_deadline.strftime('%B %d, %Y') if rfp.response_deadline else 'TBD'}",
+                        },
                     ],
                 },
             ],
@@ -325,19 +338,18 @@ slack_service = SlackService()
 # Endpoints
 # =============================================================================
 
-@router.get("/", response_model=List[NotificationResponse])
+
+@router.get("/", response_model=list[NotificationResponse])
 async def list_notifications(
     unread_only: bool = Query(False),
     limit: int = Query(50, ge=1, le=100),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[NotificationResponse]:
+) -> list[NotificationResponse]:
     """
     List user's notifications.
     """
-    query = select(Notification).where(
-        Notification.user_id == current_user.id
-    )
+    query = select(Notification).where(Notification.user_id == current_user.id)
 
     if unread_only:
         query = query.where(Notification.is_read == False)
@@ -436,6 +448,7 @@ async def mark_all_as_read(
 # Preferences
 # =============================================================================
 
+
 @router.get("/preferences")
 async def get_preferences(
     current_user: UserAuth = Depends(get_current_user),
@@ -445,9 +458,7 @@ async def get_preferences(
     Get user's notification preferences.
     """
     result = await session.execute(
-        select(NotificationPreferences).where(
-            NotificationPreferences.user_id == current_user.id
-        )
+        select(NotificationPreferences).where(NotificationPreferences.user_id == current_user.id)
     )
     prefs = result.scalar_one_or_none()
 
@@ -485,9 +496,7 @@ async def update_preferences(
     Update notification preferences.
     """
     result = await session.execute(
-        select(NotificationPreferences).where(
-            NotificationPreferences.user_id == current_user.id
-        )
+        select(NotificationPreferences).where(NotificationPreferences.user_id == current_user.id)
     )
     prefs = result.scalar_one_or_none()
 
@@ -510,6 +519,7 @@ async def update_preferences(
 # =============================================================================
 # Notification Creation Helpers
 # =============================================================================
+
 
 async def create_notification(
     session: AsyncSession,
@@ -548,10 +558,12 @@ async def send_deadline_reminders(session: AsyncSession):
     """
     # Get all users with preferences
     users_result = await session.execute(
-        select(User, NotificationPreferences).join(
+        select(User, NotificationPreferences)
+        .join(
             NotificationPreferences,
             User.id == NotificationPreferences.user_id,
-        ).where(NotificationPreferences.deadline_reminders == True)
+        )
+        .where(NotificationPreferences.deadline_reminders == True)
     )
 
     for user, prefs in users_result.all():
@@ -562,12 +574,15 @@ async def send_deadline_reminders(session: AsyncSession):
 
             # Find RFPs with deadline on target date
             rfps_result = await session.execute(
-                select(RFP).where(
+                select(RFP)
+                .where(
                     RFP.user_id == user.id,
                     RFP.response_deadline != None,
-                ).where(
+                )
+                .where(
                     RFP.response_deadline >= datetime.combine(target_date, datetime.min.time()),
-                    RFP.response_deadline < datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
+                    RFP.response_deadline
+                    < datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
                 )
             )
 

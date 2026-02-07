@@ -5,7 +5,6 @@ Endpoints to list, search, ingest, and health-check data source providers.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -28,18 +27,19 @@ router = APIRouter(prefix="/data-sources", tags=["Data Sources"])
 
 # ── Response schemas ────────────────────────────────────────────────────────
 
+
 class ProviderInfo(BaseModel):
     provider_name: str
     display_name: str
     description: str
     is_active: bool
-    healthy: Optional[bool] = None
+    healthy: bool | None = None
 
 
 class SearchResponse(BaseModel):
     provider: str
     count: int
-    results: List[RawOpportunity]
+    results: list[RawOpportunity]
 
 
 class IngestResponse(BaseModel):
@@ -51,10 +51,11 @@ class IngestResponse(BaseModel):
 
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
-@router.get("", response_model=List[ProviderInfo])
+
+@router.get("", response_model=list[ProviderInfo])
 async def list_data_sources(
     current_user: UserAuth = Depends(get_current_user),
-) -> List[ProviderInfo]:
+) -> list[ProviderInfo]:
     """List all registered data source providers."""
     providers = list_providers()
     return [
@@ -155,7 +156,7 @@ async def check_provider_health(
     return {"provider": provider_name, "healthy": healthy}
 
 
-def _parse_date(val: Optional[str]) -> Optional[datetime]:
+def _parse_date(val: str | None) -> datetime | None:
     if not val:
         return None
     for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y-%m-%dT%H:%M:%S"):

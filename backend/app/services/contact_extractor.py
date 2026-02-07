@@ -5,7 +5,6 @@ AI-powered extraction of contacts from RFP text using Gemini.
 """
 
 import json
-from typing import Optional
 
 import structlog
 
@@ -89,14 +88,16 @@ def _mock_extract(text: str) -> list[dict]:
 
     # Look for common contracting officer patterns
     if "contracting officer" in text_lower or "contract specialist" in text_lower:
-        contacts.append({
-            "name": "Contact extracted from document",
-            "title": "Contracting Officer",
-            "email": None,
-            "phone": None,
-            "agency": None,
-            "role": "Contracting Officer",
-        })
+        contacts.append(
+            {
+                "name": "Contact extracted from document",
+                "title": "Contracting Officer",
+                "email": None,
+                "phone": None,
+                "agency": None,
+                "role": "Contracting Officer",
+            }
+        )
 
     return contacts
 
@@ -110,18 +111,20 @@ def _normalize_contacts(raw_contacts: list[dict]) -> list[dict]:
         name = c.get("name", "").strip()
         if not name:
             continue
-        normalized.append({
-            "name": name,
-            "title": _str_or_none(c.get("title")),
-            "email": _str_or_none(c.get("email")),
-            "phone": _str_or_none(c.get("phone")),
-            "agency": _str_or_none(c.get("agency")),
-            "role": _str_or_none(c.get("role")),
-        })
+        normalized.append(
+            {
+                "name": name,
+                "title": _str_or_none(c.get("title")),
+                "email": _str_or_none(c.get("email")),
+                "phone": _str_or_none(c.get("phone")),
+                "agency": _str_or_none(c.get("agency")),
+                "role": _str_or_none(c.get("role")),
+            }
+        )
     return normalized
 
 
-def _str_or_none(val: Optional[object]) -> Optional[str]:
+def _str_or_none(val: object | None) -> str | None:
     """Return stripped string or None."""
     if val is None:
         return None

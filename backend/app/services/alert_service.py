@@ -5,11 +5,10 @@ Helper to compute operational alert counts.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import func
-from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.models.audit import AuditEvent
 from app.models.integration import IntegrationConfig, IntegrationSyncRun, IntegrationSyncStatus
@@ -19,7 +18,7 @@ from app.models.webhook import WebhookDelivery, WebhookDeliveryStatus, WebhookSu
 async def get_alert_counts(
     session: AsyncSession,
     *,
-    user_id: Optional[int],
+    user_id: int | None,
     days: int,
 ) -> dict:
     start_date = datetime.utcnow() - timedelta(days=days)

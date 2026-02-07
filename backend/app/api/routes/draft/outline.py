@@ -5,28 +5,27 @@ Generate and manage structured proposal outlines.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
+from app.api.deps import UserAuth, get_current_user_optional, resolve_user_id
 from app.database import get_session
-from app.api.deps import get_current_user_optional, resolve_user_id, UserAuth
+from app.models.outline import OutlineSection, OutlineStatus, ProposalOutline
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
-from app.models.outline import ProposalOutline, OutlineSection, OutlineStatus
 from app.schemas.outline import (
     OutlineRead,
+    OutlineReorderRequest,
     OutlineSectionCreate,
     OutlineSectionRead,
     OutlineSectionUpdate,
-    OutlineReorderRequest,
 )
 
 router = APIRouter()
 
 
-def _build_tree(sections: list, parent_id: Optional[int] = None) -> List[OutlineSectionRead]:
+def _build_tree(sections: list, parent_id: int | None = None) -> list[OutlineSectionRead]:
     """Build nested tree from flat sections list."""
     tree = []
     for s in sections:
@@ -55,9 +54,7 @@ async def _get_outline_or_404(
     session: AsyncSession,
 ) -> tuple:
     """Get proposal and outline, raising 404 if not found."""
-    proposal_result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    proposal_result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = proposal_result.scalar_one_or_none()
     if not proposal or proposal.user_id != user_id:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -72,8 +69,8 @@ async def _get_outline_or_404(
 @router.post("/proposals/{proposal_id}/generate-outline")
 async def generate_outline(
     proposal_id: int,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Trigger AI outline generation from compliance matrix."""
@@ -82,6 +79,7 @@ async def generate_outline(
     proposal, _ = await _get_outline_or_404(proposal_id, resolved_user_id, session)
 
     from app.tasks.generation_tasks import generate_proposal_outline
+
     task = generate_proposal_outline.delay(
         proposal_id=proposal_id,
         user_id=resolved_user_id,
@@ -92,8 +90,8 @@ async def generate_outline(
 @router.get("/proposals/{proposal_id}/outline", response_model=OutlineRead)
 async def get_outline(
     proposal_id: int,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> OutlineRead:
     """Get the proposal outline with nested sections."""
@@ -128,8 +126,8 @@ async def get_outline(
 async def add_outline_section(
     proposal_id: int,
     body: OutlineSectionCreate,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> OutlineSectionRead:
     """Add a manual section to the outline."""
@@ -172,8 +170,8 @@ async def update_outline_section(
     proposal_id: int,
     section_id: int,
     body: OutlineSectionUpdate,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> OutlineSectionRead:
     """Edit an outline section."""
@@ -220,8 +218,8 @@ async def update_outline_section(
 async def delete_outline_section(
     proposal_id: int,
     section_id: int,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Delete an outline section and its children."""
@@ -258,8 +256,8 @@ async def delete_outline_section(
 async def reorder_outline(
     proposal_id: int,
     body: OutlineReorderRequest,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Reorder outline sections."""
@@ -289,8 +287,8 @@ async def reorder_outline(
 @router.post("/proposals/{proposal_id}/outline/approve")
 async def approve_outline(
     proposal_id: int,
-    user_id: Optional[int] = Query(None),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Approve outline and auto-create ProposalSections from it."""
@@ -339,9 +337,7 @@ async def approve_outline(
         sections_created += 1
 
     # Update proposal section counts
-    proposal_result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    proposal_result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = proposal_result.scalar_one_or_none()
     if proposal:
         proposal.total_sections = (proposal.total_sections or 0) + sections_created

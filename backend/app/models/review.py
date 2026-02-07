@@ -5,10 +5,9 @@ Pink, Red, and Gold team reviews for proposal quality gates.
 """
 
 from datetime import datetime
-from typing import Optional
 from enum import Enum
 
-from sqlmodel import Field, SQLModel, Column, Text
+from sqlmodel import Column, Field, SQLModel, Text
 
 
 class ReviewType(str, Enum):
@@ -46,16 +45,17 @@ class CommentStatus(str, Enum):
 
 class ProposalReview(SQLModel, table=True):
     """Color team review for a proposal."""
+
     __tablename__ = "proposal_reviews"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     proposal_id: int = Field(foreign_key="proposals.id", index=True)
     review_type: ReviewType
     status: ReviewStatus = Field(default=ReviewStatus.SCHEDULED)
-    scheduled_date: Optional[datetime] = None
-    completed_date: Optional[datetime] = None
-    overall_score: Optional[float] = None
-    summary: Optional[str] = Field(default=None, sa_column=Column(Text))
+    scheduled_date: datetime | None = None
+    completed_date: datetime | None = None
+    overall_score: float | None = None
+    summary: str | None = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -63,9 +63,10 @@ class ProposalReview(SQLModel, table=True):
 
 class ReviewAssignment(SQLModel, table=True):
     """Reviewer assignment to a review."""
+
     __tablename__ = "review_assignments"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     review_id: int = Field(foreign_key="proposal_reviews.id", index=True)
     reviewer_user_id: int = Field(foreign_key="users.id", index=True)
     status: AssignmentStatus = Field(default=AssignmentStatus.PENDING)
@@ -74,17 +75,16 @@ class ReviewAssignment(SQLModel, table=True):
 
 class ReviewComment(SQLModel, table=True):
     """Comment left by a reviewer during a review."""
+
     __tablename__ = "review_comments"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     review_id: int = Field(foreign_key="proposal_reviews.id", index=True)
-    section_id: Optional[int] = Field(
-        default=None, foreign_key="proposal_sections.id", index=True
-    )
+    section_id: int | None = Field(default=None, foreign_key="proposal_sections.id", index=True)
     reviewer_user_id: int = Field(foreign_key="users.id")
     comment_text: str = Field(sa_column=Column(Text))
     severity: CommentSeverity = Field(default=CommentSeverity.MINOR)
     status: CommentStatus = Field(default=CommentStatus.OPEN)
-    resolution_note: Optional[str] = Field(default=None, sa_column=Column(Text))
+    resolution_note: str | None = Field(default=None, sa_column=Column(Text))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

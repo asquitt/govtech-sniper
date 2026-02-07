@@ -4,7 +4,6 @@ RFP Sniper - SharePoint Integration Routes
 Browse, download, and upload files to SharePoint via Microsoft Graph API.
 """
 
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -12,10 +11,10 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.integration import IntegrationConfig, IntegrationProvider
+from app.services.auth_service import UserAuth
 from app.services.sharepoint_service import create_sharepoint_service
 
 router = APIRouter(prefix="/sharepoint", tags=["SharePoint"])
@@ -25,25 +24,27 @@ router = APIRouter(prefix="/sharepoint", tags=["SharePoint"])
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class SharePointFile(BaseModel):
     id: str
     name: str
     is_folder: bool
     size: int
-    last_modified: Optional[str] = None
-    web_url: Optional[str] = None
+    last_modified: str | None = None
+    web_url: str | None = None
 
 
 class UploadResult(BaseModel):
     id: str
     name: str
-    web_url: Optional[str] = None
+    web_url: str | None = None
     size: int
 
 
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 async def _get_sp_service(user_id: int, session: AsyncSession):
     """Load the user's SharePoint integration config and build a service."""
@@ -67,12 +68,13 @@ async def _get_sp_service(user_id: int, session: AsyncSession):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/browse", response_model=List[SharePointFile])
+
+@router.get("/browse", response_model=list[SharePointFile])
 async def browse_files(
     path: str = Query("/", description="Folder path to list"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SharePointFile]:
+) -> list[SharePointFile]:
     """List files and folders at a given SharePoint path."""
     sp = await _get_sp_service(current_user.id, session)
     try:
@@ -95,7 +97,7 @@ async def download_file(
         return Response(
             content=content,
             media_type="application/octet-stream",
-            headers={"Content-Disposition": f'attachment; filename="download"'},
+            headers={"Content-Disposition": 'attachment; filename="download"'},
         )
     except Exception as e:
         raise HTTPException(502, f"SharePoint API error: {e}")

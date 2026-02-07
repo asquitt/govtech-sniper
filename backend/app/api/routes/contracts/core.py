@@ -8,17 +8,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.contract import ContractAward
 from app.schemas.contract import (
     ContractCreate,
-    ContractUpdate,
-    ContractRead,
     ContractListResponse,
+    ContractRead,
+    ContractUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()

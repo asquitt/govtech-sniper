@@ -6,13 +6,14 @@ Scheduled maintenance for audit retention and operational alerts.
 
 import asyncio
 from datetime import datetime
+
 import structlog
 
-from app.tasks.celery_app import celery_app
-from app.database import get_celery_session_context
 from app.config import settings
-from app.services.audit_service import purge_audit_events
+from app.database import get_celery_session_context
 from app.services.alert_service import get_alert_counts
+from app.services.audit_service import purge_audit_events
+from app.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 

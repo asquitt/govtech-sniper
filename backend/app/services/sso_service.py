@@ -4,7 +4,6 @@ RFP Sniper - SSO Service
 Token exchange helpers for Okta and Microsoft Entra ID.
 """
 
-from typing import Dict
 
 import httpx
 
@@ -16,7 +15,7 @@ async def exchange_sso_code(
     provider: IntegrationProvider,
     config: dict,
     code: str,
-) -> Dict:
+) -> dict:
     if settings.mock_sso:
         return {
             "status": "mocked",
@@ -32,7 +31,10 @@ async def exchange_sso_code(
         issuer = config.get("issuer") or f"https://{config.get('domain')}/oauth2/default"
         token_url = f"{issuer}/v1/token"
     elif provider == IntegrationProvider.MICROSOFT:
-        authority = config.get("authority") or f"https://login.microsoftonline.com/{config.get('tenant_id')}"
+        authority = (
+            config.get("authority")
+            or f"https://login.microsoftonline.com/{config.get('tenant_id')}"
+        )
         token_url = f"{authority}/oauth2/v2.0/token"
     else:
         raise ValueError("Unsupported SSO provider")

@@ -7,23 +7,21 @@ Celery tasks for SAM.gov data ingestion.
 import asyncio
 import hashlib
 import json
-from typing import List, Optional
-import structlog
 
-from celery import shared_task
+import structlog
 from sqlalchemy import desc
 from sqlmodel import select
 
-from app.tasks.celery_app import celery_app
-from app.services.ingest_service import SAMGovService, SAMGovAPIError
-from app.services.filters import KillerFilterService, quick_disqualify
-from app.services.rfp_downloader import get_rfp_downloader
-from app.schemas.rfp import SAMSearchParams
-from app.database import get_celery_session_context
 from app.config import settings
+from app.database import get_celery_session_context
+from app.models.opportunity_snapshot import SAMOpportunitySnapshot
 from app.models.rfp import RFP, RFPStatus
 from app.models.user import User, UserProfile
-from app.models.opportunity_snapshot import SAMOpportunitySnapshot
+from app.schemas.rfp import SAMSearchParams
+from app.services.filters import KillerFilterService, quick_disqualify
+from app.services.ingest_service import SAMGovAPIError, SAMGovService
+from app.services.rfp_downloader import get_rfp_downloader
+from app.tasks.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
@@ -50,13 +48,13 @@ def ingest_sam_opportunities(
     keywords: str,
     days_back: int = 90,
     limit: int = 25,
-    naics_codes: Optional[List[str]] = None,
+    naics_codes: list[str] | None = None,
     apply_filter: bool = True,
-    mock_variant: Optional[str] = None,
+    mock_variant: str | None = None,
 ) -> dict:
     """
     Celery task to ingest opportunities from SAM.gov.
-    
+
     Args:
         user_id: User requesting the ingest
         keywords: Search keywords
@@ -64,7 +62,7 @@ def ingest_sam_opportunities(
         limit: Maximum results
         naics_codes: Filter by NAICS codes
         apply_filter: Whether to run Killer Filter
-        
+
     Returns:
         Summary of ingested opportunities
     """
@@ -75,11 +73,11 @@ def ingest_sam_opportunities(
         user_id=user_id,
         keywords=keywords,
     )
-    
+
     async def _ingest():
         sam_service = SAMGovService(mock_variant=mock_variant)
         filter_service = KillerFilterService() if apply_filter else None
-        
+
         def _hash_payload(payload: dict) -> str:
             payload_str = json.dumps(payload, sort_keys=True, default=str)
             return hashlib.sha256(payload_str.encode("utf-8")).hexdigest()
@@ -119,7 +117,7 @@ def ingest_sam_opportunities(
                 "snapshots_skipped": 0,
                 "attachments_downloaded": 0,
             }
-        
+
         # Get user profile for filtering
         user_profile = None
         if apply_filter:
@@ -128,7 +126,7 @@ def ingest_sam_opportunities(
                     select(UserProfile).where(UserProfile.user_id == user_id)
                 )
                 user_profile = result.scalar_one_or_none()
-        
+
         saved_count = 0
         filtered_count = 0
         snapshots_created = 0
@@ -196,7 +194,10 @@ def ingest_sam_opportunities(
                     if (
                         download_enabled
                         and notice_id
-                        and (existing_rfp.attachment_paths is None or len(existing_rfp.attachment_paths) == 0)
+                        and (
+                            existing_rfp.attachment_paths is None
+                            or len(existing_rfp.attachment_paths) == 0
+                        )
                     ):
                         download_queue.append((rfp_id, notice_id))
 
@@ -251,9 +252,7 @@ def ingest_sam_opportunities(
                     if not downloaded:
                         continue
 
-                    result = await session.execute(
-                        select(RFP).where(RFP.id == rfp_id)
-                    )
+                    result = await session.execute(select(RFP).where(RFP.id == rfp_id))
                     rfp = result.scalar_one_or_none()
                     if not rfp:
                         continue
@@ -269,30 +268,32 @@ def ingest_sam_opportunities(
                                 break
 
                 await session.commit()
-        
+
         # Run AI Killer Filter on remaining RFPs (if enabled)
         if apply_filter and filter_service and user_profile:
             async with get_celery_session_context() as session:
                 result = await session.execute(
-                    select(RFP).where(
+                    select(RFP)
+                    .where(
                         RFP.user_id == user_id,
                         RFP.is_qualified.is_(None),
                         RFP.status == RFPStatus.NEW,
-                    ).limit(10)  # Batch limit to control costs
+                    )
+                    .limit(10)  # Batch limit to control costs
                 )
                 rfps_to_filter = result.scalars().all()
-                
+
                 for rfp in rfps_to_filter:
                     filter_result = await filter_service.filter_rfp(rfp, user_profile)
                     rfp.is_qualified = filter_result.is_qualified
                     rfp.qualification_reason = filter_result.reason
                     rfp.qualification_score = filter_result.confidence * 100
-                    
+
                     if not filter_result.is_qualified:
                         filtered_count += 1
-                
+
                 await session.commit()
-        
+
         return {
             "task_id": task_id,
             "status": "completed",
@@ -304,7 +305,7 @@ def ingest_sam_opportunities(
             "snapshots_skipped": snapshots_skipped,
             "attachments_downloaded": attachments_downloaded,
         }
-    
+
     return run_async(_ingest())
 
 
@@ -315,17 +316,17 @@ def periodic_sam_scan():
     Runs via Celery Beat schedule.
     """
     logger.info("Running periodic SAM.gov scan")
-    
+
     async def _scan_all():
         async with get_celery_session_context() as session:
             # Get all active users with profiles
             result = await session.execute(
-                select(User, UserProfile).join(
-                    UserProfile, User.id == UserProfile.user_id
-                ).where(User.is_active == True)
+                select(User, UserProfile)
+                .join(UserProfile, User.id == UserProfile.user_id)
+                .where(User.is_active == True)
             )
             users_with_profiles = result.all()
-            
+
             for user, profile in users_with_profiles:
                 if profile.include_keywords:
                     # Queue individual ingest task for each user
@@ -342,6 +343,6 @@ def periodic_sam_scan():
                             f"Queued SAM scan for user {user.id}",
                             keyword=keyword,
                         )
-    
+
     run_async(_scan_all())
     return {"status": "scans_queued"}

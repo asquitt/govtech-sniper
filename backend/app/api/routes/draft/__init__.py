@@ -6,13 +6,13 @@ Split from single draft.py (999 lines) into focused sub-modules.
 
 from fastapi import APIRouter
 
+from app.api.routes.draft.evidence import router as evidence_router
+from app.api.routes.draft.focus_documents import router as focus_documents_router
+from app.api.routes.draft.generation import router as generation_router
+from app.api.routes.draft.outline import router as outline_router
 from app.api.routes.draft.proposals import router as proposals_router
 from app.api.routes.draft.sections import router as sections_router
-from app.api.routes.draft.evidence import router as evidence_router
 from app.api.routes.draft.submission_packages import router as packages_router
-from app.api.routes.draft.generation import router as generation_router
-from app.api.routes.draft.focus_documents import router as focus_documents_router
-from app.api.routes.draft.outline import router as outline_router
 
 router = APIRouter(prefix="/draft", tags=["Draft Generation"])
 router.include_router(proposals_router)

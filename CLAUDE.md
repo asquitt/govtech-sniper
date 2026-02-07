@@ -143,6 +143,27 @@ docker compose logs <service> --tail 20                    # Check for errors
 - `settings.mock_ai` provides deterministic fallback for testing only.
 - Use Flash model for latency-sensitive operations (rewrite), Pro for deep analysis.
 
+## Developer Setup (One-Time)
+
+```bash
+# Install git pre-commit hook (runs ruff + tsc on staged files)
+cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
+
+## Linting Commands
+
+```bash
+# Python
+ruff check backend/app/               # Lint
+ruff check --fix backend/app/         # Auto-fix
+ruff format backend/app/              # Format
+
+# TypeScript
+cd frontend && npx tsc --noEmit       # Type check (whole project, never single files)
+cd frontend && npx prettier --write src/  # Format
+cd frontend && npm run lint           # ESLint
+```
+
 ## When In Doubt
 - Favor reliability and data correctness.
 - Ask only when blocked.

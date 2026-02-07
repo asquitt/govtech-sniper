@@ -5,36 +5,34 @@ Schedule, assign, comment on, and complete color team reviews.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, func
+from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.review import (
+    CommentSeverity,
+    CommentStatus,
     ProposalReview,
     ReviewAssignment,
     ReviewComment,
-    ReviewType,
     ReviewStatus,
-    AssignmentStatus,
-    CommentSeverity,
-    CommentStatus,
+    ReviewType,
 )
 from app.schemas.review import (
-    ReviewCreate,
-    ReviewRead,
-    ReviewComplete,
     AssignmentCreate,
     AssignmentRead,
     CommentCreate,
-    CommentUpdate,
     CommentRead,
+    CommentUpdate,
+    ReviewComplete,
+    ReviewCreate,
+    ReviewRead,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
@@ -43,6 +41,7 @@ router = APIRouter(prefix="/reviews", tags=["Reviews"])
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _get_review_or_404(
     review_id: int,
@@ -57,6 +56,7 @@ async def _get_review_or_404(
 # ---------------------------------------------------------------------------
 # Schedule / List reviews for a proposal
 # ---------------------------------------------------------------------------
+
 
 @router.post("/proposals/{proposal_id}/reviews", response_model=ReviewRead, status_code=201)
 async def schedule_review(
@@ -87,18 +87,22 @@ async def schedule_review(
         session,
         user_id=current_user.id,
         event_type="review.scheduled",
-        payload={"review_id": review.id, "proposal_id": proposal_id, "review_type": payload.review_type},
+        payload={
+            "review_id": review.id,
+            "proposal_id": proposal_id,
+            "review_type": payload.review_type,
+        },
     )
 
     return ReviewRead.model_validate(review)
 
 
-@router.get("/proposals/{proposal_id}/reviews", response_model=List[ReviewRead])
+@router.get("/proposals/{proposal_id}/reviews", response_model=list[ReviewRead])
 async def list_reviews(
     proposal_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ReviewRead]:
+) -> list[ReviewRead]:
     """List all reviews for a proposal."""
     result = await session.execute(
         select(ProposalReview)
@@ -112,6 +116,7 @@ async def list_reviews(
 # ---------------------------------------------------------------------------
 # Assign reviewers
 # ---------------------------------------------------------------------------
+
 
 @router.post("/{review_id}/assign", response_model=AssignmentRead, status_code=201)
 async def assign_reviewer(
@@ -147,6 +152,7 @@ async def assign_reviewer(
 # Comments
 # ---------------------------------------------------------------------------
 
+
 @router.post("/{review_id}/comments", response_model=CommentRead, status_code=201)
 async def add_comment(
     review_id: int,
@@ -180,12 +186,12 @@ async def add_comment(
     return CommentRead.model_validate(comment)
 
 
-@router.get("/{review_id}/comments", response_model=List[CommentRead])
+@router.get("/{review_id}/comments", response_model=list[CommentRead])
 async def list_comments(
     review_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[CommentRead]:
+) -> list[CommentRead]:
     """List comments for a review."""
     await _get_review_or_404(review_id, session)
 
@@ -241,6 +247,7 @@ async def update_comment(
 # ---------------------------------------------------------------------------
 # Complete review
 # ---------------------------------------------------------------------------
+
 
 @router.patch("/{review_id}/complete", response_model=ReviewRead)
 async def complete_review(

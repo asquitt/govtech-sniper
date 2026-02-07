@@ -4,26 +4,24 @@ RFP Sniper - Salesforce Integration Routes
 Salesforce CRM sync, field mappings, and webhook ingestion.
 """
 
-from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.integration import IntegrationConfig, IntegrationProvider
 from app.models.salesforce_mapping import SalesforceFieldMapping
-from app.services.salesforce_service import create_salesforce_service
-from app.services.encryption_service import decrypt_secrets
 from app.schemas.salesforce import (
     SalesforceFieldMappingCreate,
     SalesforceFieldMappingRead,
     SalesforceOpportunityRead,
     SalesforceSyncResult,
 )
+from app.services.auth_service import UserAuth
+from app.services.encryption_service import decrypt_secrets
+from app.services.salesforce_service import create_salesforce_service
 
 router = APIRouter(prefix="/salesforce", tags=["Salesforce"])
 
@@ -34,9 +32,8 @@ SF_SECRET_FIELDS = ["client_secret", "security_token"]
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_sf_integration(
-    user_id: int, session: AsyncSession
-) -> IntegrationConfig:
+
+async def _get_sf_integration(user_id: int, session: AsyncSession) -> IntegrationConfig:
     """Load the user's enabled Salesforce integration."""
     result = await session.execute(
         select(IntegrationConfig).where(
@@ -63,6 +60,7 @@ async def _build_sf_service(integration: IntegrationConfig):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/status")
 async def salesforce_status(
@@ -96,11 +94,11 @@ async def salesforce_status(
         }
 
 
-@router.get("/opportunities", response_model=List[SalesforceOpportunityRead])
+@router.get("/opportunities", response_model=list[SalesforceOpportunityRead])
 async def list_opportunities(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SalesforceOpportunityRead]:
+) -> list[SalesforceOpportunityRead]:
     """List Salesforce opportunities."""
     integration = await _get_sf_integration(current_user.id, session)
     svc = await _build_sf_service(integration)
@@ -130,11 +128,11 @@ async def trigger_sync(
         raise HTTPException(502, f"Sync failed: {e}")
 
 
-@router.get("/field-mappings", response_model=List[SalesforceFieldMappingRead])
+@router.get("/field-mappings", response_model=list[SalesforceFieldMappingRead])
 async def list_field_mappings(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SalesforceFieldMappingRead]:
+) -> list[SalesforceFieldMappingRead]:
     """List field mappings for the user's Salesforce integration."""
     integration = await _get_sf_integration(current_user.id, session)
     result = await session.execute(

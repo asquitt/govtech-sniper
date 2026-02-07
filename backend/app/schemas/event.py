@@ -1,48 +1,47 @@
 """Industry event schemas."""
 
 from datetime import datetime
-from typing import Optional, List
 
 from pydantic import BaseModel
 
 
 class EventCreate(BaseModel):
     title: str
-    agency: Optional[str] = None
+    agency: str | None = None
     event_type: str = "industry_day"
     date: datetime
-    location: Optional[str] = None
-    registration_url: Optional[str] = None
-    related_rfp_id: Optional[int] = None
-    description: Optional[str] = None
-    source: Optional[str] = None
+    location: str | None = None
+    registration_url: str | None = None
+    related_rfp_id: int | None = None
+    description: str | None = None
+    source: str | None = None
 
 
 class EventUpdate(BaseModel):
-    title: Optional[str] = None
-    agency: Optional[str] = None
-    event_type: Optional[str] = None
-    date: Optional[datetime] = None
-    location: Optional[str] = None
-    registration_url: Optional[str] = None
-    related_rfp_id: Optional[int] = None
-    description: Optional[str] = None
-    source: Optional[str] = None
-    is_archived: Optional[bool] = None
+    title: str | None = None
+    agency: str | None = None
+    event_type: str | None = None
+    date: datetime | None = None
+    location: str | None = None
+    registration_url: str | None = None
+    related_rfp_id: int | None = None
+    description: str | None = None
+    source: str | None = None
+    is_archived: bool | None = None
 
 
 class EventRead(BaseModel):
     id: int
     user_id: int
     title: str
-    agency: Optional[str]
+    agency: str | None
     event_type: str
     date: datetime
-    location: Optional[str]
-    registration_url: Optional[str]
-    related_rfp_id: Optional[int]
-    description: Optional[str]
-    source: Optional[str]
+    location: str | None
+    registration_url: str | None
+    related_rfp_id: int | None
+    description: str | None
+    source: str | None
     is_archived: bool
     created_at: datetime
     updated_at: datetime
@@ -51,5 +50,5 @@ class EventRead(BaseModel):
 
 
 class EventListResponse(BaseModel):
-    events: List[EventRead]
+    events: list[EventRead]
     total: int

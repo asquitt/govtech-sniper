@@ -5,20 +5,19 @@ API endpoints for proposal graphics requests.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
+from app.database import get_session
+from app.models.graphics import GraphicsRequestStatus, ProposalGraphicRequest
 from app.models.proposal import Proposal
 from app.services.audit_service import log_audit_event
-from app.services.graphics_generator import generate_graphic, TEMPLATE_TYPES
+from app.services.auth_service import UserAuth
+from app.services.graphics_generator import TEMPLATE_TYPES, generate_graphic
 
 router = APIRouter(prefix="/graphics", tags=["Proposal Graphics"])
 
@@ -26,47 +25,45 @@ router = APIRouter(prefix="/graphics", tags=["Proposal Graphics"])
 class GraphicsRequestCreate(BaseModel):
     proposal_id: int
     title: str
-    description: Optional[str] = None
-    section_id: Optional[int] = None
-    due_date: Optional[date] = None
+    description: str | None = None
+    section_id: int | None = None
+    due_date: date | None = None
 
 
 class GraphicsRequestUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    section_id: Optional[int] = None
-    due_date: Optional[date] = None
-    status: Optional[GraphicsRequestStatus] = None
-    asset_url: Optional[str] = None
-    notes: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
+    section_id: int | None = None
+    due_date: date | None = None
+    status: GraphicsRequestStatus | None = None
+    asset_url: str | None = None
+    notes: str | None = None
 
 
 class GraphicsRequestResponse(BaseModel):
     id: int
     proposal_id: int
-    section_id: Optional[int]
+    section_id: int | None
     user_id: int
     title: str
-    description: Optional[str]
+    description: str | None
     status: GraphicsRequestStatus
-    due_date: Optional[date]
-    asset_url: Optional[str]
-    notes: Optional[str]
+    due_date: date | None
+    asset_url: str | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-@router.get("", response_model=List[GraphicsRequestResponse])
+@router.get("", response_model=list[GraphicsRequestResponse])
 async def list_requests(
-    proposal_id: Optional[int] = Query(None),
+    proposal_id: int | None = Query(None),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[GraphicsRequestResponse]:
-    query = select(ProposalGraphicRequest).where(
-        ProposalGraphicRequest.user_id == current_user.id
-    )
+) -> list[GraphicsRequestResponse]:
+    query = select(ProposalGraphicRequest).where(ProposalGraphicRequest.user_id == current_user.id)
     if proposal_id is not None:
         query = query.where(ProposalGraphicRequest.proposal_id == proposal_id)
     result = await session.execute(query.order_by(ProposalGraphicRequest.created_at.desc()))
@@ -182,17 +179,18 @@ async def delete_request(
 # AI Graphics Generation
 # ---------------------------------------------------------------------------
 
+
 class GraphicGeneratePayload(BaseModel):
     content: str
     template_type: str
-    title: Optional[str] = None
+    title: str | None = None
 
 
 class GraphicGenerateResponse(BaseModel):
     mermaid_code: str
     template_type: str
     title: str
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class TemplateInfo(BaseModel):
@@ -200,15 +198,12 @@ class TemplateInfo(BaseModel):
     label: str
 
 
-@router.get("/templates", response_model=List[TemplateInfo])
+@router.get("/templates", response_model=list[TemplateInfo])
 async def list_templates(
     current_user: UserAuth = Depends(get_current_user),
-) -> List[TemplateInfo]:
+) -> list[TemplateInfo]:
     """List available graphic template types."""
-    return [
-        TemplateInfo(type=t, label=t.replace("_", " ").title())
-        for t in TEMPLATE_TYPES
-    ]
+    return [TemplateInfo(type=t, label=t.replace("_", " ").title()) for t in TEMPLATE_TYPES]
 
 
 @router.post("/generate", response_model=GraphicGenerateResponse)

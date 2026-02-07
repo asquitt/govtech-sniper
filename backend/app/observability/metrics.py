@@ -5,10 +5,11 @@ Custom metrics and performance tracking.
 """
 
 import time
-from functools import wraps
-from typing import Dict, Optional, Callable, Any
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
+from functools import wraps
+from typing import Any
 
 import structlog
 
@@ -22,22 +23,22 @@ class MetricsCollector:
     """
 
     def __init__(self):
-        self._counters: Dict[str, int] = defaultdict(int)
-        self._gauges: Dict[str, float] = {}
-        self._histograms: Dict[str, list] = defaultdict(list)
+        self._counters: dict[str, int] = defaultdict(int)
+        self._gauges: dict[str, float] = {}
+        self._histograms: dict[str, list] = defaultdict(list)
         self._start_time = datetime.utcnow()
 
-    def increment(self, name: str, value: int = 1, tags: Optional[Dict[str, str]] = None):
+    def increment(self, name: str, value: int = 1, tags: dict[str, str] | None = None):
         """Increment a counter metric."""
         key = self._make_key(name, tags)
         self._counters[key] += value
 
-    def gauge(self, name: str, value: float, tags: Optional[Dict[str, str]] = None):
+    def gauge(self, name: str, value: float, tags: dict[str, str] | None = None):
         """Set a gauge metric."""
         key = self._make_key(name, tags)
         self._gauges[key] = value
 
-    def histogram(self, name: str, value: float, tags: Optional[Dict[str, str]] = None):
+    def histogram(self, name: str, value: float, tags: dict[str, str] | None = None):
         """Record a histogram value."""
         key = self._make_key(name, tags)
         self._histograms[key].append(value)
@@ -45,14 +46,14 @@ class MetricsCollector:
         if len(self._histograms[key]) > 1000:
             self._histograms[key] = self._histograms[key][-1000:]
 
-    def _make_key(self, name: str, tags: Optional[Dict[str, str]] = None) -> str:
+    def _make_key(self, name: str, tags: dict[str, str] | None = None) -> str:
         """Create a unique key for the metric."""
         if not tags:
             return name
         tag_str = ",".join(f"{k}={v}" for k, v in sorted(tags.items()))
         return f"{name}[{tag_str}]"
 
-    def get_all(self) -> Dict[str, Any]:
+    def get_all(self) -> dict[str, Any]:
         """Get all collected metrics."""
         result = {
             "counters": dict(self._counters),
@@ -93,22 +94,22 @@ def get_metrics() -> MetricsCollector:
     return _metrics
 
 
-def increment_counter(name: str, value: int = 1, tags: Optional[Dict[str, str]] = None):
+def increment_counter(name: str, value: int = 1, tags: dict[str, str] | None = None):
     """Increment a counter metric."""
     _metrics.increment(name, value, tags)
 
 
-def set_gauge(name: str, value: float, tags: Optional[Dict[str, str]] = None):
+def set_gauge(name: str, value: float, tags: dict[str, str] | None = None):
     """Set a gauge metric."""
     _metrics.gauge(name, value, tags)
 
 
-def record_histogram(name: str, value: float, tags: Optional[Dict[str, str]] = None):
+def record_histogram(name: str, value: float, tags: dict[str, str] | None = None):
     """Record a histogram value."""
     _metrics.histogram(name, value, tags)
 
 
-def track_time(metric_name: str, tags: Optional[Dict[str, str]] = None):
+def track_time(metric_name: str, tags: dict[str, str] | None = None):
     """
     Decorator to track function execution time.
 
@@ -117,6 +118,7 @@ def track_time(metric_name: str, tags: Optional[Dict[str, str]] = None):
         async def analyze_rfp(rfp_id: int):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -125,7 +127,7 @@ def track_time(metric_name: str, tags: Optional[Dict[str, str]] = None):
                 result = await func(*args, **kwargs)
                 increment_counter(f"{metric_name}.success", tags=tags)
                 return result
-            except Exception as e:
+            except Exception:
                 increment_counter(f"{metric_name}.error", tags=tags)
                 raise
             finally:
@@ -139,7 +141,7 @@ def track_time(metric_name: str, tags: Optional[Dict[str, str]] = None):
                 result = func(*args, **kwargs)
                 increment_counter(f"{metric_name}.success", tags=tags)
                 return result
-            except Exception as e:
+            except Exception:
                 increment_counter(f"{metric_name}.error", tags=tags)
                 raise
             finally:
@@ -147,6 +149,7 @@ def track_time(metric_name: str, tags: Optional[Dict[str, str]] = None):
                 record_histogram(f"{metric_name}.duration_ms", duration, tags)
 
         import asyncio
+
         if asyncio.iscoroutinefunction(func):
             return async_wrapper
         return sync_wrapper
@@ -172,7 +175,8 @@ class MetricsMiddleware:
 
         # Normalize path for metrics (remove IDs)
         import re
-        normalized_path = re.sub(r'/\d+', '/{id}', path)
+
+        normalized_path = re.sub(r"/\d+", "/{id}", path)
 
         response_status = 500
 

@@ -4,11 +4,10 @@ RFP Sniper - Audit Service
 Helpers for writing audit events.
 """
 
-from typing import Optional
 from datetime import datetime, timedelta
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditEvent
 
@@ -16,11 +15,11 @@ from app.models.audit import AuditEvent
 async def log_audit_event(
     session: AsyncSession,
     *,
-    user_id: Optional[int],
+    user_id: int | None,
     entity_type: str,
-    entity_id: Optional[int],
+    entity_id: int | None,
     action: str,
-    metadata: Optional[dict] = None,
+    metadata: dict | None = None,
 ) -> AuditEvent:
     """
     Record an audit event.
@@ -43,7 +42,5 @@ async def purge_audit_events(session: AsyncSession, retention_days: int) -> int:
     Returns number of rows deleted.
     """
     cutoff = datetime.utcnow() - timedelta(days=retention_days)
-    result = await session.execute(
-        delete(AuditEvent).where(AuditEvent.created_at < cutoff)
-    )
+    result = await session.execute(delete(AuditEvent).where(AuditEvent.created_at < cutoff))
     return result.rowcount or 0

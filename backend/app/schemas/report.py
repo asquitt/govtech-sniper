@@ -1,7 +1,6 @@
 """Report schemas for request/response validation."""
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,8 +10,8 @@ from app.models.report import ReportType, ScheduleFrequency
 class ReportConfig(BaseModel):
     columns: list[str] = Field(default_factory=list)
     filters: dict[str, str] = Field(default_factory=dict)
-    group_by: Optional[str] = None
-    sort_by: Optional[str] = None
+    group_by: str | None = None
+    sort_by: str | None = None
     sort_order: str = "asc"
 
 
@@ -20,7 +19,7 @@ class SavedReportCreate(BaseModel):
     name: str = Field(max_length=255)
     report_type: ReportType
     config: ReportConfig = Field(default_factory=ReportConfig)
-    schedule: Optional[ScheduleFrequency] = None
+    schedule: ScheduleFrequency | None = None
 
 
 class SavedReportRead(BaseModel):
@@ -29,17 +28,17 @@ class SavedReportRead(BaseModel):
     name: str
     report_type: ReportType
     config: dict
-    schedule: Optional[ScheduleFrequency]
-    last_generated_at: Optional[datetime]
+    schedule: ScheduleFrequency | None
+    last_generated_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
 
 class SavedReportUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, max_length=255)
-    report_type: Optional[ReportType] = None
-    config: Optional[ReportConfig] = None
-    schedule: Optional[ScheduleFrequency] = None
+    name: str | None = Field(default=None, max_length=255)
+    report_type: ReportType | None = None
+    config: ReportConfig | None = None
+    schedule: ScheduleFrequency | None = None
 
 
 class ReportDataResponse(BaseModel):

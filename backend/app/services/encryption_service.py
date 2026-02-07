@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
-from typing import Any, Dict
+from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -59,7 +59,7 @@ def redact_value(value: Any) -> Any:
     return _REDACTED_VALUE
 
 
-def encrypt_secrets(config: Dict[str, Any], secret_fields: list[str]) -> Dict[str, Any]:
+def encrypt_secrets(config: dict[str, Any], secret_fields: list[str]) -> dict[str, Any]:
     updated = dict(config)
     for key in secret_fields:
         if key in updated and updated[key] not in (None, ""):
@@ -67,7 +67,7 @@ def encrypt_secrets(config: Dict[str, Any], secret_fields: list[str]) -> Dict[st
     return updated
 
 
-def decrypt_secrets(config: Dict[str, Any], secret_fields: list[str]) -> Dict[str, Any]:
+def decrypt_secrets(config: dict[str, Any], secret_fields: list[str]) -> dict[str, Any]:
     updated = dict(config)
     for key in secret_fields:
         if key in updated and updated[key] not in (None, ""):
@@ -75,7 +75,7 @@ def decrypt_secrets(config: Dict[str, Any], secret_fields: list[str]) -> Dict[st
     return updated
 
 
-def redact_secrets(config: Dict[str, Any], secret_fields: list[str]) -> Dict[str, Any]:
+def redact_secrets(config: dict[str, Any], secret_fields: list[str]) -> dict[str, Any]:
     updated = dict(config)
     for key in secret_fields:
         if key in updated and updated[key] not in (None, ""):

@@ -2,31 +2,30 @@
 Draft Routes - Section Evidence CRUD
 """
 
-from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user_optional, resolve_user_id
-from app.services.auth_service import UserAuth
+from app.database import get_session
+from app.models.knowledge_base import DocumentChunk, KnowledgeBaseDocument
 from app.models.proposal import Proposal, ProposalSection, SectionEvidence
-from app.models.knowledge_base import KnowledgeBaseDocument, DocumentChunk
 from app.schemas.proposal import SectionEvidenceCreate, SectionEvidenceRead
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
 
 
-@router.get("/sections/{section_id}/evidence", response_model=List[SectionEvidenceRead])
+@router.get("/sections/{section_id}/evidence", response_model=list[SectionEvidenceRead])
 async def list_section_evidence(
     section_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
-) -> List[SectionEvidenceRead]:
+) -> list[SectionEvidenceRead]:
     """
     List evidence links for a section.
     """
@@ -51,12 +50,10 @@ async def list_section_evidence(
     )
     evidence_links = evidence_result.scalars().all()
 
-    response: List[SectionEvidenceRead] = []
+    response: list[SectionEvidenceRead] = []
     for link in evidence_links:
         doc_result = await session.execute(
-            select(KnowledgeBaseDocument).where(
-                KnowledgeBaseDocument.id == link.document_id
-            )
+            select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == link.document_id)
         )
         doc = doc_result.scalar_one_or_none()
         response.append(
@@ -80,8 +77,8 @@ async def list_section_evidence(
 async def add_section_evidence(
     section_id: int,
     payload: SectionEvidenceCreate,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> SectionEvidenceRead:
     """
@@ -104,9 +101,7 @@ async def add_section_evidence(
         raise HTTPException(status_code=404, detail="Section not found")
 
     document_result = await session.execute(
-        select(KnowledgeBaseDocument).where(
-            KnowledgeBaseDocument.id == payload.document_id
-        )
+        select(KnowledgeBaseDocument).where(KnowledgeBaseDocument.id == payload.document_id)
     )
     document = document_result.scalar_one_or_none()
     if not document or document.user_id != resolved_user_id:
@@ -175,8 +170,8 @@ async def add_section_evidence(
 async def delete_section_evidence(
     section_id: int,
     evidence_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """

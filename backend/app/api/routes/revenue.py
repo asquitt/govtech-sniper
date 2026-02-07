@@ -6,24 +6,24 @@ from collections import defaultdict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, case
-from sqlmodel import select, col
+from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.rfp import RFP
-from app.models.capture import CapturePlan, CaptureStage
+from app.database import get_session
+from app.models.capture import CapturePlan
 from app.models.contract import ContractAward, ContractStatus
+from app.models.rfp import RFP
 from app.schemas.revenue import (
+    AgencyRevenueResponse,
+    AgencyRevenueSummary,
     PipelineStageSummary,
     PipelineSummaryResponse,
     RevenueTimelinePoint,
     RevenueTimelineResponse,
-    AgencyRevenueSummary,
-    AgencyRevenueResponse,
 )
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/revenue", tags=["Revenue"])
 
@@ -42,9 +42,7 @@ async def get_pipeline_summary(
             func.count(CapturePlan.id).label("count"),
             func.coalesce(func.sum(RFP.estimated_value), 0).label("unweighted"),
             func.coalesce(
-                func.sum(
-                    RFP.estimated_value * CapturePlan.win_probability / 100.0
-                ),
+                func.sum(RFP.estimated_value * CapturePlan.win_probability / 100.0),
                 0,
             ).label("weighted"),
         )
@@ -173,9 +171,7 @@ async def get_revenue_by_agency(
             func.count(CapturePlan.id).label("count"),
             func.coalesce(func.sum(RFP.estimated_value), 0).label("unweighted"),
             func.coalesce(
-                func.sum(
-                    RFP.estimated_value * CapturePlan.win_probability / 100.0
-                ),
+                func.sum(RFP.estimated_value * CapturePlan.win_probability / 100.0),
                 0,
             ).label("weighted"),
         )

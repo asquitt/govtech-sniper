@@ -5,18 +5,17 @@ Manage webhook subscriptions.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.webhook import WebhookSubscription, WebhookDelivery
+from app.database import get_session
+from app.models.webhook import WebhookDelivery, WebhookSubscription
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 
@@ -24,25 +23,25 @@ router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
 class WebhookCreate(BaseModel):
     name: str
     target_url: HttpUrl
-    secret: Optional[str] = None
-    event_types: List[str] = []
+    secret: str | None = None
+    event_types: list[str] = []
     is_active: bool = True
 
 
 class WebhookUpdate(BaseModel):
-    name: Optional[str] = None
-    target_url: Optional[HttpUrl] = None
-    secret: Optional[str] = None
-    event_types: Optional[List[str]] = None
-    is_active: Optional[bool] = None
+    name: str | None = None
+    target_url: HttpUrl | None = None
+    secret: str | None = None
+    event_types: list[str] | None = None
+    is_active: bool | None = None
 
 
 class WebhookResponse(BaseModel):
     id: int
     name: str
     target_url: str
-    secret: Optional[str]
-    event_types: List[str]
+    secret: str | None
+    event_types: list[str]
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -56,19 +55,19 @@ class DeliveryResponse(BaseModel):
     event_type: str
     payload: dict
     status: str
-    response_code: Optional[int]
-    response_body: Optional[str]
+    response_code: int | None
+    response_body: str | None
     created_at: datetime
-    delivered_at: Optional[datetime]
+    delivered_at: datetime | None
 
     model_config = {"from_attributes": True}
 
 
-@router.get("", response_model=List[WebhookResponse])
+@router.get("", response_model=list[WebhookResponse])
 async def list_webhooks(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[WebhookResponse]:
+) -> list[WebhookResponse]:
     result = await session.execute(
         select(WebhookSubscription).where(WebhookSubscription.user_id == current_user.id)
     )
@@ -172,12 +171,12 @@ async def delete_webhook(
     return {"message": "Webhook deleted"}
 
 
-@router.get("/{webhook_id}/deliveries", response_model=List[DeliveryResponse])
+@router.get("/{webhook_id}/deliveries", response_model=list[DeliveryResponse])
 async def list_webhook_deliveries(
     webhook_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[DeliveryResponse]:
+) -> list[DeliveryResponse]:
     # Ensure ownership
     result = await session.execute(
         select(WebhookSubscription).where(

@@ -7,7 +7,6 @@ Requires IntegrationConfig with provider=sharepoint and config containing:
 """
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -32,7 +31,7 @@ class SharePointService:
         self.client_secret = client_secret
         self.site_id = site_id
         self.drive_id = drive_id
-        self._token: Optional[str] = None
+        self._token: str | None = None
 
     async def _get_token(self) -> str:
         """Acquire OAuth2 client credentials token from Azure AD."""
@@ -60,7 +59,11 @@ class SharePointService:
     async def list_files(self, folder_path: str = "/") -> list[dict]:
         """List files and folders at a given path."""
         token = await self._get_token()
-        path_segment = f"root:/{folder_path.strip('/')}:/children" if folder_path.strip("/") else "root/children"
+        path_segment = (
+            f"root:/{folder_path.strip('/')}:/children"
+            if folder_path.strip("/")
+            else "root/children"
+        )
         url = f"{GRAPH_BASE}/drives/{self.drive_id}/{path_segment}"
         async with httpx.AsyncClient() as client:
             resp = await client.get(url, headers=self._headers(token))

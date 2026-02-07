@@ -5,29 +5,28 @@ User registration, login, and token management.
 """
 
 from datetime import datetime
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
-from pydantic import BaseModel, EmailStr, Field
 import pyotp
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
-from app.database import get_session
-from app.models.user import User, UserProfile, UserTier, ClearanceLevel
+from app.api.deps import check_rate_limit, get_current_user
 from app.config import settings
+from app.database import get_session
+from app.models.user import ClearanceLevel, User, UserProfile, UserTier
+from app.services.audit_service import log_audit_event
 from app.services.auth_service import (
-    hash_password,
-    verify_password,
-    create_token_pair,
-    decode_refresh_token,
-    validate_password_strength,
     TokenPair,
     UserAuth,
+    create_token_pair,
+    decode_refresh_token,
+    hash_password,
+    validate_password_strength,
+    verify_password,
 )
-from app.api.deps import get_current_user, check_rate_limit
-from app.services.audit_service import log_audit_event
 
 logger = structlog.get_logger(__name__)
 
@@ -38,38 +37,44 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 # Request/Response Schemas
 # =============================================================================
 
+
 class RegisterRequest(BaseModel):
     """User registration request."""
+
     email: EmailStr
     password: str
     full_name: str = Field(..., min_length=2, max_length=255)
-    company_name: Optional[str] = Field(None, max_length=255)
+    company_name: str | None = Field(None, max_length=255)
 
 
 class LoginRequest(BaseModel):
     """User login request."""
+
     email: EmailStr
     password: str
-    mfa_code: Optional[str] = None
+    mfa_code: str | None = None
 
 
 class RefreshRequest(BaseModel):
     """Token refresh request."""
+
     refresh_token: str
 
 
 class ChangePasswordRequest(BaseModel):
     """Password change request."""
+
     current_password: str
     new_password: str
 
 
 class UserResponse(BaseModel):
     """User information response."""
+
     id: int
     email: str
-    full_name: Optional[str]
-    company_name: Optional[str]
+    full_name: str | None
+    company_name: str | None
     tier: str
     is_active: bool
     api_calls_today: int
@@ -93,19 +98,21 @@ class MfaDisableRequest(BaseModel):
 
 class ProfileUpdateRequest(BaseModel):
     """Profile update request."""
-    naics_codes: Optional[list[str]] = None
-    clearance_level: Optional[ClearanceLevel] = None
-    set_aside_types: Optional[list[str]] = None
-    preferred_states: Optional[list[str]] = None
-    min_contract_value: Optional[int] = None
-    max_contract_value: Optional[int] = None
-    include_keywords: Optional[list[str]] = None
-    exclude_keywords: Optional[list[str]] = None
+
+    naics_codes: list[str] | None = None
+    clearance_level: ClearanceLevel | None = None
+    set_aside_types: list[str] | None = None
+    preferred_states: list[str] | None = None
+    min_contract_value: int | None = None
+    max_contract_value: int | None = None
+    include_keywords: list[str] | None = None
+    exclude_keywords: list[str] | None = None
 
 
 # =============================================================================
 # Registration & Login
 # =============================================================================
+
 
 @router.post(
     "/register",
@@ -123,9 +130,7 @@ async def register(
     Returns JWT tokens upon successful registration.
     """
     # Check if email already exists
-    result = await session.execute(
-        select(User).where(User.email == request.email.lower())
-    )
+    result = await session.execute(select(User).where(User.email == request.email.lower()))
     existing_user = result.scalar_one_or_none()
 
     if existing_user:
@@ -193,9 +198,7 @@ async def login(
     Returns JWT tokens upon successful authentication.
     """
     # Find user
-    result = await session.execute(
-        select(User).where(User.email == request.email.lower())
-    )
+    result = await session.execute(select(User).where(User.email == request.email.lower()))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(request.password, user.hashed_password):
@@ -252,9 +255,7 @@ async def enroll_mfa(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> MfaEnrollResponse:
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -290,9 +291,7 @@ async def verify_mfa(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
     if not user or not user.mfa_secret:
         raise HTTPException(status_code=404, detail="MFA not initialized")
@@ -321,9 +320,7 @@ async def disable_mfa(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
     if not user or not user.mfa_secret:
         raise HTTPException(status_code=404, detail="MFA not initialized")
@@ -364,9 +361,7 @@ async def refresh_token(
         )
 
     # Fetch user
-    result = await session.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
@@ -404,6 +399,7 @@ async def logout(
 # User Management
 # =============================================================================
 
+
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
     current_user: UserAuth = Depends(get_current_user),
@@ -412,9 +408,7 @@ async def get_current_user_info(
     """
     Get current user's information.
     """
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -436,17 +430,15 @@ async def get_current_user_info(
 
 @router.put("/me")
 async def update_current_user(
-    full_name: Optional[str] = None,
-    company_name: Optional[str] = None,
+    full_name: str | None = None,
+    company_name: str | None = None,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> UserResponse:
     """
     Update current user's basic information.
     """
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -484,9 +476,7 @@ async def change_password(
     """
     Change current user's password.
     """
-    result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    result = await session.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -520,6 +510,7 @@ async def change_password(
 # =============================================================================
 # Profile Management
 # =============================================================================
+
 
 @router.get("/profile")
 async def get_profile(

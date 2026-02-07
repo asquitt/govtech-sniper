@@ -5,7 +5,6 @@ Uses Pydantic Settings for type-safe environment variable handling.
 """
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,7 +15,7 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables.
     All sensitive values should be set via environment variables, not hardcoded.
     """
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -31,7 +30,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = Field(default=False)
     secret_key: str = Field(default="CHANGE_ME_IN_PRODUCTION")
-    field_encryption_key: Optional[str] = Field(default=None)
+    field_encryption_key: str | None = Field(default=None)
     audit_export_signing_key: str = Field(default="CHANGE_ME_AUDIT_SIGNING")
     audit_retention_days: int = Field(default=365, ge=30, le=3650)
 
@@ -52,23 +51,21 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # External APIs
     # -------------------------------------------------------------------------
-    sam_gov_api_key: Optional[str] = Field(default=None)
-    sam_gov_base_url: str = Field(
-        default="https://api.sam.gov/prod/opportunities/v2/search"
-    )
+    sam_gov_api_key: str | None = Field(default=None)
+    sam_gov_base_url: str = Field(default="https://api.sam.gov/prod/opportunities/v2/search")
     sam_download_attachments: bool = Field(default=True)
     sam_max_attachments: int = Field(default=10, ge=1, le=50)
     sam_circuit_breaker_enabled: bool = Field(default=True)
     sam_circuit_breaker_cooldown_seconds: int = Field(default=900, ge=60, le=86400)
     sam_circuit_breaker_max_seconds: int = Field(default=3600, ge=60, le=86400)
-    
-    gemini_api_key: Optional[str] = Field(default=None)
+
+    gemini_api_key: str | None = Field(default=None)
     gemini_model_pro: str = Field(default="gemini-1.5-pro")
     gemini_model_flash: str = Field(default="gemini-1.5-flash")
     mock_ai: bool = Field(default=False)
     mock_sam_gov: bool = Field(default=False)
     mock_sam_gov_variant: str = Field(default="v1")
-    sam_mock_attachments_dir: Optional[str] = Field(default=None)
+    sam_mock_attachments_dir: str | None = Field(default=None)
 
     # -------------------------------------------------------------------------
     # File Storage
@@ -86,7 +83,7 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Observability
     # -------------------------------------------------------------------------
-    sentry_dsn: Optional[str] = Field(default=None)
+    sentry_dsn: str | None = Field(default=None)
     sentry_environment: str = Field(default="development")
     sentry_traces_sample_rate: float = Field(default=0.1)
     log_level: str = Field(default="INFO")
@@ -97,11 +94,11 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # SCIM Provisioning
     # -------------------------------------------------------------------------
-    scim_bearer_token: Optional[str] = Field(default=None)
+    scim_bearer_token: str | None = Field(default=None)
     scim_default_team_name: str = Field(default="Default Team")
     scim_default_role: str = Field(default="member")
     scim_auto_create_team: bool = Field(default=True)
-    scim_group_role_map: Optional[str] = Field(
+    scim_group_role_map: str | None = Field(
         default=None,
         description="JSON map of SCIM group displayName to team role",
     )
@@ -135,7 +132,7 @@ class Settings(BaseSettings):
 
     @field_validator("sam_gov_api_key", "gemini_api_key", mode="before")
     @classmethod
-    def validate_api_keys(cls, v: Optional[str]) -> Optional[str]:
+    def validate_api_keys(cls, v: str | None) -> str | None:
         """Ensure API keys are not placeholder values."""
         if v and v.startswith("your_"):
             return None

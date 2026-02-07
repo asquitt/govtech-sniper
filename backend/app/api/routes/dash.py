@@ -5,30 +5,29 @@ Minimal Dash (AI assistant) endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
-from app.api.deps import get_current_user, check_rate_limit
-from app.services.auth_service import UserAuth
-from app.models.dash import DashSession, DashMessage, DashRole
-from app.services.dash_service import generate_dash_response
+from app.models.dash import DashMessage, DashRole, DashSession
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
+from app.services.dash_service import generate_dash_response
 
 router = APIRouter(prefix="/dash", tags=["Dash"])
 
 
 class DashSessionCreate(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
 
 
 class DashSessionResponse(BaseModel):
     id: int
-    title: Optional[str]
+    title: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -45,7 +44,7 @@ class DashMessageResponse(BaseModel):
     session_id: int
     role: DashRole
     content: str
-    citations: List[dict]
+    citations: list[dict]
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -53,22 +52,22 @@ class DashMessageResponse(BaseModel):
 
 class DashAskRequest(BaseModel):
     question: str
-    rfp_id: Optional[int] = None
+    rfp_id: int | None = None
 
 
 class DashAskResponse(BaseModel):
     answer: str
-    citations: List[dict]
+    citations: list[dict]
 
 
 class DashRunbookRequest(BaseModel):
-    rfp_id: Optional[int] = None
+    rfp_id: int | None = None
 
 
 class DashRunbookResponse(BaseModel):
     runbook: str
     answer: str
-    citations: List[dict]
+    citations: list[dict]
 
 
 RUNBOOK_PROMPTS = {
@@ -79,11 +78,11 @@ RUNBOOK_PROMPTS = {
 }
 
 
-@router.get("/sessions", response_model=List[DashSessionResponse])
+@router.get("/sessions", response_model=list[DashSessionResponse])
 async def list_sessions(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[DashSessionResponse]:
+) -> list[DashSessionResponse]:
     result = await session.execute(
         select(DashSession)
         .where(DashSession.user_id == current_user.id)

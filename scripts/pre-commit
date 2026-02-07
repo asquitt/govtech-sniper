@@ -1,0 +1,26 @@
+#!/bin/bash
+# Git pre-commit hook for govtech-sniper monorepo
+# Runs ruff (Python) and tsc (TypeScript) on staged files
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+# ── Python checks ──────────────────────────────────────────────
+PY_FILES=$(echo "$STAGED" | grep -E '\.py$' || true)
+if [ -n "$PY_FILES" ]; then
+    echo "Running ruff lint on staged Python files..."
+    echo "$PY_FILES" | xargs ruff check --config backend/pyproject.toml
+    echo "Running ruff format check..."
+    echo "$PY_FILES" | xargs ruff format --check --config backend/pyproject.toml
+fi
+
+# ── TypeScript checks ─────────────────────────────────────────
+TS_FILES=$(echo "$STAGED" | grep -E '\.(ts|tsx)$' || true)
+if [ -n "$TS_FILES" ]; then
+    echo "Running tsc on frontend..."
+    cd frontend && npx tsc --noEmit && cd ..
+fi
+
+echo "Pre-commit checks passed."

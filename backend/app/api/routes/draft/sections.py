@@ -2,23 +2,20 @@
 Draft Routes - Section CRUD
 """
 
-from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import desc
-from sqlmodel import select, func
+from sqlmodel import func, select
 
-from app.database import get_session
 from app.api.deps import get_current_user_optional, resolve_user_id
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.proposal import (
     Proposal,
     ProposalSection,
-    SectionStatus,
     ProposalVersion,
     ProposalVersionType,
+    SectionStatus,
     SectionVersion,
 )
 from app.models.rfp import ComplianceMatrix
@@ -28,6 +25,7 @@ from app.schemas.proposal import (
     ProposalSectionUpdate,
 )
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
@@ -46,9 +44,7 @@ async def create_section(
     the compliance matrix.
     """
     # Verify proposal exists
-    result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
 
     if not proposal:
@@ -74,22 +70,20 @@ async def create_section(
     return ProposalSectionRead.model_validate(new_section)
 
 
-@router.get("/proposals/{proposal_id}/sections", response_model=List[ProposalSectionRead])
+@router.get("/proposals/{proposal_id}/sections", response_model=list[ProposalSectionRead])
 async def list_sections(
     proposal_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    status: Optional[SectionStatus] = Query(None, description="Filter by section status"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    status: SectionStatus | None = Query(None, description="Filter by section status"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
-) -> List[ProposalSectionRead]:
+) -> list[ProposalSectionRead]:
     """
     List proposal sections.
     """
     resolved_user_id = resolve_user_id(user_id, current_user)
 
-    proposal_result = await session.execute(
-        select(Proposal).where(Proposal.id == proposal_id)
-    )
+    proposal_result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = proposal_result.scalar_one_or_none()
     if not proposal or proposal.user_id != resolved_user_id:
         raise HTTPException(status_code=404, detail="Proposal not found")
@@ -106,8 +100,8 @@ async def list_sections(
 @router.get("/sections/{section_id}", response_model=ProposalSectionRead)
 async def get_section(
     section_id: int,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> ProposalSectionRead:
     """
@@ -136,8 +130,8 @@ async def get_section(
 async def update_section(
     section_id: int,
     update: ProposalSectionUpdate,
-    user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),
-    current_user: Optional[UserAuth] = Depends(get_current_user_optional),
+    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> ProposalSectionRead:
     """
@@ -179,9 +173,11 @@ async def update_section(
         if matrix:
             for req in matrix.requirements:
                 if req.get("id") == section.requirement_id:
-                    if update_data.get("status") == SectionStatus.APPROVED:
-                        req["is_addressed"] = True
-                    elif "final_content" in update_data and update_data.get("final_content"):
+                    if (
+                        update_data.get("status") == SectionStatus.APPROVED
+                        or "final_content" in update_data
+                        and update_data.get("final_content")
+                    ):
                         req["is_addressed"] = True
                     elif update_data.get("status") == SectionStatus.PENDING:
                         req["is_addressed"] = False
@@ -191,19 +187,19 @@ async def update_section(
             matrix.mandatory_count = len(
                 [r for r in matrix.requirements if r.get("importance") == "mandatory"]
             )
-            matrix.addressed_count = len(
-                [r for r in matrix.requirements if r.get("is_addressed")]
-            )
+            matrix.addressed_count = len([r for r in matrix.requirements if r.get("is_addressed")])
             matrix.updated_at = datetime.utcnow()
 
     # Update proposal completion counts
     completed_result = await session.execute(
         select(ProposalSection).where(
             ProposalSection.proposal_id == proposal.id,
-            ProposalSection.status.in_([
-                SectionStatus.GENERATED,
-                SectionStatus.APPROVED,
-            ]),
+            ProposalSection.status.in_(
+                [
+                    SectionStatus.GENERATED,
+                    SectionStatus.APPROVED,
+                ]
+            ),
         )
     )
     proposal.completed_sections = len(completed_result.scalars().all())

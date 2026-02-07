@@ -8,10 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.integration import IntegrationConfig, IntegrationProvider
+from app.services.auth_service import UserAuth
 from app.services.unanet_service import UnanetService
 
 router = APIRouter(prefix="/unanet", tags=["unanet"])
@@ -21,9 +21,8 @@ router = APIRouter(prefix="/unanet", tags=["unanet"])
 # Helpers
 # ---------------------------------------------------------------------------
 
-async def _get_unanet_integration(
-    user_id: int, session: AsyncSession
-) -> IntegrationConfig | None:
+
+async def _get_unanet_integration(user_id: int, session: AsyncSession) -> IntegrationConfig | None:
     """Load the user's Unanet integration config."""
     result = await session.execute(
         select(IntegrationConfig).where(
@@ -37,6 +36,7 @@ async def _get_unanet_integration(
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/status")
 async def unanet_status(

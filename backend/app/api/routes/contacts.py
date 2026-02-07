@@ -5,19 +5,18 @@ CRUD for opportunity contacts, AI extraction, and agency directory.
 """
 
 from datetime import datetime
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.contact import OpportunityContact, AgencyContactDatabase
+from app.database import get_session
+from app.models.contact import AgencyContactDatabase, OpportunityContact
 from app.models.rfp import RFP
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.contact_extractor import extract_contacts_from_text
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
@@ -27,49 +26,50 @@ router = APIRouter(prefix="/contacts", tags=["Contacts"])
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
+
 class ContactCreate(BaseModel):
-    rfp_id: Optional[int] = None
+    rfp_id: int | None = None
     name: str
-    role: Optional[str] = None
-    organization: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    notes: Optional[str] = None
-    agency: Optional[str] = None
-    title: Optional[str] = None
-    department: Optional[str] = None
-    location: Optional[str] = None
+    role: str | None = None
+    organization: str | None = None
+    email: EmailStr | None = None
+    phone: str | None = None
+    notes: str | None = None
+    agency: str | None = None
+    title: str | None = None
+    department: str | None = None
+    location: str | None = None
 
 
 class ContactUpdate(BaseModel):
-    name: Optional[str] = None
-    role: Optional[str] = None
-    organization: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = None
-    notes: Optional[str] = None
-    agency: Optional[str] = None
-    title: Optional[str] = None
-    department: Optional[str] = None
-    location: Optional[str] = None
+    name: str | None = None
+    role: str | None = None
+    organization: str | None = None
+    email: EmailStr | None = None
+    phone: str | None = None
+    notes: str | None = None
+    agency: str | None = None
+    title: str | None = None
+    department: str | None = None
+    location: str | None = None
 
 
 class ContactResponse(BaseModel):
     id: int
-    rfp_id: Optional[int]
+    rfp_id: int | None
     name: str
-    role: Optional[str]
-    organization: Optional[str]
-    email: Optional[str]
-    phone: Optional[str]
-    notes: Optional[str]
-    agency: Optional[str]
-    title: Optional[str]
-    department: Optional[str]
-    location: Optional[str]
-    source: Optional[str]
-    extraction_confidence: Optional[float]
-    linked_rfp_ids: Optional[list]
+    role: str | None
+    organization: str | None
+    email: str | None
+    phone: str | None
+    notes: str | None
+    agency: str | None
+    title: str | None
+    department: str | None
+    location: str | None
+    source: str | None
+    extraction_confidence: float | None
+    linked_rfp_ids: list | None
     created_at: datetime
     updated_at: datetime
 
@@ -78,28 +78,28 @@ class ContactResponse(BaseModel):
 
 class ExtractedContactResponse(BaseModel):
     name: str
-    title: Optional[str]
-    email: Optional[str]
-    phone: Optional[str]
-    agency: Optional[str]
-    role: Optional[str]
+    title: str | None
+    email: str | None
+    phone: str | None
+    agency: str | None
+    role: str | None
 
 
 class AgencyCreate(BaseModel):
     agency_name: str
-    office: Optional[str] = None
-    address: Optional[str] = None
-    website: Optional[str] = None
-    primary_contact_id: Optional[int] = None
+    office: str | None = None
+    address: str | None = None
+    website: str | None = None
+    primary_contact_id: int | None = None
 
 
 class AgencyResponse(BaseModel):
     id: int
     agency_name: str
-    office: Optional[str]
-    address: Optional[str]
-    website: Optional[str]
-    primary_contact_id: Optional[int]
+    office: str | None
+    address: str | None
+    website: str | None
+    primary_contact_id: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -110,16 +110,15 @@ class AgencyResponse(BaseModel):
 # Existing CRUD endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("", response_model=List[ContactResponse])
+
+@router.get("", response_model=list[ContactResponse])
 async def list_contacts(
-    rfp_id: Optional[int] = Query(None),
+    rfp_id: int | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ContactResponse]:
-    query = select(OpportunityContact).where(
-        OpportunityContact.user_id == current_user.id
-    )
+) -> list[ContactResponse]:
+    query = select(OpportunityContact).where(OpportunityContact.user_id == current_user.id)
     if rfp_id:
         query = query.where(OpportunityContact.rfp_id == rfp_id)
     query = query.order_by(OpportunityContact.created_at.desc()).limit(limit)
@@ -232,12 +231,13 @@ async def delete_contact(
 # AI extraction endpoint
 # ---------------------------------------------------------------------------
 
-@router.post("/extract/{rfp_id}", response_model=List[ExtractedContactResponse])
+
+@router.post("/extract/{rfp_id}", response_model=list[ExtractedContactResponse])
 async def extract_contacts(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ExtractedContactResponse]:
+) -> list[ExtractedContactResponse]:
     """AI-extract contacts from an RFP's full text."""
     rfp_result = await session.execute(
         select(RFP).where(RFP.id == rfp_id, RFP.user_id == current_user.id)
@@ -258,20 +258,19 @@ async def extract_contacts(
 # Search endpoint
 # ---------------------------------------------------------------------------
 
-@router.get("/search", response_model=List[ContactResponse])
+
+@router.get("/search", response_model=list[ContactResponse])
 async def search_contacts(
-    agency: Optional[str] = Query(None),
-    role: Optional[str] = Query(None),
-    location: Optional[str] = Query(None),
-    name: Optional[str] = Query(None),
+    agency: str | None = Query(None),
+    role: str | None = Query(None),
+    location: str | None = Query(None),
+    name: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[ContactResponse]:
+) -> list[ContactResponse]:
     """Search contacts by agency, role, location, or name."""
-    query = select(OpportunityContact).where(
-        OpportunityContact.user_id == current_user.id
-    )
+    query = select(OpportunityContact).where(OpportunityContact.user_id == current_user.id)
     if agency:
         query = query.where(OpportunityContact.agency.ilike(f"%{agency}%"))
     if role:
@@ -291,12 +290,13 @@ async def search_contacts(
 # Agency directory endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/agencies", response_model=List[AgencyResponse])
+
+@router.get("/agencies", response_model=list[AgencyResponse])
 async def list_agencies(
     limit: int = Query(50, ge=1, le=200),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[AgencyResponse]:
+) -> list[AgencyResponse]:
     """List agency profiles."""
     query = (
         select(AgencyContactDatabase)

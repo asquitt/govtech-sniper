@@ -5,7 +5,6 @@ Stub service for syncing projects with Unanet ERP.
 """
 
 from datetime import datetime
-from typing import Optional
 
 from app.models.integration import IntegrationConfig
 
@@ -15,8 +14,8 @@ class UnanetService:
 
     def __init__(self, config: IntegrationConfig) -> None:
         self.config = config
-        self.base_url: Optional[str] = (config.config or {}).get("base_url")
-        self.api_key: Optional[str] = (config.config or {}).get("api_key")
+        self.base_url: str | None = (config.config or {}).get("base_url")
+        self.api_key: str | None = (config.config or {}).get("api_key")
 
     async def list_projects(self) -> list[dict]:
         """Return mock project list from Unanet."""
@@ -59,7 +58,7 @@ class UnanetService:
             "synced_at": datetime.utcnow().isoformat(),
         }
 
-    async def get_project(self, project_id: str) -> Optional[dict]:
+    async def get_project(self, project_id: str) -> dict | None:
         """Return a single mock project by ID."""
         projects = await self.list_projects()
         for project in projects:

@@ -6,35 +6,34 @@ Shared workspaces, invitations, member management, and data sharing.
 
 import secrets
 from datetime import datetime, timedelta
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, func
+from sqlmodel import func, select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
-from app.models.user import User
-from app.models.rfp import RFP
+from app.database import get_session
 from app.models.collaboration import (
+    SharedDataPermission,
     SharedWorkspace,
     WorkspaceInvitation,
     WorkspaceMember,
-    SharedDataPermission,
     WorkspaceRole,
 )
+from app.models.rfp import RFP
+from app.models.user import User
 from app.schemas.collaboration import (
-    WorkspaceCreate,
-    WorkspaceUpdate,
-    WorkspaceRead,
     InvitationCreate,
     InvitationRead,
     MemberRead,
+    PortalView,
     ShareDataCreate,
     SharedDataRead,
-    PortalView,
+    WorkspaceCreate,
+    WorkspaceRead,
+    WorkspaceUpdate,
 )
+from app.services.auth_service import UserAuth
 
 router = APIRouter(prefix="/collaboration", tags=["Collaboration"])
 
@@ -42,6 +41,7 @@ router = APIRouter(prefix="/collaboration", tags=["Collaboration"])
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 async def _get_workspace_or_404(
     workspace_id: int,
@@ -81,9 +81,7 @@ async def _require_member_role(
 
 async def _member_count(workspace_id: int, session: AsyncSession) -> int:
     result = await session.execute(
-        select(func.count(WorkspaceMember.id)).where(
-            WorkspaceMember.workspace_id == workspace_id
-        )
+        select(func.count(WorkspaceMember.id)).where(WorkspaceMember.workspace_id == workspace_id)
     )
     return result.scalar_one()
 
@@ -92,11 +90,12 @@ async def _member_count(workspace_id: int, session: AsyncSession) -> int:
 # Workspace CRUD
 # ---------------------------------------------------------------------------
 
-@router.get("/workspaces", response_model=List[WorkspaceRead])
+
+@router.get("/workspaces", response_model=list[WorkspaceRead])
 async def list_workspaces(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[WorkspaceRead]:
+) -> list[WorkspaceRead]:
     """List workspaces the user owns or is a member of."""
     # Owned
     owned_q = select(SharedWorkspace).where(SharedWorkspace.owner_id == current_user.id)
@@ -111,7 +110,7 @@ async def list_workspaces(
     membered = (await session.execute(member_q)).scalars().all()
 
     seen: set[int] = set()
-    results: List[WorkspaceRead] = []
+    results: list[WorkspaceRead] = []
     for ws in [*owned, *membered]:
         if ws.id in seen:
             continue
@@ -208,6 +207,7 @@ async def delete_workspace(
 # Invitations
 # ---------------------------------------------------------------------------
 
+
 @router.post("/workspaces/{workspace_id}/invite", response_model=InvitationRead, status_code=201)
 async def invite_to_workspace(
     workspace_id: int,
@@ -239,12 +239,12 @@ async def invite_to_workspace(
     )
 
 
-@router.get("/workspaces/{workspace_id}/invitations", response_model=List[InvitationRead])
+@router.get("/workspaces/{workspace_id}/invitations", response_model=list[InvitationRead])
 async def list_invitations(
     workspace_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[InvitationRead]:
+) -> list[InvitationRead]:
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.ADMIN, session)
     result = await session.execute(
         select(WorkspaceInvitation).where(WorkspaceInvitation.workspace_id == workspace_id)
@@ -313,12 +313,13 @@ async def accept_invitation(
 # Members
 # ---------------------------------------------------------------------------
 
-@router.get("/workspaces/{workspace_id}/members", response_model=List[MemberRead])
+
+@router.get("/workspaces/{workspace_id}/members", response_model=list[MemberRead])
 async def list_members(
     workspace_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[MemberRead]:
+) -> list[MemberRead]:
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.VIEWER, session)
     result = await session.execute(
         select(WorkspaceMember, User)
@@ -365,6 +366,7 @@ async def remove_member(
 # Data sharing
 # ---------------------------------------------------------------------------
 
+
 @router.post("/workspaces/{workspace_id}/share", response_model=SharedDataRead, status_code=201)
 async def share_data(
     workspace_id: int,
@@ -390,12 +392,12 @@ async def share_data(
     )
 
 
-@router.get("/workspaces/{workspace_id}/shared", response_model=List[SharedDataRead])
+@router.get("/workspaces/{workspace_id}/shared", response_model=list[SharedDataRead])
 async def list_shared_data(
     workspace_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[SharedDataRead]:
+) -> list[SharedDataRead]:
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.VIEWER, session)
     result = await session.execute(
         select(SharedDataPermission).where(SharedDataPermission.workspace_id == workspace_id)
@@ -437,6 +439,7 @@ async def unshare_data(
 # ---------------------------------------------------------------------------
 # Partner Portal (read-only view)
 # ---------------------------------------------------------------------------
+
 
 @router.get("/portal/{workspace_id}", response_model=PortalView)
 async def partner_portal(
@@ -502,6 +505,7 @@ async def partner_portal(
 # Real-Time Presence & Section Locking (REST fallback)
 # ---------------------------------------------------------------------------
 
+
 @router.get("/proposals/{proposal_id}/presence")
 async def get_document_presence(
     proposal_id: int,
@@ -511,9 +515,7 @@ async def get_document_presence(
     from app.api.routes.websocket import manager
 
     users = manager.get_presence(proposal_id)
-    locks = [
-        lock for lock in manager.section_locks.values()
-    ]
+    locks = [lock for lock in manager.section_locks.values()]
     return {
         "proposal_id": proposal_id,
         "users": users,

@@ -4,8 +4,8 @@ RFP Sniper - Database Connection & Session Management
 Async PostgreSQL connection using SQLModel + SQLAlchemy.
 """
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -40,36 +40,37 @@ async_session_factory = async_sessionmaker(
 # Database Lifecycle
 # =============================================================================
 
+
 async def init_db() -> None:
     """
     Initialize database tables.
     Called on application startup.
-    
+
     Note: In production, use Alembic migrations instead.
     """
     async with engine.begin() as conn:
         # Import all models to ensure they're registered with SQLModel
         from app.models import (  # noqa: F401
-            user,
-            rfp,
-            proposal,
+            audit,
+            award,
+            budget_intel,
+            capture,
+            contact,
+            contract,
+            dash,
+            graphics,
+            integration,
             knowledge_base,
             opportunity_snapshot,
-            audit,
-            integration,
-            webhook,
-            dash,
-            capture,
-            contract,
+            proposal,
+            rfp,
             saved_search,
-            award,
-            contact,
-            word_addin,
-            graphics,
             secret,
-            budget_intel,
+            user,
+            webhook,
+            word_addin,
         )
-        
+
         # Create all tables (dev only - use Alembic in production)
         await conn.run_sync(SQLModel.metadata.create_all)
 
@@ -86,10 +87,11 @@ async def close_db() -> None:
 # Dependency Injection
 # =============================================================================
 
+
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency that provides a database session.
-    
+
     Usage:
         @router.get("/items")
         async def get_items(session: AsyncSession = Depends(get_session)):
@@ -111,7 +113,7 @@ async def get_session_context() -> AsyncGenerator[AsyncSession, None]:
     """
     Context manager for database sessions outside of FastAPI routes.
     Useful for Celery tasks and scripts.
-    
+
     Usage:
         async with get_session_context() as session:
             result = await session.execute(query)
@@ -130,6 +132,7 @@ async def get_session_context() -> AsyncGenerator[AsyncSession, None]:
 # =============================================================================
 # Celery-specific Engine (NullPool for worker processes)
 # =============================================================================
+
 
 def get_celery_engine():
     """

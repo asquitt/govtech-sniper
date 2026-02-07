@@ -3,30 +3,29 @@ Contract status report CRUD operations.
 """
 
 from datetime import datetime
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.database import get_session
 from app.api.deps import get_current_user
-from app.services.auth_service import UserAuth
+from app.database import get_session
 from app.models.contract import ContractAward, ContractStatusReport
-from app.schemas.contract import StatusReportCreate, StatusReportUpdate, StatusReportRead
+from app.schemas.contract import StatusReportCreate, StatusReportRead, StatusReportUpdate
 from app.services.audit_service import log_audit_event
+from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
 
 
-@router.get("/{contract_id}/status-reports", response_model=List[StatusReportRead])
+@router.get("/{contract_id}/status-reports", response_model=list[StatusReportRead])
 async def list_status_reports(
     contract_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[StatusReportRead]:
+) -> list[StatusReportRead]:
     contract_result = await session.execute(
         select(ContractAward).where(
             ContractAward.id == contract_id,
@@ -37,9 +36,7 @@ async def list_status_reports(
         raise HTTPException(status_code=404, detail="Contract not found")
 
     result = await session.execute(
-        select(ContractStatusReport).where(
-            ContractStatusReport.contract_id == contract_id
-        )
+        select(ContractStatusReport).where(ContractStatusReport.contract_id == contract_id)
     )
     reports = result.scalars().all()
     return [StatusReportRead.model_validate(r) for r in reports]

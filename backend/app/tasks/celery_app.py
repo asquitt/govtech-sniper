@@ -29,27 +29,21 @@ celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    
     # Timezone
     timezone="UTC",
     enable_utc=True,
-    
     # Task execution
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
-    
     # Result expiration (24 hours)
     result_expires=86400,
-    
     # Task time limits
     task_soft_time_limit=300,  # 5 minutes soft limit
-    task_time_limit=600,       # 10 minutes hard limit
-    
+    task_time_limit=600,  # 10 minutes hard limit
     # Retry settings
     task_default_retry_delay=60,
     task_max_retries=3,
-    
     # Queues
     task_queues=(
         Queue("celery"),
@@ -60,7 +54,6 @@ celery_app.conf.update(
         Queue("periodic"),
         Queue("maintenance"),
     ),
-
     # Beat schedule for periodic tasks
     beat_schedule={
         # Scan SAM.gov every 6 hours for new opportunities
@@ -88,7 +81,6 @@ celery_app.conf.update(
             "options": {"queue": "maintenance"},
         },
     },
-    
     # Task routing
     task_routes={
         "app.tasks.ingest_tasks.*": {"queue": "ingest"},

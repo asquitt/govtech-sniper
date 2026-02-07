@@ -5,19 +5,18 @@ Team management and collaboration features.
 """
 
 from datetime import datetime
-from typing import Optional, List
 from enum import Enum
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
-from sqlmodel import select, Field, SQLModel, Column, Text, JSON
-from pydantic import BaseModel, EmailStr
 import structlog
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import JSON, Column, Field, SQLModel, Text, select
 
+from app.api.deps import UserAuth, get_current_user
 from app.database import get_session
 from app.models.user import User
-from app.api.deps import get_current_user, UserAuth
 
 logger = structlog.get_logger(__name__)
 
@@ -28,8 +27,10 @@ router = APIRouter(prefix="/teams", tags=["Teams"])
 # Team Models
 # =============================================================================
 
+
 class TeamRole(str, Enum):
     """Roles within a team."""
+
     OWNER = "owner"
     ADMIN = "admin"
     MEMBER = "member"
@@ -40,11 +41,12 @@ class Team(SQLModel, table=True):
     """
     Team/Organization for collaboration.
     """
+
     __tablename__ = "teams"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=255)
-    description: Optional[str] = Field(default=None, max_length=1000)
+    description: str | None = Field(default=None, max_length=1000)
 
     # Owner
     owner_id: int = Field(foreign_key="users.id")
@@ -61,16 +63,17 @@ class TeamMember(SQLModel, table=True):
     """
     Team membership.
     """
+
     __tablename__ = "team_members"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     team_id: int = Field(foreign_key="teams.id", index=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     role: TeamRole = Field(default=TeamRole.MEMBER)
 
     # Invitation status
     invited_at: datetime = Field(default_factory=datetime.utcnow)
-    accepted_at: Optional[datetime] = None
+    accepted_at: datetime | None = None
     is_active: bool = Field(default=True)
 
 
@@ -78,9 +81,10 @@ class TeamInvitation(SQLModel, table=True):
     """
     Pending team invitations.
     """
+
     __tablename__ = "team_invitations"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     team_id: int = Field(foreign_key="teams.id", index=True)
     email: str = Field(max_length=255, index=True)
     role: TeamRole = Field(default=TeamRole.MEMBER)
@@ -92,7 +96,7 @@ class TeamInvitation(SQLModel, table=True):
 
     # Status
     is_accepted: bool = Field(default=False)
-    accepted_at: Optional[datetime] = None
+    accepted_at: datetime | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -101,9 +105,10 @@ class ProposalComment(SQLModel, table=True):
     """
     Comments on proposal sections.
     """
+
     __tablename__ = "proposal_comments"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     proposal_section_id: int = Field(foreign_key="proposal_sections.id", index=True)
     user_id: int = Field(foreign_key="users.id")
 
@@ -111,12 +116,12 @@ class ProposalComment(SQLModel, table=True):
     content: str = Field(sa_column=Column(Text))
 
     # Thread support
-    parent_id: Optional[int] = Field(default=None, foreign_key="proposal_comments.id")
+    parent_id: int | None = Field(default=None, foreign_key="proposal_comments.id")
 
     # Status
     is_resolved: bool = Field(default=False)
-    resolved_by: Optional[int] = Field(default=None, foreign_key="users.id")
-    resolved_at: Optional[datetime] = None
+    resolved_by: int | None = Field(default=None, foreign_key="users.id")
+    resolved_at: datetime | None = None
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -127,23 +132,27 @@ class ProposalComment(SQLModel, table=True):
 # Request/Response Schemas
 # =============================================================================
 
+
 class TeamCreate(BaseModel):
     """Create a new team."""
+
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class TeamUpdate(BaseModel):
     """Update team details."""
-    name: Optional[str] = None
-    description: Optional[str] = None
+
+    name: str | None = None
+    description: str | None = None
 
 
 class TeamResponse(BaseModel):
     """Team response."""
+
     id: int
     name: str
-    description: Optional[str]
+    description: str | None
     owner_id: int
     member_count: int
     your_role: str
@@ -152,28 +161,32 @@ class TeamResponse(BaseModel):
 
 class InviteRequest(BaseModel):
     """Team invitation request."""
+
     email: EmailStr
     role: TeamRole = TeamRole.MEMBER
 
 
 class TeamMemberUpdate(BaseModel):
     """Update a team member's role."""
+
     role: TeamRole
 
 
 class CommentCreate(BaseModel):
     """Create a comment."""
+
     content: str
-    parent_id: Optional[int] = None
+    parent_id: int | None = None
 
 
 class CommentResponse(BaseModel):
     """Comment response."""
+
     id: int
     content: str
     user_id: int
     user_name: str
-    parent_id: Optional[int]
+    parent_id: int | None
     is_resolved: bool
     created_at: datetime
 
@@ -182,17 +195,19 @@ class CommentResponse(BaseModel):
 # Team Endpoints
 # =============================================================================
 
-@router.get("/", response_model=List[TeamResponse])
+
+@router.get("/", response_model=list[TeamResponse])
 async def list_teams(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[TeamResponse]:
+) -> list[TeamResponse]:
     """
     List teams the user belongs to.
     """
     # Get user's team memberships
     memberships = await session.execute(
-        select(TeamMember, Team).join(Team, TeamMember.team_id == Team.id)
+        select(TeamMember, Team)
+        .join(Team, TeamMember.team_id == Team.id)
         .where(
             TeamMember.user_id == current_user.id,
             TeamMember.is_active == True,
@@ -210,15 +225,17 @@ async def list_teams(
         )
         member_count = count_result.scalar() or 0
 
-        teams.append(TeamResponse(
-            id=team.id,
-            name=team.name,
-            description=team.description,
-            owner_id=team.owner_id,
-            member_count=member_count,
-            your_role=membership.role.value,
-            created_at=team.created_at,
-        ))
+        teams.append(
+            TeamResponse(
+                id=team.id,
+                name=team.name,
+                description=team.description,
+                owner_id=team.owner_id,
+                member_count=member_count,
+                your_role=membership.role.value,
+                created_at=team.created_at,
+            )
+        )
 
     return teams
 
@@ -288,9 +305,7 @@ async def get_team(
         raise HTTPException(status_code=403, detail="Not a member of this team")
 
     # Get team
-    team_result = await session.execute(
-        select(Team).where(Team.id == team_id)
-    )
+    team_result = await session.execute(select(Team).where(Team.id == team_id))
     team = team_result.scalar_one_or_none()
 
     if not team:
@@ -298,7 +313,8 @@ async def get_team(
 
     # Get members with user info
     members_result = await session.execute(
-        select(TeamMember, User).join(User, TeamMember.user_id == User.id)
+        select(TeamMember, User)
+        .join(User, TeamMember.user_id == User.id)
         .where(
             TeamMember.team_id == team_id,
             TeamMember.is_active == True,
@@ -350,9 +366,7 @@ async def invite_member(
         raise HTTPException(status_code=403, detail="Not authorized to invite members")
 
     # Check if user exists
-    user_result = await session.execute(
-        select(User).where(User.email == request.email.lower())
-    )
+    user_result = await session.execute(select(User).where(User.email == request.email.lower()))
     existing_user = user_result.scalar_one_or_none()
 
     if existing_user:
@@ -383,6 +397,7 @@ async def invite_member(
     else:
         # Create invitation for non-existing user
         import secrets
+
         token = secrets.token_urlsafe(32)
 
         invitation = TeamInvitation(
@@ -430,9 +445,7 @@ async def remove_member(
         raise HTTPException(status_code=403, detail="Not authorized to remove members")
 
     # Can't remove owner
-    team_result = await session.execute(
-        select(Team).where(Team.id == team_id)
-    )
+    team_result = await session.execute(select(Team).where(Team.id == team_id))
     team = team_result.scalar_one_or_none()
 
     if team and team.owner_id == user_id:
@@ -495,9 +508,7 @@ async def update_member_role(
         raise HTTPException(status_code=400, detail="Cannot change owner role")
 
     if request.role == TeamRole.OWNER and current_member.role != TeamRole.OWNER:
-        raise HTTPException(
-            status_code=403, detail="Only the owner can assign owner role"
-        )
+        raise HTTPException(status_code=403, detail="Only the owner can assign owner role")
 
     member.role = request.role
     await session.commit()
@@ -510,21 +521,24 @@ async def update_member_role(
 # Comment Endpoints
 # =============================================================================
 
+
 @router.get("/proposals/{proposal_id}/sections/{section_id}/comments")
 async def list_comments(
     proposal_id: int,
     section_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[CommentResponse]:
+) -> list[CommentResponse]:
     """
     List comments on a proposal section.
     """
-    from app.models.proposal import ProposalSection, Proposal
+    from app.models.proposal import Proposal, ProposalSection
 
     # Verify access to proposal
     section_result = await session.execute(
-        select(ProposalSection).join(Proposal).where(
+        select(ProposalSection)
+        .join(Proposal)
+        .where(
             ProposalSection.id == section_id,
             Proposal.id == proposal_id,
         )
@@ -567,11 +581,13 @@ async def add_comment(
     """
     Add a comment to a proposal section.
     """
-    from app.models.proposal import ProposalSection, Proposal
+    from app.models.proposal import Proposal, ProposalSection
 
     # Verify access
     section_result = await session.execute(
-        select(ProposalSection).join(Proposal).where(
+        select(ProposalSection)
+        .join(Proposal)
+        .where(
             ProposalSection.id == section_id,
             Proposal.id == proposal_id,
         )
@@ -595,9 +611,7 @@ async def add_comment(
     logger.info("Comment added", section_id=section_id, user_id=current_user.id)
 
     # Get user info
-    user_result = await session.execute(
-        select(User).where(User.id == current_user.id)
-    )
+    user_result = await session.execute(select(User).where(User.id == current_user.id))
     user = user_result.scalar_one()
 
     return CommentResponse(
@@ -638,4 +652,3 @@ async def resolve_comment(
 
 # Import needed for member count
 from datetime import timedelta
-from sqlalchemy import func

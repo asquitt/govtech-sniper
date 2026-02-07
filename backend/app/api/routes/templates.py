@@ -5,16 +5,15 @@ Pre-built proposal response templates for common requirements.
 """
 
 from datetime import datetime
-from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, Field, SQLModel, Column, Text, JSON
-from pydantic import BaseModel
 import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import JSON, Column, Field, SQLModel, Text, select
 
+from app.api.deps import UserAuth, get_current_user
 from app.database import get_session
-from app.api.deps import get_current_user, UserAuth
 
 logger = structlog.get_logger(__name__)
 
@@ -25,18 +24,20 @@ router = APIRouter(prefix="/templates", tags=["Templates"])
 # Template Models
 # =============================================================================
 
+
 class ProposalTemplate(SQLModel, table=True):
     """
     Pre-built response templates for common proposal requirements.
     """
+
     __tablename__ = "proposal_templates"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
 
     # Template identification
     name: str = Field(max_length=255, index=True)
     category: str = Field(max_length=100, index=True)  # "Past Performance", "Technical", etc.
-    subcategory: Optional[str] = Field(default=None, max_length=100)
+    subcategory: str | None = Field(default=None, max_length=100)
 
     # Template content
     description: str = Field(max_length=1000)
@@ -48,17 +49,17 @@ class ProposalTemplate(SQLModel, table=True):
 
     # Metadata
     is_system: bool = Field(default=True)  # System templates vs user-created
-    user_id: Optional[int] = Field(default=None, foreign_key="users.id")  # For user templates
+    user_id: int | None = Field(default=None, foreign_key="users.id")  # For user templates
     usage_count: int = Field(default=0)
 
     # Keywords for matching
-    keywords: List[str] = Field(default=[], sa_column=Column(JSON))
+    keywords: list[str] = Field(default=[], sa_column=Column(JSON))
 
     # Marketplace fields
     is_public: bool = Field(default=False, index=True)
     rating_sum: int = Field(default=0)
     rating_count: int = Field(default=0)
-    forked_from_id: Optional[int] = Field(default=None, foreign_key="proposal_templates.id")
+    forked_from_id: int | None = Field(default=None, foreign_key="proposal_templates.id")
 
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -69,38 +70,42 @@ class ProposalTemplate(SQLModel, table=True):
 # Request/Response Schemas
 # =============================================================================
 
+
 class TemplateCreate(BaseModel):
     """Create a new template."""
+
     name: str
     category: str
-    subcategory: Optional[str] = None
+    subcategory: str | None = None
     description: str
     template_text: str
     placeholders: dict = {}
-    keywords: List[str] = []
+    keywords: list[str] = []
 
 
 class TemplateUpdate(BaseModel):
     """Update a template."""
-    name: Optional[str] = None
-    category: Optional[str] = None
-    subcategory: Optional[str] = None
-    description: Optional[str] = None
-    template_text: Optional[str] = None
-    placeholders: Optional[dict] = None
-    keywords: Optional[List[str]] = None
+
+    name: str | None = None
+    category: str | None = None
+    subcategory: str | None = None
+    description: str | None = None
+    template_text: str | None = None
+    placeholders: dict | None = None
+    keywords: list[str] | None = None
 
 
 class TemplateResponse(BaseModel):
     """Template response."""
+
     id: int
     name: str
     category: str
-    subcategory: Optional[str]
+    subcategory: str | None
     description: str
     template_text: str
     placeholders: dict
-    keywords: List[str]
+    keywords: list[str]
     is_system: bool
     usage_count: int
     created_at: datetime
@@ -415,20 +420,20 @@ All employees complete annual security awareness training covering:
 # Endpoints
 # =============================================================================
 
-@router.get("/", response_model=List[TemplateResponse])
+
+@router.get("/", response_model=list[TemplateResponse])
 async def list_templates(
-    category: Optional[str] = Query(None, description="Filter by category"),
-    search: Optional[str] = Query(None, description="Search in name and keywords"),
+    category: str | None = Query(None, description="Filter by category"),
+    search: str | None = Query(None, description="Search in name and keywords"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[TemplateResponse]:
+) -> list[TemplateResponse]:
     """
     List all available templates.
     Includes system templates and user's custom templates.
     """
     query = select(ProposalTemplate).where(
-        (ProposalTemplate.is_system == True) |
-        (ProposalTemplate.user_id == current_user.id)
+        (ProposalTemplate.is_system == True) | (ProposalTemplate.user_id == current_user.id)
     )
 
     if category:
@@ -441,7 +446,8 @@ async def list_templates(
     if search:
         search_lower = search.lower()
         templates = [
-            t for t in templates
+            t
+            for t in templates
             if search_lower in t.name.lower()
             or any(search_lower in kw.lower() for kw in t.keywords)
         ]
@@ -468,13 +474,11 @@ async def list_templates(
 async def list_categories(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> List[str]:
+) -> list[str]:
     """
     List all template categories.
     """
-    result = await session.execute(
-        select(ProposalTemplate.category).distinct()
-    )
+    result = await session.execute(select(ProposalTemplate.category).distinct())
     categories = [row[0] for row in result.all()]
     return sorted(categories)
 
@@ -587,7 +591,8 @@ async def use_template(
 
     # Check for unfilled placeholders
     import re
-    unfilled = re.findall(r'\{(\w+)\}', filled_text)
+
+    unfilled = re.findall(r"\{(\w+)\}", filled_text)
 
     return {
         "filled_text": filled_text,
