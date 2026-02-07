@@ -7,6 +7,8 @@ The main application that ties everything together.
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+from starlette.types import ASGIApp, Receive, Scope, Send
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -112,6 +114,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         debug=settings.debug,
     )
     
+    # Security: reject default secret keys in production
+    _defaults = {"CHANGE_ME_IN_PRODUCTION", "CHANGE_ME_AUDIT_SIGNING"}
+    if not settings.debug:
+        if settings.secret_key in _defaults:
+            raise RuntimeError(
+                "SECRET_KEY is still the default value. "
+                "Set a strong SECRET_KEY env var before running in production."
+            )
+        if settings.audit_export_signing_key in _defaults:
+            raise RuntimeError(
+                "AUDIT_EXPORT_SIGNING_KEY is still the default value. "
+                "Set a strong AUDIT_EXPORT_SIGNING_KEY env var before running in production."
+            )
+    elif settings.secret_key in _defaults:
+        logger.warning(
+            "Running with default SECRET_KEY — acceptable in debug mode only"
+        )
+
     # Startup
     try:
         await init_db()
@@ -172,14 +192,39 @@ API authentication is handled via JWT tokens. All endpoints (except /health and 
 # Middleware
 # =============================================================================
 
+
+class MaxUploadSizeMiddleware:
+    """Reject requests whose Content-Length exceeds the configured limit."""
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            headers = dict(scope.get("headers", []))
+            content_length = headers.get(b"content-length")
+            if content_length and int(content_length) > self.max_bytes:
+                response = JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body too large. Max {self.max_bytes // (1024 * 1024)}MB."},
+                )
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+# Upload size limit
+app.add_middleware(
+    MaxUploadSizeMiddleware,
+    max_bytes=settings.max_upload_size_mb * 1024 * 1024,
+)
+
 # CORS middleware for frontend access
+_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Next.js dev server
-        "http://localhost:8000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

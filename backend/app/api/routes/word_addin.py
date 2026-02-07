@@ -16,10 +16,37 @@ from app.database import get_session
 from app.api.deps import get_current_user
 from app.services.auth_service import UserAuth
 from app.models.word_addin import WordAddinSession, WordAddinEvent, WordAddinSessionStatus
-from app.models.proposal import Proposal
+from app.models.proposal import Proposal, ProposalSection
 from app.services.audit_service import log_audit_event
+from app.services.gemini_service import GeminiService
+from app.config import settings
 
 router = APIRouter(prefix="/word-addin", tags=["Word Add-in"])
+
+
+async def _get_section_for_user(
+    section_id: int,
+    user_id: int,
+    session: AsyncSession,
+) -> ProposalSection:
+    """Load a proposal section and verify ownership. Raises 404 if not found or not owned."""
+    result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(
+            Proposal.id == section.proposal_id,
+            Proposal.user_id == user_id,
+        )
+    )
+    if not proposal_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    return section
 
 
 class WordAddinSessionCreate(BaseModel):
@@ -259,23 +286,7 @@ async def pull_section_content(
     session: AsyncSession = Depends(get_session),
 ) -> SectionPullResponse:
     """Pull section content for editing in Word."""
-    from app.models.proposal import ProposalSection
-
-    result = await session.execute(
-        select(ProposalSection).where(ProposalSection.id == section_id)
-    )
-    section = result.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    proposal_result = await session.execute(
-        select(Proposal).where(
-            Proposal.id == section.proposal_id,
-            Proposal.user_id == current_user.id,
-        )
-    )
-    if not proposal_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Proposal not found")
+    section = await _get_section_for_user(section_id, current_user.id, session)
 
     requirements: list[str] = []
     if section.requirement_text:
@@ -306,23 +317,7 @@ async def push_section_content(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Push edited content from Word back to the system."""
-    from app.models.proposal import ProposalSection
-
-    result = await session.execute(
-        select(ProposalSection).where(ProposalSection.id == section_id)
-    )
-    section = result.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    proposal_result = await session.execute(
-        select(Proposal).where(
-            Proposal.id == section.proposal_id,
-            Proposal.user_id == current_user.id,
-        )
-    )
-    if not proposal_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Proposal not found")
+    section = await _get_section_for_user(section_id, current_user.id, session)
 
     section.final_content = payload.content
     section.updated_at = datetime.utcnow()
@@ -350,23 +345,7 @@ async def check_section_compliance(
     session: AsyncSession = Depends(get_session),
 ) -> ComplianceCheckResult:
     """Check section content against its requirements."""
-    from app.models.proposal import ProposalSection
-
-    result = await session.execute(
-        select(ProposalSection).where(ProposalSection.id == section_id)
-    )
-    section = result.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    proposal_result = await session.execute(
-        select(Proposal).where(
-            Proposal.id == section.proposal_id,
-            Proposal.user_id == current_user.id,
-        )
-    )
-    if not proposal_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Proposal not found")
+    section = await _get_section_for_user(section_id, current_user.id, session)
 
     content = section.final_content or ""
     if not content and section.generated_content:
@@ -401,39 +380,61 @@ async def check_section_compliance(
     )
 
 
+_REWRITE_PROMPTS = {
+    "shorten": (
+        "Rewrite the following government proposal text to be more concise. "
+        "Remove redundancy and filler while preserving all key points, "
+        "technical details, and compliance language. Target roughly half the "
+        "original length.\n\nTEXT:\n{content}"
+    ),
+    "expand": (
+        "Expand the following government proposal text with additional detail, "
+        "supporting evidence, and specificity. Add concrete examples, metrics, "
+        "or methodology where appropriate. Maintain a professional, compliant "
+        "tone.\n\nTEXT:\n{content}"
+    ),
+    "improve": (
+        "Improve the following government proposal text for clarity, "
+        "professionalism, and persuasiveness. Fix grammar, strengthen weak "
+        "language, and ensure compliance-friendly phrasing. Do not change the "
+        "core meaning.\n\nTEXT:\n{content}"
+    ),
+}
+
+
 @router.post("/ai/rewrite", response_model=AIRewriteResponse)
 async def ai_rewrite(
     payload: AIRewritePayload,
     current_user: UserAuth = Depends(get_current_user),
 ) -> AIRewriteResponse:
-    """AI rewrite content (shorten/expand/improve)."""
+    """AI rewrite content (shorten/expand/improve) using Gemini Flash."""
     content = payload.content
     mode = payload.mode
 
-    if mode not in ("shorten", "expand", "improve"):
+    if mode not in _REWRITE_PROMPTS:
         raise HTTPException(
             status_code=400, detail="Mode must be shorten, expand, or improve"
         )
 
-    if mode == "shorten":
-        sentences = content.split(". ")
-        if len(sentences) > 2:
-            rewritten = ". ".join(sentences[: len(sentences) // 2 + 1])
-            if not rewritten.endswith("."):
-                rewritten += "."
-        else:
-            rewritten = content
-    elif mode == "expand":
-        rewritten = (
-            content
-            + "\n\nAdditionally, this approach ensures comprehensive coverage of "
-            "all stated requirements while maintaining alignment with the "
-            "evaluation criteria."
+    prompt = _REWRITE_PROMPTS[mode].format(content=content)
+
+    if settings.mock_ai:
+        # Deterministic fallback for testing
+        rewritten = f"[{mode}] {content}"
+    else:
+        gemini = GeminiService()
+        if not gemini.flash_model:
+            raise HTTPException(status_code=503, detail="AI service not configured")
+        import google.generativeai as genai
+
+        response = await gemini.flash_model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.4,
+                max_output_tokens=len(content) * 2,
+            ),
         )
-    else:  # improve
-        rewritten = content.replace("  ", " ").strip()
-        if not rewritten.endswith("."):
-            rewritten += "."
+        rewritten = response.text.strip()
 
     return AIRewriteResponse(
         original_length=len(content),

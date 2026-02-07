@@ -4,17 +4,16 @@ RFP Sniper - Dash Routes
 Minimal Dash (AI assistant) endpoints.
 """
 
-import uuid as uuid_lib
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.database import get_session
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, check_rate_limit
 from app.services.auth_service import UserAuth
 from app.models.dash import DashSession, DashMessage, DashRole
 from app.services.dash_service import generate_dash_response
@@ -162,7 +161,7 @@ async def add_message(
     return DashMessageResponse.model_validate(message)
 
 
-@router.post("/ask", response_model=DashAskResponse)
+@router.post("/ask", response_model=DashAskResponse, dependencies=[Depends(check_rate_limit)])
 async def ask_dash(
     payload: DashAskRequest,
     current_user: UserAuth = Depends(get_current_user),
@@ -216,45 +215,3 @@ async def run_dash_runbook(
     await session.commit()
 
     return DashRunbookResponse(runbook=runbook, answer=answer, citations=citations)
-
-
-# =============================================================================
-# Agent Endpoints
-# =============================================================================
-
-from app.services.agents import get_agent, AGENT_REGISTRY  # noqa: E402
-
-
-@router.get("/agents")
-async def list_agents(
-    current_user: UserAuth = Depends(get_current_user),
-) -> dict:
-    return {
-        "agents": [
-            {"type": k, "description": v.description}
-            for k, v in AGENT_REGISTRY.items()
-        ]
-    }
-
-
-@router.post("/agents/{agent_type}/run")
-async def run_agent(
-    agent_type: str,
-    rfp_id: Optional[int] = Query(None),
-    current_user: UserAuth = Depends(get_current_user),
-) -> dict:
-    try:
-        agent = get_agent(agent_type)
-    except ValueError:
-        raise HTTPException(status_code=404, detail=f"Unknown agent type: {agent_type}")
-
-    run_id = str(uuid_lib.uuid4())[:8]
-    params = {"rfp_id": rfp_id} if rfp_id else {}
-    result = await agent.execute(params, current_user.id)
-
-    return {
-        "run_id": run_id,
-        "agent_type": agent_type,
-        "status": result.status,
-        "result": result.result,
-    }

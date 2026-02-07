@@ -26,7 +26,7 @@ from app.services.auth_service import (
     TokenPair,
     UserAuth,
 )
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, check_rate_limit
 from app.services.audit_service import log_audit_event
 
 logger = structlog.get_logger(__name__)
@@ -107,7 +107,12 @@ class ProfileUpdateRequest(BaseModel):
 # Registration & Login
 # =============================================================================
 
-@router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=TokenPair,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def register(
     request: RegisterRequest,
     session: AsyncSession = Depends(get_session),
@@ -177,7 +182,7 @@ async def register(
     return create_token_pair(user.id, user.email, user.tier.value)
 
 
-@router.post("/login", response_model=TokenPair)
+@router.post("/login", response_model=TokenPair, dependencies=[Depends(check_rate_limit)])
 async def login(
     request: LoginRequest,
     session: AsyncSession = Depends(get_session),

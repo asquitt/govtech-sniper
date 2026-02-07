@@ -11,18 +11,12 @@ from app.services.data_providers.base import (
 )
 from app.services.data_providers.fpds import FPDSProvider
 from app.services.data_providers.gsa_ebuy import GSAEbuyProvider
-from app.services.data_providers.stubs import DIBBSProvider, GWACProvider, SLEDProvider
 from app.services.data_providers.usaspending import USAspendingProvider
-from app.services.data_providers.canada import CanadaProvider
 
 _PROVIDERS: dict[str, DataSourceProvider] = {
     "gsa_ebuy": GSAEbuyProvider(),
     "fpds": FPDSProvider(),
     "usaspending": USAspendingProvider(),
-    "sled": SLEDProvider(),
-    "dibbs": DIBBSProvider(),
-    "gwac": GWACProvider(),
-    "buyandsell_gc": CanadaProvider(),
 }
 
 

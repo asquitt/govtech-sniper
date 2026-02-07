@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
-from app.api.deps import get_current_user_optional, resolve_user_id
+from app.api.deps import get_current_user_optional, resolve_user_id, check_rate_limit
 from app.services.auth_service import UserAuth
 from app.schemas.rfp import SAMSearchParams, SAMIngestResponse
 from app.tasks.ingest_tasks import ingest_sam_opportunities
@@ -19,7 +19,7 @@ from app.config import settings
 router = APIRouter(prefix="/ingest", tags=["Ingest"])
 
 
-@router.post("/sam", response_model=SAMIngestResponse)
+@router.post("/sam", response_model=SAMIngestResponse, dependencies=[Depends(check_rate_limit)])
 async def trigger_sam_ingest(
     params: SAMSearchParams,
     user_id: Optional[int] = Query(None, description="User ID (optional if authenticated)"),

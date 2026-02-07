@@ -116,6 +116,33 @@ docker compose logs <service> --tail 20                    # Check for errors
 - Docs updated.
 - Changes committed and pushed.
 
+## Codebase Hygiene
+
+### Rate Limiting
+- All public/expensive endpoints must use `Depends(check_rate_limit)` from `app.api.deps`.
+- Applies to: auth (login/register), AI endpoints (dash, rewrite), ingestion, search.
+
+### Stub/Scaffold Code
+- No stub code ships to production. If a feature isn't implemented, don't register it.
+- If temporary scaffolding is needed during development, mark with `# TODO(stub): <reason>` and track in `docs/TECH_DEBT.md`.
+
+### Secret Key Security
+- Secret keys must never have usable defaults in production.
+- `main.py` lifespan raises `RuntimeError` if `SECRET_KEY` or `AUDIT_EXPORT_SIGNING_KEY` are defaults in non-debug mode.
+
+### Upload Size Enforcement
+- `MaxUploadSizeMiddleware` in `main.py` rejects requests exceeding `max_upload_size_mb` from config.
+- Config default: 50MB. Override via `MAX_UPLOAD_SIZE_MB` env var.
+
+### CORS
+- Production origins configured via `CORS_ORIGINS` env var (comma-separated).
+- Default: localhost only. Must be set for deployment.
+
+### AI Endpoints
+- All AI-powered endpoints (Dash `/ask`, Word add-in `/ai/rewrite`) must use real Gemini calls.
+- `settings.mock_ai` provides deterministic fallback for testing only.
+- Use Flash model for latency-sensitive operations (rewrite), Pro for deep analysis.
+
 ## When In Doubt
 - Favor reliability and data correctness.
 - Ask only when blocked.
