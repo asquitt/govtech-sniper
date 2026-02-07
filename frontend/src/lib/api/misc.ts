@@ -2,6 +2,8 @@ import api from "./client";
 import type {
   AwardRecord,
   OpportunityContact,
+  ExtractedContact,
+  AgencyProfile,
   WordAddinSession,
   WordAddinSessionStatus,
   WordAddinEvent,
@@ -70,6 +72,38 @@ export const contactApi = {
 
   remove: async (contactId: number): Promise<void> => {
     await api.delete(`/contacts/${contactId}`);
+  },
+
+  extract: async (rfpId: number): Promise<ExtractedContact[]> => {
+    const { data } = await api.post(`/contacts/extract/${rfpId}`);
+    return data;
+  },
+
+  search: async (params?: {
+    agency?: string;
+    role?: string;
+    location?: string;
+    name?: string;
+    limit?: number;
+  }): Promise<OpportunityContact[]> => {
+    const { data } = await api.get("/contacts/search", { params });
+    return data;
+  },
+
+  listAgencies: async (): Promise<AgencyProfile[]> => {
+    const { data } = await api.get("/contacts/agencies");
+    return data;
+  },
+
+  upsertAgency: async (payload: {
+    agency_name: string;
+    office?: string;
+    address?: string;
+    website?: string;
+    primary_contact_id?: number;
+  }): Promise<AgencyProfile> => {
+    const { data } = await api.post("/contacts/agencies", payload);
+    return data;
   },
 };
 

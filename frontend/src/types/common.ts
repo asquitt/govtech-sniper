@@ -22,6 +22,8 @@ export interface AwardRecord {
   updated_at: string;
 }
 
+export type ContactSource = "manual" | "ai_extracted" | "imported";
+
 export interface OpportunityContact {
   id: number;
   rfp_id?: number | null;
@@ -31,6 +33,33 @@ export interface OpportunityContact {
   email?: string | null;
   phone?: string | null;
   notes?: string | null;
+  agency?: string | null;
+  title?: string | null;
+  department?: string | null;
+  location?: string | null;
+  source?: ContactSource | null;
+  extraction_confidence?: number | null;
+  linked_rfp_ids?: number[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExtractedContact {
+  name: string;
+  title?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  agency?: string | null;
+  role?: string | null;
+}
+
+export interface AgencyProfile {
+  id: number;
+  agency_name: string;
+  office?: string | null;
+  address?: string | null;
+  website?: string | null;
+  primary_contact_id?: number | null;
   created_at: string;
   updated_at: string;
 }

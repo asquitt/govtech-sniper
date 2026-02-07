@@ -20,6 +20,7 @@ import {
   DollarSign,
   GitBranch,
   TrendingUp,
+  UserSearch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,11 @@ const navItems: NavItem[] = [
     title: "Collaboration",
     href: "/collaboration",
     icon: Share2,
+  },
+  {
+    title: "Contacts",
+    href: "/contacts",
+    icon: UserSearch,
   },
   {
     title: "Contracts",
