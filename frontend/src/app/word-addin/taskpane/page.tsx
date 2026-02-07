@@ -6,12 +6,15 @@ import { useOffice } from "@/hooks/useOffice";
 import { AddinAuthGate } from "./_components/addin-auth-gate";
 import { ProposalSelector } from "./_components/proposal-selector";
 import { SectionList } from "./_components/section-list";
+import { SectionSyncPanel } from "./_components/section-sync-panel";
+import { AiRewritePanel } from "./_components/ai-rewrite-panel";
 import type { Proposal, ProposalSection } from "@/types";
 
-type TabId = "sections" | "rewrite" | "compliance" | "search" | "generate";
+type TabId = "sections" | "sync" | "rewrite" | "compliance" | "search" | "generate";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "sections", label: "Sections" },
+  { id: "sync", label: "Sync" },
   { id: "rewrite", label: "Rewrite" },
   { id: "compliance", label: "Check" },
   { id: "search", label: "Search" },
@@ -56,12 +59,12 @@ export default function TaskPanePage() {
         />
 
         {/* Tab navigation */}
-        <div className="flex gap-0.5 border-b border-border">
+        <div className="flex gap-0.5 border-b border-border overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-2 py-1 text-[11px] font-medium border-b-2 transition-colors ${
+              className={`px-2 py-1 text-[11px] font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -81,10 +84,15 @@ export default function TaskPanePage() {
           />
         )}
 
+        {activeTab === "sync" && (
+          <SectionSyncPanel
+            section={selectedSection}
+            isInOffice={isInOffice}
+          />
+        )}
+
         {activeTab === "rewrite" && (
-          <p className="text-xs text-muted-foreground py-4 text-center">
-            AI Rewrite panel — coming next.
-          </p>
+          <AiRewritePanel isInOffice={isInOffice} />
         )}
 
         {activeTab === "compliance" && (
@@ -105,8 +113,8 @@ export default function TaskPanePage() {
           </p>
         )}
 
-        {/* Selected section info */}
-        {selectedSection && (
+        {/* Selected section info (shown when not on sync tab) */}
+        {selectedSection && activeTab !== "sync" && (
           <div className="rounded-md border border-border bg-card/50 p-2">
             <p className="text-[10px] text-muted-foreground">
               Selected Section
