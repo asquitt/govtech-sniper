@@ -42,14 +42,15 @@ describe("OpportunitiesPage", () => {
     mockedRfpApi.getStats.mockResolvedValue({
       total: 1,
       qualified: 1,
+      disqualified: 0,
       pending_filter: 0,
       by_status: { analyzing: 0 },
     });
 
     mockedSavedSearchApi.list.mockResolvedValue([]);
 
-    mockedIngestApi.triggerSamSearch.mockResolvedValue({ task_id: "task-1" });
-    mockedIngestApi.getTaskStatus.mockResolvedValue({ status: "completed" });
+    mockedIngestApi.triggerSamSearch.mockResolvedValue({ task_id: "task-1", message: "Search started", status: "pending" });
+    mockedIngestApi.getTaskStatus.mockResolvedValue({ task_id: "task-1", status: "completed" });
   });
 
   it("renders the opportunities list and stats", async () => {

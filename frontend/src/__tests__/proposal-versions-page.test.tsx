@@ -29,15 +29,11 @@ describe("ProposalVersionsPage", () => {
       title: "Test Proposal",
       version: 3,
       status: "draft",
-      executive_summary: null,
       total_sections: 5,
       completed_sections: 2,
       compliance_score: 78,
-      docx_export_path: null,
-      pdf_export_path: null,
       created_at: "2026-02-01T00:00:00Z",
       updated_at: "2026-02-02T00:00:00Z",
-      submitted_at: null,
       completion_percentage: 40,
     });
 
