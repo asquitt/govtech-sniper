@@ -120,6 +120,8 @@ class ProposalSectionRead(BaseModel):
     quality_score: float | None = None
     quality_breakdown: dict | None = None
     display_order: int
+    assigned_to_user_id: int | None = None
+    assigned_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     generated_at: datetime | None

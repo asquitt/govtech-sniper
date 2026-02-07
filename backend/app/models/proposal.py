@@ -187,6 +187,10 @@ class ProposalSection(ProposalSectionBase, table=True):
     # Order for display
     display_order: int = Field(default=0)
 
+    # Section assignment
+    assigned_to_user_id: int | None = Field(default=None, foreign_key="users.id")
+    assigned_at: datetime | None = None
+
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

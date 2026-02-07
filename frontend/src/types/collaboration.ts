@@ -74,3 +74,14 @@ export interface DocumentPresence {
   users: DocumentPresenceUser[];
   locks: SectionLock[];
 }
+
+// Cursor Presence
+
+export interface CursorPosition {
+  user_id: number;
+  user_name: string;
+  section_id: number;
+  position: number;
+  color: string;
+  timestamp: string;
+}

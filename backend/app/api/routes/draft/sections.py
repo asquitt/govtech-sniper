@@ -5,6 +5,7 @@ Draft Routes - Section CRUD
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
@@ -270,4 +271,37 @@ async def update_section(
     await session.commit()
     await session.refresh(section)
 
+    return ProposalSectionRead.model_validate(section)
+
+
+# ---------------------------------------------------------------------------
+# Section assignment
+# ---------------------------------------------------------------------------
+
+
+class SectionAssignPayload(BaseModel):
+    assigned_to_user_id: int | None = None
+
+
+@router.patch("/sections/{section_id}/assign", response_model=ProposalSectionRead)
+async def assign_section(
+    section_id: int,
+    payload: SectionAssignPayload,
+    current_user: UserAuth = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+) -> ProposalSectionRead:
+    """Assign or unassign a user to a proposal section."""
+    section_result = await session.execute(
+        select(ProposalSection).where(ProposalSection.id == section_id)
+    )
+    section = section_result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    section.assigned_to_user_id = payload.assigned_to_user_id
+    section.assigned_at = datetime.utcnow() if payload.assigned_to_user_id else None
+    section.updated_at = datetime.utcnow()
+
+    await session.commit()
+    await session.refresh(section)
     return ProposalSectionRead.model_validate(section)
