@@ -69,6 +69,7 @@ async def init_db() -> None:
             knowledge_base,
             market_signal,
             opportunity_snapshot,
+            organization,
             outline,
             proposal,
             proposal_focus_document,

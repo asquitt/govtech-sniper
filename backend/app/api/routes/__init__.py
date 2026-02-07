@@ -5,6 +5,7 @@ Route module exports.
 """
 
 from app.api.routes.activity import router as activity_router
+from app.api.routes.admin import router as admin_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.analytics_reporting import router as analytics_reporting_router
 from app.api.routes.analyze import router as analyze_router
@@ -108,4 +109,5 @@ __all__ = [
     "reports_router",
     "activity_router",
     "intelligence_router",
+    "admin_router",
 ]

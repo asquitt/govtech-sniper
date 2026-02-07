@@ -41,3 +41,4 @@ export { reportApi } from "./reports";
 export { templateMarketplaceApi } from "./template-marketplace";
 export { activityApi } from "./activity";
 export { intelligenceApi } from "./intelligence";
+export { adminApi } from "./admin";

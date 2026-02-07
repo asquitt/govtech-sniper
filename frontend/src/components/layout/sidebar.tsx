@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   FileBarChart,
   ClipboardCheck,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -144,6 +145,11 @@ const navItems: NavItem[] = [
     title: "Reports",
     href: "/reports",
     icon: FileBarChart,
+  },
+  {
+    title: "Admin",
+    href: "/admin",
+    icon: Building2,
   },
   {
     title: "Settings",

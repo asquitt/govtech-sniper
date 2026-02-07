@@ -14,6 +14,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.routes import (
     activity_router,
+    admin_router,
     analytics_reporting_router,
     analytics_router,
     analyze_router,
@@ -350,6 +351,7 @@ app.include_router(unanet_router, prefix=api_prefix)
 app.include_router(reports_router, prefix=api_prefix)
 app.include_router(activity_router, prefix=api_prefix)
 app.include_router(intelligence_router, prefix=api_prefix)
+app.include_router(admin_router, prefix=api_prefix)
 
 
 # =============================================================================

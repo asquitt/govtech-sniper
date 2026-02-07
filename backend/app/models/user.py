@@ -76,6 +76,9 @@ class User(UserBase, table=True):
     stripe_customer_id: str | None = Field(default=None, max_length=255)
     stripe_subscription_id: str | None = Field(default=None, max_length=255)
 
+    # Organization (multi-tenant)
+    organization_id: int | None = Field(default=None, foreign_key="organizations.id", index=True)
+
     # MFA
     mfa_enabled: bool = Field(default=False)
     mfa_secret: str | None = Field(default=None, max_length=255)

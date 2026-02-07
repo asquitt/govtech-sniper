@@ -71,6 +71,13 @@ from app.models.integration import (
 from app.models.knowledge_base import DocumentChunk, KnowledgeBaseDocument
 from app.models.market_signal import DigestFrequency, MarketSignal, SignalSubscription, SignalType
 from app.models.opportunity_snapshot import SAMOpportunitySnapshot
+from app.models.organization import (
+    Organization,
+    OrganizationMember,
+    OrgRole,
+    SSOIdentity,
+    SSOProvider,
+)
 from app.models.outline import OutlineSection, OutlineStatus, ProposalOutline
 from app.models.proposal import (
     Proposal,
@@ -220,4 +227,9 @@ __all__ = [
     "NDAStatus",
     "TeamingNDA",
     "TeamingPerformanceRating",
+    "Organization",
+    "OrganizationMember",
+    "OrgRole",
+    "SSOIdentity",
+    "SSOProvider",
 ]
