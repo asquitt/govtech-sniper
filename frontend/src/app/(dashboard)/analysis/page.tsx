@@ -185,7 +185,7 @@ export default function AnalysisIndexPage() {
                   rfp.requirements_total > 0
                     ? (rfp.requirements_addressed / rfp.requirements_total) * 100
                     : 0;
-                const deadline = rfp.response_deadline || rfp.deadline;
+                const deadline = rfp.response_deadline;
                 const daysLeft = deadline
                   ? Math.ceil(
                       (new Date(deadline).getTime() - Date.now()) /

@@ -64,12 +64,17 @@ export interface RFPListItem {
   id: number;
   title: string;
   solicitation_number: string;
+  notice_id?: string;
   agency: string;
   status: RFPStatus;
   is_qualified?: boolean;
   qualification_score?: number;
   recommendation_score?: number;
   response_deadline?: string;
+  requirements_count?: number;
+  sections_generated?: number;
+  analyzed_at?: string;
+  updated_at?: string;
   created_at: string;
 }
 
@@ -513,33 +518,6 @@ export interface ObservabilityMetrics {
   };
 }
 
-// -----------------------------------------------------------------------------
-// Capture Types
-// -----------------------------------------------------------------------------
-
-export type CaptureStage =
-  | "identified"
-  | "qualified"
-  | "pursuit"
-  | "proposal"
-  | "submitted"
-  | "won"
-  | "lost";
-
-export type BidDecision = "pending" | "bid" | "no_bid";
-
-export interface CapturePlan {
-  id: number;
-  rfp_id: number;
-  owner_id: number;
-  stage: CaptureStage;
-  bid_decision: BidDecision;
-  win_probability?: number | null;
-  notes?: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface CapturePlanListItem extends CapturePlan {
   rfp_title: string;
   rfp_agency?: string | null;
@@ -606,6 +584,7 @@ export interface ComplianceRequirement {
   status?: RequirementStatus;
   assigned_to?: string;
   tags?: string[];
+  generated_content?: GeneratedContent;
 }
 
 export interface ComplianceMatrix {

@@ -220,19 +220,19 @@ export default function OpportunityDetailPage() {
     if (!rfp) return;
     try {
       setIsSavingIntel(true);
-      const payload = {
-        source_type: intelForm.source_type || null,
-        jurisdiction: intelForm.jurisdiction || null,
-        contract_vehicle: intelForm.contract_vehicle || null,
-        incumbent_vendor: intelForm.incumbent_vendor || null,
-        buyer_contact_name: intelForm.buyer_contact_name || null,
-        buyer_contact_email: intelForm.buyer_contact_email || null,
-        buyer_contact_phone: intelForm.buyer_contact_phone || null,
+      const payload: Partial<RFP> = {
+        source_type: intelForm.source_type || undefined,
+        jurisdiction: intelForm.jurisdiction || undefined,
+        contract_vehicle: intelForm.contract_vehicle || undefined,
+        incumbent_vendor: intelForm.incumbent_vendor || undefined,
+        buyer_contact_name: intelForm.buyer_contact_name || undefined,
+        buyer_contact_email: intelForm.buyer_contact_email || undefined,
+        buyer_contact_phone: intelForm.buyer_contact_phone || undefined,
         budget_estimate: intelForm.budget_estimate
           ? Number(intelForm.budget_estimate)
-          : null,
-        competitive_landscape: intelForm.competitive_landscape || null,
-        intel_notes: intelForm.intel_notes || null,
+          : undefined,
+        competitive_landscape: intelForm.competitive_landscape || undefined,
+        intel_notes: intelForm.intel_notes || undefined,
       };
       const updated = await rfpApi.update(rfp.id, payload);
       setRfp(updated);

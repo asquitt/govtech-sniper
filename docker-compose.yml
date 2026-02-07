@@ -165,6 +165,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     container_name: rfp_sniper_frontend
     ports:
       - "${FRONTEND_PORT:-3000}:3000"

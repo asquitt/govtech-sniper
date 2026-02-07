@@ -5,7 +5,6 @@ Export proposals to DOCX and PDF formats.
 """
 
 import io
-import os
 import re
 from datetime import datetime
 from typing import Optional
@@ -32,11 +31,6 @@ router = APIRouter(prefix="/export", tags=["Export"])
 # =============================================================================
 
 _TAG_RE = re.compile(r"<[^>]+>")
-_HEADING_RE = re.compile(r"<h([1-4])[^>]*>(.*?)</h\1>", re.DOTALL)
-_LI_RE = re.compile(r"<li[^>]*>(.*?)</li>", re.DOTALL)
-_BLOCK_RE = re.compile(
-    r"<(p|blockquote|li|h[1-4])[^>]*>(.*?)</\1>", re.DOTALL
-)
 
 
 def _strip_tags(html: str) -> str:
@@ -56,22 +50,29 @@ def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[na
     HTML (legacy plain-text), falls back to newline splitting.
     """
     if not _has_html(html):
-        # Legacy plain-text content
         for para in html.split("\n\n"):
             if para.strip():
                 doc.add_paragraph(para.strip())
         return
 
-    # Process headings
-    pos = 0
-    parts: list[tuple[str, str]] = []  # (type, text)
+    # Expand <ul>/<ol> blocks into individual <li> tags for matching
+    def _expand_lists(h: str) -> str:
+        return re.sub(
+            r"<(ul|ol)[^>]*>(.*?)</\1>",
+            lambda m: m.group(2),
+            h,
+            flags=re.DOTALL,
+        )
 
-    # Walk through HTML extracting blocks in order
+    expanded = _expand_lists(html)
+
+    # Match top-level block elements in order
     block_pattern = re.compile(
-        r"<(h[1-4]|p|blockquote|li|ul|ol)[^>]*>(.*?)</\1>",
+        r"<(h[1-4]|p|blockquote|li)[^>]*>(.*?)</\1>",
         re.DOTALL,
     )
-    for m in block_pattern.finditer(html):
+    parts: list[tuple[str, str]] = []
+    for m in block_pattern.finditer(expanded):
         tag = m.group(1)
         inner = _strip_tags(m.group(2))
         if not inner:
@@ -79,7 +80,6 @@ def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[na
         parts.append((tag, inner))
 
     if not parts:
-        # Fallback: strip all tags and add as single paragraph
         plain = _strip_tags(html)
         if plain:
             doc.add_paragraph(plain)
@@ -90,8 +90,7 @@ def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[na
             level = int(tag[1])
             doc.add_heading(text, level=min(level + 1, 4))
         elif tag == "blockquote":
-            p = doc.add_paragraph(text)
-            p.style = "Quote" if "Quote" in [s.name for s in doc.styles] else None
+            doc.add_paragraph(text, style="Quote")
         elif tag == "li":
             doc.add_paragraph(text, style="List Bullet")
         else:

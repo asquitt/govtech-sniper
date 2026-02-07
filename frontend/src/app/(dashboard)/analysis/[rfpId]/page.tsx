@@ -209,8 +209,8 @@ export default function AnalysisPage() {
         section: editForm.section,
         requirement_text: editForm.requirement_text,
         importance: editForm.importance as ComplianceRequirement["importance"],
-        category: editForm.category || null,
-        notes: editForm.notes || null,
+        category: editForm.category || undefined,
+        notes: editForm.notes || undefined,
         is_addressed: editForm.is_addressed,
         page_reference: editForm.page_reference
           ? parseInt(editForm.page_reference, 10)
@@ -218,12 +218,12 @@ export default function AnalysisPage() {
         keywords: editForm.keywords
           ? editForm.keywords.split(",").map((k) => k.trim()).filter(Boolean)
           : [],
-        status: editForm.status,
-        assigned_to: editForm.assigned_to || null,
+        status: editForm.status as ComplianceRequirement["status"],
+        assigned_to: editForm.assigned_to || undefined,
         tags: editForm.tags
           ? editForm.tags.split(",").map((k) => k.trim()).filter(Boolean)
           : [],
-      };
+      } satisfies Partial<ComplianceRequirement>;
       const updated = await analysisApi.updateRequirement(
         rfpId,
         selectedRequirement.id,
@@ -267,20 +267,20 @@ export default function AnalysisPage() {
         section: newRequirement.section,
         requirement_text: newRequirement.requirement_text,
         importance: newRequirement.importance as ComplianceRequirement["importance"],
-        category: newRequirement.category || null,
-        notes: newRequirement.notes || null,
+        category: newRequirement.category || undefined,
+        notes: newRequirement.notes || undefined,
         page_reference: newRequirement.page_reference
           ? parseInt(newRequirement.page_reference, 10)
           : undefined,
         keywords: newRequirement.keywords
           ? newRequirement.keywords.split(",").map((k) => k.trim()).filter(Boolean)
           : [],
-        status: newRequirement.status,
-        assigned_to: newRequirement.assigned_to || null,
+        status: newRequirement.status as ComplianceRequirement["status"],
+        assigned_to: newRequirement.assigned_to || undefined,
         tags: newRequirement.tags
           ? newRequirement.tags.split(",").map((k) => k.trim()).filter(Boolean)
           : [],
-      };
+      } satisfies Partial<ComplianceRequirement>;
       const updated = await analysisApi.addRequirement(rfpId, payload);
       setRequirements(updated.requirements);
       setShowCreateRequirement(false);
@@ -382,7 +382,7 @@ export default function AnalysisPage() {
       {/* Header */}
       <Header
         title={rfp.title}
-        description={`${rfp.solicitation_number || rfp.notice_id} • ${rfp.agency}`}
+        description={`${rfp.solicitation_number} • ${rfp.agency}`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" asChild>
