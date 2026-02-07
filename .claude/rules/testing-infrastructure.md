@@ -20,13 +20,16 @@
 ## Hook Behavior
 - **Python edits**: ruff auto-formats + fixes imports, pyright warns (doesn't block)
 - **TypeScript edits**: tsc runs whole-project check (blocks on failure), prettier formats
-- **git commit**: pre-commit hook runs ruff + tsc on staged files (blocks on failure)
+- **git commit**: `--no-verify` is **blocked** by PreToolUse hook. Pre-commit verifies ruff + tsc on staged files (blocks via JSON deny on failure)
+- **Sensitive files**: `.env`, `.pem`, `.key`, `credentials.json`, `secrets.json` edits are **blocked** by PreToolUse hook
+- **Session end**: Stop hook runs quality gate — checks for uncommitted lint/type errors and uncommitted changes
 - Hook failures are **real errors** — fix them, don't ignore or bypass
 
 ## Before Every Commit
 - Git pre-commit hook enforces ruff + tsc
-- Never use `--no-verify` to bypass hooks
+- **NEVER use `--no-verify`** — it is blocked by a PreToolUse hook and will be denied
 - If hook fails: fix errors, re-stage, retry commit
+- Edit `.env` files manually — Claude Code blocks sensitive file edits
 
 ## Linting Commands Quick Reference
 ```bash
