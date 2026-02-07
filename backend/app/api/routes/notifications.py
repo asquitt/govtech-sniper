@@ -39,6 +39,7 @@ class NotificationType(str, Enum):
     SYSTEM_ALERT = "system_alert"
     TEAM_INVITE = "team_invite"
     COMMENT_ADDED = "comment_added"
+    MENTION = "mention"
 
 
 class NotificationChannel(str, Enum):

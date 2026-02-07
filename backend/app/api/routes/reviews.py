@@ -258,6 +258,11 @@ async def add_comment(
         reviewer_user_id=current_user.id,
         comment_text=payload.comment_text,
         severity=CommentSeverity(payload.severity),
+        anchor_text=payload.anchor_text,
+        anchor_offset_start=payload.anchor_offset_start,
+        anchor_offset_end=payload.anchor_offset_end,
+        is_inline=payload.is_inline,
+        mentions=payload.mentions,
     )
     session.add(comment)
     await session.commit()
@@ -291,6 +296,24 @@ async def list_comments(
     )
     comments = result.scalars().all()
     return [CommentRead.model_validate(c) for c in comments]
+
+
+@router.get("/sections/{section_id}/inline-comments", response_model=list[CommentRead])
+async def list_inline_comments(
+    section_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[CommentRead]:
+    """List inline comments for a specific section (across all reviews)."""
+    result = await session.execute(
+        select(ReviewComment)
+        .where(
+            ReviewComment.section_id == section_id,
+            ReviewComment.is_inline == True,  # noqa: E712
+        )
+        .order_by(ReviewComment.anchor_offset_start.asc())
+    )
+    return [CommentRead.model_validate(c) for c in result.scalars().all()]
 
 
 @router.patch("/{review_id}/comments/{comment_id}", response_model=CommentRead)

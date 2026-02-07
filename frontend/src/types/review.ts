@@ -48,6 +48,11 @@ export interface ReviewComment {
   verified_by_user_id?: number | null;
   resolved_at?: string | null;
   verified_at?: string | null;
+  anchor_text?: string | null;
+  anchor_offset_start?: number | null;
+  anchor_offset_end?: number | null;
+  is_inline?: boolean;
+  mentions?: number[] | null;
   created_at: string;
 }
 

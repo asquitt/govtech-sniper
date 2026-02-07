@@ -76,6 +76,12 @@ class CommentCreate(BaseModel):
     section_id: int | None = None
     comment_text: str
     severity: str = "minor"  # critical | major | minor | suggestion
+    # Inline comment fields
+    anchor_text: str | None = None
+    anchor_offset_start: int | None = None
+    anchor_offset_end: int | None = None
+    is_inline: bool = False
+    mentions: list[int] | None = None  # user_ids
 
 
 class CommentUpdate(BaseModel):
@@ -98,6 +104,11 @@ class CommentRead(BaseModel):
     verified_by_user_id: int | None = None
     resolved_at: datetime | None = None
     verified_at: datetime | None = None
+    anchor_text: str | None = None
+    anchor_offset_start: int | None = None
+    anchor_offset_end: int | None = None
+    is_inline: bool = False
+    mentions: list[int] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

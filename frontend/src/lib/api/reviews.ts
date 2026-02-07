@@ -57,6 +57,11 @@ export const reviewApi = {
       section_id?: number | null;
       comment_text: string;
       severity?: CommentSeverity;
+      anchor_text?: string | null;
+      anchor_offset_start?: number | null;
+      anchor_offset_end?: number | null;
+      is_inline?: boolean;
+      mentions?: number[] | null;
     }
   ): Promise<ReviewComment> => {
     const { data } = await api.post(
@@ -68,6 +73,13 @@ export const reviewApi = {
 
   listComments: async (reviewId: number): Promise<ReviewComment[]> => {
     const { data } = await api.get(`/reviews/${reviewId}/comments`);
+    return data;
+  },
+
+  getInlineComments: async (sectionId: number): Promise<ReviewComment[]> => {
+    const { data } = await api.get(
+      `/reviews/sections/${sectionId}/inline-comments`
+    );
     return data;
   },
 

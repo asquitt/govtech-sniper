@@ -7,6 +7,7 @@ Pink, Red, and Gold team reviews for proposal quality gates.
 from datetime import datetime
 from enum import Enum
 
+from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel, Text
 
 
@@ -103,6 +104,13 @@ class ReviewComment(SQLModel, table=True):
     verified_by_user_id: int | None = Field(default=None, foreign_key="users.id")
     resolved_at: datetime | None = None
     verified_at: datetime | None = None
+
+    # Inline comment fields
+    anchor_text: str | None = Field(default=None, sa_column=Column(Text))
+    anchor_offset_start: int | None = None
+    anchor_offset_end: int | None = None
+    is_inline: bool = Field(default=False)
+    mentions: list | None = Field(default=None, sa_column=Column(JSON))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
