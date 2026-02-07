@@ -100,7 +100,11 @@ jobs:
 
       - name: Dump API logs on failure
         if: failure()
-        run: docker compose logs api --tail 100
+        run: docker compose logs api --tail 200
+
+      - name: Dump Celery worker logs on failure
+        if: failure()
+        run: docker compose logs celery_worker --tail 100
 
       - name: Tear down
         if: always()
