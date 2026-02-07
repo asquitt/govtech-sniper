@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Target,
   FileSearch,
+  BarChart2,
   BarChart3,
   FolderOpen,
   Settings,
@@ -97,6 +98,11 @@ const navItems: NavItem[] = [
     title: "Forecasts",
     href: "/forecasts",
     icon: TrendingUp,
+  },
+  {
+    title: "Analytics",
+    href: "/analytics",
+    icon: BarChart2,
   },
   {
     title: "Settings",
