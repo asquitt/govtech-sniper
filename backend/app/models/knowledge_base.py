@@ -83,6 +83,15 @@ class KnowledgeBaseDocument(KnowledgeBaseDocumentBase, table=True):
     # Tags for filtering
     tags: List[str] = Field(default=[], sa_column=Column(JSON))
     
+    # Past Performance metadata
+    contract_number: Optional[str] = Field(default=None, max_length=50)
+    performing_agency: Optional[str] = Field(default=None, max_length=255, index=True)
+    contract_value: Optional[float] = None
+    period_of_performance_start: Optional[datetime] = None
+    period_of_performance_end: Optional[datetime] = None
+    naics_code: Optional[str] = Field(default=None, max_length=10)
+    relevance_tags: list = Field(default=[], sa_column=Column(JSON))
+
     # Usage tracking
     times_cited: int = Field(default=0)
     last_cited_at: Optional[datetime] = None

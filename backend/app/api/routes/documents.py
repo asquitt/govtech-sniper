@@ -329,3 +329,100 @@ async def delete_document(
     return {"message": f"Document {document_id} deleted"}
 
 
+# === Past Performance Endpoints ===
+
+from app.schemas.past_performance import (
+    PastPerformanceMetadata,
+    PastPerformanceRead,
+    PastPerformanceListResponse,
+    MatchResult,
+    MatchResponse,
+    NarrativeResponse,
+)
+from app.services.past_performance_matcher import match_past_performances, generate_narrative
+
+
+@router.post("/documents/{document_id}/past-performance-metadata", response_model=PastPerformanceRead)
+async def add_past_performance_metadata(
+    document_id: int,
+    payload: PastPerformanceMetadata,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PastPerformanceRead:
+    """Add or update past performance metadata on a document."""
+    result = await session.execute(
+        select(KnowledgeBaseDocument).where(
+            KnowledgeBaseDocument.id == document_id,
+            KnowledgeBaseDocument.user_id == current_user.id,
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(doc, field, value)
+    doc.updated_at = datetime.utcnow()
+
+    await session.commit()
+    await session.refresh(doc)
+    return PastPerformanceRead.model_validate(doc)
+
+
+@router.get("/documents/past-performances", response_model=PastPerformanceListResponse)
+async def list_past_performances(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PastPerformanceListResponse:
+    """List all past performance documents with metadata."""
+    result = await session.execute(
+        select(KnowledgeBaseDocument).where(
+            KnowledgeBaseDocument.user_id == current_user.id,
+            KnowledgeBaseDocument.document_type == DocumentType.PAST_PERFORMANCE,
+        )
+    )
+    docs = result.scalars().all()
+    data = [PastPerformanceRead.model_validate(d) for d in docs]
+    return PastPerformanceListResponse(documents=data, total=len(data))
+
+
+@router.post("/documents/past-performances/match/{rfp_id}", response_model=MatchResponse)
+async def match_past_performance(
+    rfp_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MatchResponse:
+    """Match past performance documents against an RFP."""
+    matches = await match_past_performances(session, rfp_id, current_user.id)
+    return MatchResponse(
+        rfp_id=rfp_id,
+        matches=[
+            MatchResult(
+                document_id=m.document_id,
+                title=m.title,
+                score=m.score,
+                matching_criteria=m.matching_criteria,
+            )
+            for m in matches
+        ],
+        total=len(matches),
+    )
+
+
+@router.post("/documents/past-performances/{document_id}/narrative/{rfp_id}", response_model=NarrativeResponse)
+async def generate_past_performance_narrative(
+    document_id: int,
+    rfp_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> NarrativeResponse:
+    """Generate a tailored narrative for a past performance document."""
+    narrative = await generate_narrative(session, document_id, rfp_id, current_user.id)
+    if not narrative:
+        raise HTTPException(status_code=404, detail="Document or RFP not found")
+    return NarrativeResponse(
+        document_id=document_id,
+        rfp_id=rfp_id,
+        narrative=narrative,
+    )
