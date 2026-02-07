@@ -7,7 +7,7 @@ Capture pipeline, bid decisions, and teaming partners.
 from datetime import date, datetime
 from enum import Enum
 
-from sqlmodel import JSON, Column, Field, SQLModel
+from sqlmodel import JSON, Column, Field, SQLModel, Text
 
 
 class CaptureStage(str, Enum):
@@ -224,6 +224,39 @@ class TeamingRequest(SQLModel, table=True):
     rfp_id: int | None = Field(default=None, foreign_key="rfps.id", index=True)
     message: str | None = None
     status: TeamingRequestStatus = Field(default=TeamingRequestStatus.PENDING)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class BidScorecardRecommendation(str, Enum):
+    BID = "bid"
+    NO_BID = "no_bid"
+    CONDITIONAL = "conditional"
+
+
+class ScorerType(str, Enum):
+    AI = "ai"
+    HUMAN = "human"
+
+
+class BidScorecard(SQLModel, table=True):
+    """Individual bid/no-bid scorecard from AI or a human team member."""
+
+    __tablename__ = "bid_scorecards"
+
+    id: int | None = Field(default=None, primary_key=True)
+    rfp_id: int = Field(foreign_key="rfps.id", index=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    criteria_scores: list[dict] = Field(default=[], sa_column=Column(JSON))
+    overall_score: float | None = None
+    recommendation: BidScorecardRecommendation | None = None
+    confidence: float | None = None
+    reasoning: str | None = Field(default=None, sa_column=Column(Text))
+
+    scorer_type: ScorerType = Field(default=ScorerType.AI)
+    scorer_id: int | None = None  # user_id if human scorer
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
