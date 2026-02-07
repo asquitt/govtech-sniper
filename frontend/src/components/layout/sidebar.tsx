@@ -21,6 +21,8 @@ import {
   GitBranch,
   TrendingUp,
   UserSearch,
+  Calendar,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -109,6 +111,16 @@ const navItems: NavItem[] = [
     title: "Analytics",
     href: "/analytics",
     icon: BarChart2,
+  },
+  {
+    title: "Events",
+    href: "/events",
+    icon: Calendar,
+  },
+  {
+    title: "Signals",
+    href: "/signals",
+    icon: Radio,
   },
   {
     title: "Settings",

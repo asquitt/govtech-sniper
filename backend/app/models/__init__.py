@@ -76,6 +76,8 @@ from app.models.collaboration import (
 )
 from app.models.salesforce_mapping import SalesforceFieldMapping
 from app.models.embedding import DocumentEmbedding
+from app.models.event import IndustryEvent, EventType
+from app.models.market_signal import MarketSignal, SignalSubscription, SignalType, DigestFrequency
 from app.models.review import (
     ProposalReview,
     ReviewAssignment,
@@ -174,4 +176,10 @@ __all__ = [
     "CommentSeverity",
     "CommentStatus",
     "DocumentEmbedding",
+    "IndustryEvent",
+    "EventType",
+    "MarketSignal",
+    "SignalSubscription",
+    "SignalType",
+    "DigestFrequency",
 ]

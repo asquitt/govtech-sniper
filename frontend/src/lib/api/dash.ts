@@ -31,4 +31,26 @@ export const dashApi = {
     const { data } = await api.post("/dash/ask", payload);
     return data;
   },
+
+  listAgents: async (): Promise<{
+    agents: { type: string; description: string }[];
+  }> => {
+    const { data } = await api.get("/dash/agents");
+    return data;
+  },
+
+  runAgent: async (
+    agentType: string,
+    rfpId?: number
+  ): Promise<{
+    run_id: string;
+    agent_type: string;
+    status: string;
+    result: Record<string, unknown>;
+  }> => {
+    const { data } = await api.post(`/dash/agents/${agentType}/run`, null, {
+      params: rfpId ? { rfp_id: rfpId } : undefined,
+    });
+    return data;
+  },
 };

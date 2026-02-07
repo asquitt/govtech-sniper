@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { dashApi, rfpApi } from "@/lib/api";
 import { VoiceControls } from "@/components/dash/voice-controls";
+import { AgentLauncher } from "@/components/dash/agent-launcher";
 import type { RFPListItem } from "@/types";
 
 interface ChatMessage {
@@ -137,6 +138,8 @@ export default function DashPage() {
             </div>
           </CardContent>
         </Card>
+
+        <AgentLauncher selectedRfpId={selectedRfpId} />
 
         <Card className="border border-border">
           <CardContent className="p-4 space-y-3">

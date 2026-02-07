@@ -44,6 +44,8 @@ from app.api.routes.analytics_reporting import router as analytics_reporting_rou
 from app.api.routes.reviews import router as reviews_router
 from app.api.routes.subscription import router as subscription_router
 from app.api.routes.search import router as search_router
+from app.api.routes.events import router as events_router
+from app.api.routes.signals import router as signals_router
 
 __all__ = [
     "ingest_router",
@@ -86,4 +88,6 @@ __all__ = [
     "reviews_router",
     "subscription_router",
     "search_router",
+    "events_router",
+    "signals_router",
 ]

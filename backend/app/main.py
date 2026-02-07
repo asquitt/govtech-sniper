@@ -64,6 +64,8 @@ from app.api.routes import (
     reviews_router,
     subscription_router,
     search_router,
+    events_router,
+    signals_router,
 )
 
 # Configure structured logging
@@ -280,6 +282,8 @@ app.include_router(analytics_reporting_router, prefix=api_prefix)
 app.include_router(reviews_router, prefix=api_prefix)
 app.include_router(subscription_router, prefix=api_prefix)
 app.include_router(search_router, prefix=api_prefix)
+app.include_router(events_router, prefix=api_prefix)
+app.include_router(signals_router, prefix=api_prefix)
 
 
 # =============================================================================

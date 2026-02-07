@@ -17,3 +17,5 @@ export * from "./subscription";
 export * from "./review";
 export * from "./past-performance";
 export * from "./search";
+export * from "./events";
+export * from "./signals";
