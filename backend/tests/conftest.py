@@ -5,25 +5,24 @@ Pytest fixtures and configuration for testing.
 """
 
 import asyncio
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from app.main import app
 from app import models  # noqa: F401
 from app.database import get_session
-from app.models.user import User
-from app.models.rfp import RFP
-from app.models.proposal import Proposal, ProposalSection
+from app.main import app
 from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.proposal import Proposal
+from app.models.rfp import RFP
+from app.models.user import User
 from app.services.auth_service import create_token_pair, hash_password
 from app.services.cache_service import cache_clear
-
 
 # Test database URL - use SQLite for testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
@@ -82,7 +81,9 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = get_test_session
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", follow_redirects=True
+    ) as ac:
         yield ac
 
     app.dependency_overrides.clear()
@@ -138,9 +139,7 @@ async def test_rfp(db_session: AsyncSession, test_user: User) -> RFP:
 
 
 @pytest_asyncio.fixture
-async def test_proposal(
-    db_session: AsyncSession, test_user: User, test_rfp: RFP
-) -> Proposal:
+async def test_proposal(db_session: AsyncSession, test_user: User, test_rfp: RFP) -> Proposal:
     """Create a test proposal."""
     proposal = Proposal(
         user_id=test_user.id,
@@ -157,9 +156,7 @@ async def test_proposal(
 
 
 @pytest_asyncio.fixture
-async def test_document(
-    db_session: AsyncSession, test_user: User
-) -> KnowledgeBaseDocument:
+async def test_document(db_session: AsyncSession, test_user: User) -> KnowledgeBaseDocument:
     """Create a test knowledge base document."""
     doc = KnowledgeBaseDocument(
         user_id=test_user.id,
