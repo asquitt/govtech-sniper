@@ -90,6 +90,7 @@ from app.models.review import (
     CommentSeverity,
     CommentStatus,
 )
+from app.models.report import SavedReport, ReportType, ScheduleFrequency
 
 __all__ = [
     "User",
@@ -191,4 +192,7 @@ __all__ = [
     "WorkflowExecution",
     "TriggerType",
     "ExecutionStatus",
+    "SavedReport",
+    "ReportType",
+    "ScheduleFrequency",
 ]

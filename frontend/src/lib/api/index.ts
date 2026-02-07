@@ -37,3 +37,5 @@ export { workflowApi } from "./workflows";
 export { emailIngestApi } from "./email-ingest";
 export { complianceApi } from "./compliance";
 export { unanetApi } from "./unanet";
+export { reportApi } from "./reports";
+export { templateMarketplaceApi } from "./template-marketplace";

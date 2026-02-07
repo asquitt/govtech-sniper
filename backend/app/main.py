@@ -34,6 +34,7 @@ from app.api.routes import (
     websocket_router,
     analytics_router,
     templates_router,
+    templates_marketplace_router,
     export_router,
     notifications_router,
     teams_router,
@@ -70,6 +71,7 @@ from app.api.routes import (
     workflows_router,
     compliance_router,
     unanet_router,
+    reports_router,
 )
 
 # Configure structured logging
@@ -255,6 +257,7 @@ app.include_router(draft_router, prefix=api_prefix)
 app.include_router(rfps_router, prefix=api_prefix)
 app.include_router(documents_router, prefix=api_prefix)
 app.include_router(export_router, prefix=api_prefix)
+app.include_router(templates_marketplace_router, prefix=api_prefix)
 app.include_router(templates_router, prefix=api_prefix)
 app.include_router(analytics_router, prefix=api_prefix)
 app.include_router(notifications_router, prefix=api_prefix)
@@ -292,6 +295,7 @@ app.include_router(email_ingest_router, prefix=api_prefix)
 app.include_router(workflows_router, prefix=api_prefix)
 app.include_router(compliance_router, prefix=api_prefix)
 app.include_router(unanet_router, prefix=api_prefix)
+app.include_router(reports_router, prefix=api_prefix)
 
 
 # =============================================================================

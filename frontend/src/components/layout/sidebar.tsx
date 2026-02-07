@@ -24,6 +24,7 @@ import {
   Calendar,
   Radio,
   ShieldCheck,
+  FileBarChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,11 @@ const navItems: NavItem[] = [
     title: "Compliance",
     href: "/compliance",
     icon: ShieldCheck,
+  },
+  {
+    title: "Reports",
+    href: "/reports",
+    icon: FileBarChart,
   },
   {
     title: "Settings",

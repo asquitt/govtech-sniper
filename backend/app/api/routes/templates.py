@@ -54,6 +54,12 @@ class ProposalTemplate(SQLModel, table=True):
     # Keywords for matching
     keywords: List[str] = Field(default=[], sa_column=Column(JSON))
 
+    # Marketplace fields
+    is_public: bool = Field(default=False, index=True)
+    rating_sum: int = Field(default=0)
+    rating_count: int = Field(default=0)
+    forked_from_id: Optional[int] = Field(default=None, foreign_key="proposal_templates.id")
+
     # Timestamps
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

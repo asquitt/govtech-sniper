@@ -14,6 +14,7 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.websocket import router as websocket_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.templates import router as templates_router
+from app.api.routes.templates_marketplace import router as templates_marketplace_router
 from app.api.routes.export import router as export_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.teams import router as teams_router
@@ -50,6 +51,7 @@ from app.api.routes.email_ingest import router as email_ingest_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.compliance_dashboard import router as compliance_router
 from app.api.routes.unanet import router as unanet_router
+from app.api.routes.reports import router as reports_router
 
 __all__ = [
     "ingest_router",
@@ -62,6 +64,7 @@ __all__ = [
     "websocket_router",
     "analytics_router",
     "templates_router",
+    "templates_marketplace_router",
     "export_router",
     "notifications_router",
     "teams_router",
@@ -98,4 +101,5 @@ __all__ = [
     "workflows_router",
     "compliance_router",
     "unanet_router",
+    "reports_router",
 ]

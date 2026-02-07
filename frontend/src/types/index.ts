@@ -23,3 +23,5 @@ export * from "./workflow";
 export * from "./email-ingest";
 export * from "./compliance";
 export * from "./unanet";
+export * from "./report";
+export * from "./template-marketplace";
