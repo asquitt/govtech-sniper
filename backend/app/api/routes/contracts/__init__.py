@@ -11,6 +11,8 @@ from app.api.routes.contracts.deliverables import router as deliverables_router
 from app.api.routes.contracts.tasks import router as tasks_router
 from app.api.routes.contracts.cpars import router as cpars_router
 from app.api.routes.contracts.status_reports import router as status_reports_router
+from app.api.routes.contracts.modifications import router as modifications_router
+from app.api.routes.contracts.clins import router as clins_router
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
 router.include_router(core_router)
@@ -18,3 +20,5 @@ router.include_router(deliverables_router)
 router.include_router(tasks_router)
 router.include_router(cpars_router)
 router.include_router(status_reports_router)
+router.include_router(modifications_router)
+router.include_router(clins_router)

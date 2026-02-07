@@ -57,6 +57,11 @@ from app.models.contract import (
     CPARSReview,
     CPARSEvidence,
     ContractStatusReport,
+    ContractModification,
+    ContractCLIN,
+    ContractType,
+    ModType,
+    CLINType,
 )
 
 __all__ = [
@@ -119,4 +124,9 @@ __all__ = [
     "CPARSReview",
     "CPARSEvidence",
     "ContractStatusReport",
+    "ContractModification",
+    "ContractCLIN",
+    "ContractType",
+    "ModType",
+    "CLINType",
 ]

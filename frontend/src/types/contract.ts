@@ -11,13 +11,19 @@ export type DeliverableStatus =
   | "approved"
   | "overdue";
 
+export type ContractType = "prime" | "subcontract" | "idiq" | "task_order" | "bpa";
+export type ModType = "administrative" | "funding" | "scope" | "period_of_performance" | "other";
+export type CLINType = "ffp" | "t_and_m" | "cost_plus";
+
 export interface ContractAward {
   id: number;
   user_id: number;
   rfp_id?: number | null;
+  parent_contract_id?: number | null;
   contract_number: string;
   title: string;
   agency?: string | null;
+  contract_type?: ContractType | null;
   start_date?: string | null;
   end_date?: string | null;
   value?: number | null;
@@ -80,6 +86,31 @@ export interface ContractStatusReport {
   accomplishments?: string | null;
   risks?: string | null;
   next_steps?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractModification {
+  id: number;
+  contract_id: number;
+  modification_number: string;
+  mod_type?: ModType | null;
+  description?: string | null;
+  effective_date?: string | null;
+  value_change?: number | null;
+  created_at: string;
+}
+
+export interface ContractCLIN {
+  id: number;
+  contract_id: number;
+  clin_number: string;
+  description?: string | null;
+  clin_type?: CLINType | null;
+  unit_price?: number | null;
+  quantity?: number | null;
+  total_value?: number | null;
+  funded_amount?: number | null;
   created_at: string;
   updated_at: string;
 }

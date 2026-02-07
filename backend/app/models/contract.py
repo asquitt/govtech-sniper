@@ -26,6 +26,28 @@ class DeliverableStatus(str, Enum):
     OVERDUE = "overdue"
 
 
+class ContractType(str, Enum):
+    PRIME = "prime"
+    SUBCONTRACT = "subcontract"
+    IDIQ = "idiq"
+    TASK_ORDER = "task_order"
+    BPA = "bpa"
+
+
+class ModType(str, Enum):
+    ADMINISTRATIVE = "administrative"
+    FUNDING = "funding"
+    SCOPE = "scope"
+    PERIOD_OF_PERFORMANCE = "period_of_performance"
+    OTHER = "other"
+
+
+class CLINType(str, Enum):
+    FFP = "ffp"
+    T_AND_M = "t_and_m"
+    COST_PLUS = "cost_plus"
+
+
 class ContractAward(SQLModel, table=True):
     """
     Awarded contract record.
@@ -35,10 +57,14 @@ class ContractAward(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     rfp_id: Optional[int] = Field(default=None, foreign_key="rfps.id", index=True)
+    parent_contract_id: Optional[int] = Field(
+        default=None, foreign_key="contract_awards.id", index=True
+    )
 
     contract_number: str = Field(max_length=255)
     title: str = Field(max_length=500)
     agency: Optional[str] = Field(default=None, max_length=255)
+    contract_type: Optional[str] = Field(default=None, max_length=50)
 
     start_date: Optional[date] = None
     end_date: Optional[date] = None
@@ -136,6 +162,45 @@ class ContractStatusReport(SQLModel, table=True):
     accomplishments: Optional[str] = Field(default=None, sa_column=Column(Text))
     risks: Optional[str] = Field(default=None, sa_column=Column(Text))
     next_steps: Optional[str] = Field(default=None, sa_column=Column(Text))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ContractModification(SQLModel, table=True):
+    """
+    Contract modification record.
+    """
+    __tablename__ = "contract_modifications"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    contract_id: int = Field(foreign_key="contract_awards.id", index=True)
+
+    modification_number: str = Field(max_length=50)
+    mod_type: Optional[str] = Field(default=None, max_length=50)
+    description: Optional[str] = None
+    effective_date: Optional[date] = None
+    value_change: Optional[float] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ContractCLIN(SQLModel, table=True):
+    """
+    Contract Line Item Number.
+    """
+    __tablename__ = "contract_clins"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    contract_id: int = Field(foreign_key="contract_awards.id", index=True)
+
+    clin_number: str = Field(max_length=50)
+    description: Optional[str] = None
+    clin_type: Optional[str] = Field(default=None, max_length=20)
+    unit_price: Optional[float] = None
+    quantity: Optional[int] = None
+    total_value: Optional[float] = None
+    funded_amount: Optional[float] = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

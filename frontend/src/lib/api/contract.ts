@@ -8,6 +8,8 @@ import type {
   CPARSReview,
   CPARSEvidence,
   ContractStatusReport,
+  ContractModification,
+  ContractCLIN,
 } from "@/types";
 
 // =============================================================================
@@ -153,5 +155,64 @@ export const contractApi = {
 
   deleteStatusReport: async (reportId: number): Promise<void> => {
     await api.delete(`/contracts/status-reports/${reportId}`);
+  },
+
+  // Modifications
+  listModifications: async (contractId: number): Promise<ContractModification[]> => {
+    const { data } = await api.get(`/contracts/${contractId}/modifications`);
+    return data;
+  },
+
+  createModification: async (
+    contractId: number,
+    payload: {
+      modification_number: string;
+      mod_type?: string;
+      description?: string;
+      effective_date?: string;
+      value_change?: number;
+    }
+  ): Promise<ContractModification> => {
+    const { data } = await api.post(`/contracts/${contractId}/modifications`, payload);
+    return data;
+  },
+
+  deleteModification: async (contractId: number, modId: number): Promise<void> => {
+    await api.delete(`/contracts/${contractId}/modifications/${modId}`);
+  },
+
+  // CLINs
+  listCLINs: async (contractId: number): Promise<ContractCLIN[]> => {
+    const { data } = await api.get(`/contracts/${contractId}/clins`);
+    return data;
+  },
+
+  createCLIN: async (
+    contractId: number,
+    payload: {
+      clin_number: string;
+      description?: string;
+      clin_type?: string;
+      unit_price?: number;
+      quantity?: number;
+      total_value?: number;
+      funded_amount?: number;
+    }
+  ): Promise<ContractCLIN> => {
+    const { data } = await api.post(`/contracts/${contractId}/clins`, payload);
+    return data;
+  },
+
+  updateCLIN: async (
+    contractId: number,
+    clinId: number,
+    payload: Partial<ContractCLIN>
+  ): Promise<ContractCLIN> => {
+    const { data } = await api.patch(`/contracts/${contractId}/clins/${clinId}`, payload);
+    return data;
+  },
+
+  deleteCLIN: async (contractId: number, clinId: number): Promise<void> => {
+    await api.delete(`/contracts/${contractId}/clins/${clinId}`);
   },
 };
