@@ -63,6 +63,7 @@ from app.api.routes import (
     analytics_reporting_router,
     reviews_router,
     subscription_router,
+    search_router,
 )
 
 # Configure structured logging
@@ -278,6 +279,7 @@ app.include_router(data_sources_router, prefix=api_prefix)
 app.include_router(analytics_reporting_router, prefix=api_prefix)
 app.include_router(reviews_router, prefix=api_prefix)
 app.include_router(subscription_router, prefix=api_prefix)
+app.include_router(search_router, prefix=api_prefix)
 
 
 # =============================================================================

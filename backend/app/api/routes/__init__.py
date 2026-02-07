@@ -43,6 +43,7 @@ from app.api.routes.salesforce import router as salesforce_router
 from app.api.routes.analytics_reporting import router as analytics_reporting_router
 from app.api.routes.reviews import router as reviews_router
 from app.api.routes.subscription import router as subscription_router
+from app.api.routes.search import router as search_router
 
 __all__ = [
     "ingest_router",
@@ -84,4 +85,5 @@ __all__ = [
     "analytics_reporting_router",
     "reviews_router",
     "subscription_router",
+    "search_router",
 ]

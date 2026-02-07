@@ -29,3 +29,5 @@ export { salesforceApi } from "./salesforce";
 export { dataSourcesApi } from "./data-sources";
 export { subscriptionApi } from "./subscription";
 export { reviewApi } from "./reviews";
+export { pastPerformanceApi } from "./past-performance";
+export { searchApi } from "./search";

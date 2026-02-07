@@ -75,6 +75,7 @@ from app.models.collaboration import (
     SharedDataType,
 )
 from app.models.salesforce_mapping import SalesforceFieldMapping
+from app.models.embedding import DocumentEmbedding
 from app.models.review import (
     ProposalReview,
     ReviewAssignment,
@@ -172,4 +173,5 @@ __all__ = [
     "AssignmentStatus",
     "CommentSeverity",
     "CommentStatus",
+    "DocumentEmbedding",
 ]

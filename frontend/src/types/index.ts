@@ -15,3 +15,5 @@ export * from "./data-sources";
 export * from "./analytics";
 export * from "./subscription";
 export * from "./review";
+export * from "./past-performance";
+export * from "./search";
