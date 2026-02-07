@@ -260,3 +260,55 @@ class BidScorecard(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# =============================================================================
+# NDA Tracking
+# =============================================================================
+
+
+class NDAStatus(str, Enum):
+    DRAFT = "draft"
+    SENT = "sent"
+    SIGNED = "signed"
+    EXPIRED = "expired"
+
+
+class TeamingNDA(SQLModel, table=True):
+    """NDA record between user and teaming partner."""
+
+    __tablename__ = "teaming_ndas"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id")
+    status: NDAStatus = Field(default=NDAStatus.DRAFT)
+    signed_date: date | None = None
+    expiry_date: date | None = None
+    document_path: str | None = Field(default=None, max_length=500)
+    notes: str | None = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# =============================================================================
+# Performance Ratings
+# =============================================================================
+
+
+class TeamingPerformanceRating(SQLModel, table=True):
+    """Performance rating for a teaming partner."""
+
+    __tablename__ = "teaming_performance_ratings"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id")
+    rating: int = Field(ge=1, le=5)  # overall 1-5
+    responsiveness: int | None = Field(default=None, ge=1, le=5)
+    quality: int | None = Field(default=None, ge=1, le=5)
+    timeliness: int | None = Field(default=None, ge=1, le=5)
+    comment: str | None = Field(default=None, sa_column=Column(Text))
+    created_at: datetime = Field(default_factory=datetime.utcnow)

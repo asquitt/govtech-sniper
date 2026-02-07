@@ -21,9 +21,12 @@ from app.models.capture import (
     CapturePlan,
     CaptureStage,
     GateReview,
+    NDAStatus,
     RFPTeamingPartner,
     ScorerType,
+    TeamingNDA,
     TeamingPartner,
+    TeamingPerformanceRating,
     TeamingRequest,
     TeamingRequestStatus,
 )
@@ -214,4 +217,7 @@ __all__ = [
     "SyncDirection",
     "ActivityFeedEntry",
     "ActivityType",
+    "NDAStatus",
+    "TeamingNDA",
+    "TeamingPerformanceRating",
 ]

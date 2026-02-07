@@ -231,3 +231,40 @@ export interface CapabilityGapResult {
   recommended_partners: RecommendedPartner[];
   analysis_summary: string;
 }
+
+// ---------------------------------------------------------------------------
+// NDA Tracking
+// ---------------------------------------------------------------------------
+
+export type NDAStatus = "draft" | "sent" | "signed" | "expired";
+
+export interface TeamingNDA {
+  id: number;
+  user_id: number;
+  partner_id: number;
+  rfp_id?: number | null;
+  status: NDAStatus;
+  signed_date?: string | null;
+  expiry_date?: string | null;
+  document_path?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Performance Ratings
+// ---------------------------------------------------------------------------
+
+export interface TeamingPerformanceRating {
+  id: number;
+  user_id: number;
+  partner_id: number;
+  rfp_id?: number | null;
+  rating: number;
+  responsiveness?: number | null;
+  quality?: number | null;
+  timeliness?: number | null;
+  comment?: string | null;
+  created_at: string;
+}

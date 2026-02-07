@@ -101,3 +101,71 @@ class CapabilityGapResult(BaseModel):
     gaps: list[CapabilityGapItem] = []
     recommended_partners: list[RecommendedPartner] = []
     analysis_summary: str = ""
+
+
+# ---------------------------------------------------------------------------
+# NDA Tracking
+# ---------------------------------------------------------------------------
+
+
+class NDACreate(BaseModel):
+    partner_id: int
+    rfp_id: int | None = None
+    signed_date: str | None = None
+    expiry_date: str | None = None
+    document_path: str | None = None
+    notes: str | None = None
+
+
+class NDAUpdate(BaseModel):
+    status: str | None = None  # draft | sent | signed | expired
+    signed_date: str | None = None
+    expiry_date: str | None = None
+    document_path: str | None = None
+    notes: str | None = None
+
+
+class NDARead(BaseModel):
+    id: int
+    user_id: int
+    partner_id: int
+    rfp_id: int | None = None
+    status: str
+    signed_date: str | None = None
+    expiry_date: str | None = None
+    document_path: str | None = None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Performance Ratings
+# ---------------------------------------------------------------------------
+
+
+class PerformanceRatingCreate(BaseModel):
+    partner_id: int
+    rfp_id: int | None = None
+    rating: int  # 1-5
+    responsiveness: int | None = None
+    quality: int | None = None
+    timeliness: int | None = None
+    comment: str | None = None
+
+
+class PerformanceRatingRead(BaseModel):
+    id: int
+    user_id: int
+    partner_id: int
+    rfp_id: int | None = None
+    rating: int
+    responsiveness: int | None = None
+    quality: int | None = None
+    timeliness: int | None = None
+    comment: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
