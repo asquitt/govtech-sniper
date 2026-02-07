@@ -9,6 +9,8 @@ import { SectionList } from "./_components/section-list";
 import { SectionSyncPanel } from "./_components/section-sync-panel";
 import { AiRewritePanel } from "./_components/ai-rewrite-panel";
 import { ComplianceCheckPanel } from "./_components/compliance-check-panel";
+import { KbSearchPanel } from "./_components/kb-search-panel";
+import { GeneratePanel } from "./_components/generate-panel";
 import type { Proposal, ProposalSection } from "@/types";
 
 type TabId = "sections" | "sync" | "rewrite" | "compliance" | "search" | "generate";
@@ -104,15 +106,14 @@ export default function TaskPanePage() {
         )}
 
         {activeTab === "search" && (
-          <p className="text-xs text-muted-foreground py-4 text-center">
-            Knowledge base search — coming next.
-          </p>
+          <KbSearchPanel isInOffice={isInOffice} />
         )}
 
         {activeTab === "generate" && (
-          <p className="text-xs text-muted-foreground py-4 text-center">
-            Section generation — coming next.
-          </p>
+          <GeneratePanel
+            section={selectedSection}
+            isInOffice={isInOffice}
+          />
         )}
 
         {/* Selected section info (shown when not on sync tab) */}
