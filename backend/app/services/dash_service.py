@@ -1,303 +1,284 @@
 """
 RFP Sniper - Dash Service
 ========================
-Context-aware assistant with lightweight tool dispatch for Phase 4.
+Gemini-powered conversational AI assistant for GovCon workflows.
 """
 
+import asyncio
+from collections.abc import AsyncGenerator
 
+import google.generativeai as genai
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.config import settings
-from app.models.award import AwardRecord
-from app.models.budget_intel import BudgetIntelligence
-from app.models.contact import OpportunityContact
-from app.models.contract import ContractAward
+from app.models.capture import CapturePlan
 from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.proposal import Proposal, ProposalSection
 from app.models.rfp import RFP, ComplianceMatrix
 
+logger = structlog.get_logger(__name__)
 
-def _detect_intent(question: str) -> str:
-    text = (question or "").lower()
-    if any(keyword in text for keyword in ["summarize", "summary", "overview"]):
-        return "summary"
-    if any(keyword in text for keyword in ["compliance", "gap", "gaps", "missing"]):
-        return "compliance_gap"
-    if any(keyword in text for keyword in ["capability", "capabilities", "capability statement"]):
-        return "capability_statement"
-    if any(
-        keyword in text
-        for keyword in ["competitor", "competition", "award", "awardee", "incumbent", "competitive"]
-    ):
-        return "competitive_intel"
-    return "general"
+SYSTEM_PROMPT = """You are Dash, an AI assistant for government contracting professionals \
+using GovTech Sniper.
+
+Your role:
+- Answer questions about opportunities, proposals, compliance, and capture strategy
+- Help users understand RFP requirements and draft proposal content
+- Provide actionable insights grounded in the user's data
+- Be concise but thorough; use Markdown formatting
+
+Rules:
+- Only reference data provided in the context below. If information is not available, say so.
+- When referencing specific documents, cite them by name.
+- Never fabricate past performance, contract numbers, or award data.
+
+{context}"""
+
+MAX_HISTORY_MESSAGES = 20
+MAX_RFP_TEXT_CHARS = 20_000
+MAX_DOC_TEXT_CHARS = 10_000
+MAX_KB_DOCS = 5
 
 
-def _truncate(text: str, max_chars: int = 400) -> str:
-    if not text:
-        return ""
-    if len(text) <= max_chars:
-        return text
+def _truncate(text: str, max_chars: int) -> str:
+    if not text or len(text) <= max_chars:
+        return text or ""
     return text[: max_chars - 3].rstrip() + "..."
 
 
-def _build_rfp_context(rfp: RFP | None) -> str:
-    if not rfp:
-        return "No opportunity context found."
-
-    parts = [f"Opportunity: {rfp.title}"]
-    if rfp.agency:
-        parts.append(f"Agency: {rfp.agency}")
-    if rfp.response_deadline:
-        parts.append(f"Deadline: {rfp.response_deadline.isoformat()}")
-    if rfp.naics_code:
-        parts.append(f"NAICS: {rfp.naics_code}")
-    if rfp.set_aside:
-        parts.append(f"Set-Aside: {rfp.set_aside}")
-    return " | ".join(parts)
-
-
-def _build_doc_citations(docs: list[KnowledgeBaseDocument]) -> list[dict]:
+async def _gather_context(
+    db: AsyncSession,
+    user_id: int,
+    rfp_id: int | None,
+) -> tuple[str, list[dict]]:
+    """Gather user data context for the system prompt. Returns (context_text, citations)."""
+    sections: list[str] = []
     citations: list[dict] = []
-    for doc in docs:
-        citations.append(
-            {
-                "type": "document",
-                "document_id": doc.id,
-                "title": doc.title,
-                "filename": doc.original_filename,
-            }
+
+    # --- RFP context ---
+    rfp: RFP | None = None
+    if rfp_id is not None:
+        result = await db.execute(select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id))
+        rfp = result.scalar_one_or_none()
+
+    if rfp:
+        citations.append({"type": "rfp", "rfp_id": rfp.id, "title": rfp.title})
+        parts = [f"## Active Opportunity\nTitle: {rfp.title}"]
+        if rfp.agency:
+            parts.append(f"Agency: {rfp.agency}")
+        if rfp.solicitation_number:
+            parts.append(f"Solicitation: {rfp.solicitation_number}")
+        if rfp.response_deadline:
+            parts.append(f"Deadline: {rfp.response_deadline.isoformat()}")
+        if rfp.naics_code:
+            parts.append(f"NAICS: {rfp.naics_code}")
+        if rfp.set_aside:
+            parts.append(f"Set-Aside: {rfp.set_aside}")
+        summary = rfp.summary or rfp.description
+        if summary:
+            parts.append(f"Summary: {_truncate(summary, 2000)}")
+        if rfp.full_text:
+            parts.append(
+                f"\nRFP Full Text (excerpt):\n{_truncate(rfp.full_text, MAX_RFP_TEXT_CHARS)}"
+            )
+        sections.append("\n".join(parts))
+
+        # --- Compliance matrix ---
+        matrix_result = await db.execute(
+            select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp.id)
         )
-    return citations
+        matrix = matrix_result.scalar_one_or_none()
+        if matrix and matrix.requirements:
+            reqs = matrix.requirements
+            open_reqs = [r for r in reqs if not r.get("is_addressed")]
+            lines = [f"\n## Compliance Matrix ({len(reqs)} requirements, {len(open_reqs)} open)"]
+            for req in reqs[:15]:
+                status = "OPEN" if not req.get("is_addressed") else "Addressed"
+                lines.append(
+                    f"- [{status}] {req.get('id')}: {_truncate(req.get('requirement_text', ''), 200)}"
+                )
+            if len(reqs) > 15:
+                lines.append(f"... and {len(reqs) - 15} more requirements")
+            sections.append("\n".join(lines))
 
-
-def _summarize_compliance(matrix: ComplianceMatrix) -> tuple[str, list[dict]]:
-    open_requirements = [req for req in matrix.requirements if not req.get("is_addressed")]
-    citations = []
-    top_items = open_requirements[:5]
-    for req in top_items:
-        citations.append(
-            {
-                "type": "requirement",
-                "requirement_id": req.get("id"),
-                "section": req.get("section"),
-            }
+        # --- Active proposal ---
+        proposal_result = await db.execute(
+            select(Proposal).where(Proposal.rfp_id == rfp.id, Proposal.user_id == user_id)
         )
-    if not open_requirements:
-        return "All compliance requirements are marked as addressed.", citations
+        proposal = proposal_result.scalar_one_or_none()
+        if proposal:
+            sec_result = await db.execute(
+                select(ProposalSection)
+                .where(ProposalSection.proposal_id == proposal.id)
+                .order_by(ProposalSection.display_order)
+            )
+            prop_sections = sec_result.scalars().all()
+            if prop_sections:
+                lines = [f"\n## Active Proposal (status: {proposal.status.value})"]
+                for ps in prop_sections[:20]:
+                    lines.append(f"- [{ps.status.value}] {ps.title}")
+                sections.append("\n".join(lines))
 
-    summary_lines = [
-        f"Compliance gaps: {len(open_requirements)} requirement(s) still open.",
-        "Top gaps:",
-    ]
-    for req in top_items:
-        summary_lines.append(f"- {req.get('id')}: {req.get('requirement_text')}")
-    return "\n".join(summary_lines), citations
-
-
-def _summarize_awards(awards: list[AwardRecord]) -> tuple[str, list[dict]]:
-    if not awards:
-        return "No award intelligence records found yet.", []
-
-    top_awards = sorted(
-        awards,
-        key=lambda award: award.award_amount or 0,
-        reverse=True,
-    )[:3]
-    citations: list[dict] = []
-    lines = [f"Award records found: {len(awards)}."]
-    for award in top_awards:
-        citations.append(
-            {
-                "type": "award",
-                "award_id": award.id,
-                "awardee": award.awardee_name,
-            }
+        # --- Capture plan ---
+        capture_result = await db.execute(
+            select(CapturePlan).where(CapturePlan.rfp_id == rfp.id, CapturePlan.owner_id == user_id)
         )
-        amount = f"${award.award_amount:,}" if award.award_amount else "Amount TBD"
-        vehicle = award.contract_vehicle or "Vehicle unknown"
-        lines.append(f"- {award.awardee_name} · {amount} · {vehicle}")
-    return "\n".join(lines), citations
+        capture = capture_result.scalar_one_or_none()
+        if capture:
+            parts = [f"\n## Capture Plan (stage: {capture.stage.value})"]
+            parts.append(f"Bid Decision: {capture.bid_decision.value}")
+            if capture.win_probability is not None:
+                parts.append(f"Win Probability: {capture.win_probability}%")
+            if capture.notes:
+                parts.append(f"Notes: {_truncate(capture.notes, 500)}")
+            sections.append("\n".join(parts))
+
+    # --- Knowledge base documents ---
+    docs_result = await db.execute(
+        select(KnowledgeBaseDocument)
+        .where(KnowledgeBaseDocument.user_id == user_id)
+        .order_by(KnowledgeBaseDocument.created_at.desc())
+        .limit(MAX_KB_DOCS)
+    )
+    docs = docs_result.scalars().all()
+    if docs:
+        lines = ["\n## Knowledge Base Documents"]
+        for doc in docs:
+            citations.append(
+                {
+                    "type": "document",
+                    "document_id": doc.id,
+                    "title": doc.title,
+                    "filename": doc.original_filename,
+                }
+            )
+            lines.append(f"\n### {doc.original_filename}")
+            if doc.full_text:
+                lines.append(_truncate(doc.full_text, MAX_DOC_TEXT_CHARS))
+            else:
+                lines.append("(no text extracted)")
+        sections.append("\n".join(lines))
+
+    context_text = "\n".join(sections) if sections else "No user data available."
+    return context_text, citations
 
 
-def _summarize_contacts(contacts: list[OpportunityContact]) -> tuple[str, list[dict]]:
-    if not contacts:
-        return "No opportunity contacts recorded.", []
-    top_contacts = contacts[:3]
-    citations: list[dict] = []
-    lines = [f"Contacts recorded: {len(contacts)}."]
-    for contact in top_contacts:
-        citations.append(
-            {
-                "type": "contact",
-                "contact_id": contact.id,
-                "name": contact.name,
-            }
-        )
-        role = contact.role or "Role unknown"
-        org = contact.organization or "Org unknown"
-        lines.append(f"- {contact.name} · {role} · {org}")
-    return "\n".join(lines), citations
-
-
-def _summarize_budgets(records: list[BudgetIntelligence]) -> tuple[str, list[dict]]:
-    if not records:
-        return "No budget intelligence records found.", []
-    top = records[:3]
-    citations: list[dict] = []
-    lines = [f"Budget records found: {len(records)}."]
-    for record in top:
-        citations.append({"type": "budget_intel", "id": record.id})
-        amount = f"${record.amount:,.0f}" if record.amount else "Amount TBD"
-        lines.append(f"- {record.title} · FY{record.fiscal_year or 'TBD'} · {amount}")
-    return "\n".join(lines), citations
-
-
-def _summarize_contracts(contracts: list[ContractAward]) -> tuple[str, list[dict]]:
-    if not contracts:
-        return "No related contracts found.", []
-    citations: list[dict] = []
-    lines = [f"Related contracts: {len(contracts)}."]
-    for contract in contracts[:3]:
-        citations.append({"type": "contract", "id": contract.id})
-        lines.append(f"- {contract.title} · {contract.contract_number}")
-    return "\n".join(lines), citations
+def _build_gemini_history(conversation_history: list[dict] | None) -> list[dict]:
+    """Convert stored messages to Gemini multi-turn format."""
+    if not conversation_history:
+        return []
+    history = []
+    for msg in conversation_history[-MAX_HISTORY_MESSAGES:]:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        # Gemini uses "model" not "assistant"
+        gemini_role = "model" if role == "assistant" else "user"
+        history.append({"role": gemini_role, "parts": [content]})
+    return history
 
 
 async def generate_dash_response(
-    session: AsyncSession,
+    db: AsyncSession,
     *,
     user_id: int,
     question: str,
     rfp_id: int | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> tuple[str, list[dict]]:
-    """
-    Generate a response grounded in internal data.
-    Returns (content, citations).
-    """
-    citations: list[dict] = []
-
-    rfp: RFP | None = None
-    if rfp_id is not None:
-        result = await session.execute(select(RFP).where(RFP.id == rfp_id, RFP.user_id == user_id))
-        rfp = result.scalar_one_or_none()
-        if rfp:
-            citations.append(
-                {
-                    "type": "rfp",
-                    "rfp_id": rfp.id,
-                    "title": rfp.title,
-                }
-            )
-
-    docs_result = await session.execute(
-        select(KnowledgeBaseDocument)
-        .where(KnowledgeBaseDocument.user_id == user_id)
-        .order_by(KnowledgeBaseDocument.created_at.desc())
-        .limit(3)
-    )
-    docs = docs_result.scalars().all()
-    citations.extend(_build_doc_citations(docs))
-
-    intent = _detect_intent(question)
-    context = _build_rfp_context(rfp)
-
-    if intent == "summary":
-        if not rfp:
-            answer = "Select an opportunity to summarize."
-        else:
-            base_text = rfp.summary or rfp.description or "No description available."
-            answer = f"{context}\nSummary: {_truncate(base_text)}"
-    elif intent == "compliance_gap":
-        if not rfp:
-            answer = "Select an opportunity to analyze compliance gaps."
-        else:
-            matrix_result = await session.execute(
-                select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp.id)
-            )
-            matrix = matrix_result.scalar_one_or_none()
-            if not matrix:
-                answer = f"{context}\nNo compliance matrix found for this opportunity."
-            else:
-                gap_summary, gap_citations = _summarize_compliance(matrix)
-                citations.extend(gap_citations)
-                answer = f"{context}\n{gap_summary}"
-    elif intent == "capability_statement":
-        if not docs:
-            answer = (
-                "Upload capability statements or past performance documents to draft a statement."
-            )
-        else:
-            doc_titles = ", ".join([doc.title for doc in docs])
-            answer = (
-                f"Draft capability statement for {context}: "
-                f"Our team delivers mission-ready solutions backed by {doc_titles}. "
-                "We have proven experience supporting federal programs with secure, compliant delivery."
-            )
-    elif intent == "competitive_intel":
-        awards: list[AwardRecord] = []
-        contacts: list[OpportunityContact] = []
-        budgets: list[BudgetIntelligence] = []
-        contracts: list[ContractAward] = []
-        if rfp:
-            awards_result = await session.execute(
-                select(AwardRecord).where(
-                    AwardRecord.user_id == user_id,
-                    AwardRecord.rfp_id == rfp.id,
-                )
-            )
-            awards = awards_result.scalars().all()
-            contacts_result = await session.execute(
-                select(OpportunityContact).where(
-                    OpportunityContact.user_id == user_id,
-                    OpportunityContact.rfp_id == rfp.id,
-                )
-            )
-            contacts = contacts_result.scalars().all()
-            budgets_result = await session.execute(
-                select(BudgetIntelligence).where(
-                    BudgetIntelligence.user_id == user_id,
-                    BudgetIntelligence.rfp_id == rfp.id,
-                )
-            )
-            budgets = budgets_result.scalars().all()
-            contract_result = await session.execute(
-                select(ContractAward).where(
-                    ContractAward.user_id == user_id,
-                    ContractAward.rfp_id == rfp.id,
-                )
-            )
-            contracts = contract_result.scalars().all()
-        else:
-            awards_result = await session.execute(
-                select(AwardRecord)
-                .where(AwardRecord.user_id == user_id)
-                .order_by(AwardRecord.created_at.desc())
-                .limit(5)
-            )
-            awards = awards_result.scalars().all()
-
-        award_summary, award_citations = _summarize_awards(awards)
-        contact_summary, contact_citations = _summarize_contacts(contacts)
-        budget_summary, budget_citations = _summarize_budgets(budgets)
-        contract_summary, contract_citations = _summarize_contracts(contracts)
-        citations.extend(award_citations)
-        citations.extend(contact_citations)
-        citations.extend(budget_citations)
-        citations.extend(contract_citations)
-
-        base_context = context if rfp else "Competitive intel summary (all awards)"
-        answer = (
-            f"{base_context}\n{award_summary}\n{contact_summary}\n"
-            f"{budget_summary}\n{contract_summary}"
-        )
-    else:
-        answer = (
-            f"{context}\nI can help with summaries, compliance gap analysis, or capability statements. "
-            f"Ask a specific question and I will ground the response in your data."
-        )
+    """Generate an AI-powered chat response grounded in user data."""
+    context_text, citations = await _gather_context(db, user_id, rfp_id)
 
     if settings.mock_ai:
-        answer = f"{answer} (mock)"
+        answer = (
+            f"**Mock Dash Response**\n\n"
+            f"You asked: {question}\n\n"
+            f"Context loaded: {'RFP and user data available' if rfp_id else 'No RFP selected'}\n\n"
+            f"This is a mock response. Configure `GEMINI_API_KEY` for real AI."
+        )
+        return answer, citations
 
-    return answer, citations
+    if not settings.gemini_api_key:
+        return "Gemini API is not configured. Set GEMINI_API_KEY to enable AI chat.", citations
+
+    genai.configure(api_key=settings.gemini_api_key)
+    system_instruction = SYSTEM_PROMPT.format(context=context_text)
+    history = _build_gemini_history(conversation_history)
+
+    try:
+        model = genai.GenerativeModel(
+            settings.gemini_model_flash,
+            system_instruction=system_instruction,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=4096,
+            ),
+        )
+        chat = model.start_chat(history=history)
+        response = await chat.send_message_async(question)
+        return response.text, citations
+    except Exception as e:
+        logger.error("Dash AI generation failed", error=str(e))
+        return f"I encountered an error generating a response: {e}", citations
+
+
+async def generate_dash_response_stream(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    question: str,
+    rfp_id: int | None = None,
+    conversation_history: list[dict] | None = None,
+) -> AsyncGenerator[str, None]:
+    """Stream AI response chunks. Yields text chunks as they arrive."""
+    context_text, _ = await _gather_context(db, user_id, rfp_id)
+
+    if settings.mock_ai:
+        mock_parts = [
+            "**Mock Dash Response**\n\n",
+            f"You asked: _{question}_\n\n",
+            "This is a streaming mock response. ",
+            "Configure `GEMINI_API_KEY` for real AI.",
+        ]
+        for part in mock_parts:
+            yield part
+            await asyncio.sleep(0.1)
+        return
+
+    if not settings.gemini_api_key:
+        yield "Gemini API is not configured. Set GEMINI_API_KEY to enable AI chat."
+        return
+
+    genai.configure(api_key=settings.gemini_api_key)
+    system_instruction = SYSTEM_PROMPT.format(context=context_text)
+    history = _build_gemini_history(conversation_history)
+
+    try:
+        model = genai.GenerativeModel(
+            settings.gemini_model_flash,
+            system_instruction=system_instruction,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=4096,
+            ),
+        )
+        chat = model.start_chat(history=history)
+        response = await chat.send_message_async(question, stream=True)
+        async for chunk in response:
+            if chunk.text:
+                yield chunk.text
+    except Exception as e:
+        logger.error("Dash AI streaming failed", error=str(e))
+        yield f"\n\nI encountered an error: {e}"
+
+
+async def get_context_citations(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    rfp_id: int | None = None,
+) -> list[dict]:
+    """Get just the citations for the current context (used after streaming completes)."""
+    _, citations = await _gather_context(db, user_id, rfp_id)
+    return citations
