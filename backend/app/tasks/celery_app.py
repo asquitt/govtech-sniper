@@ -87,6 +87,12 @@ celery_app.conf.update(
             "schedule": crontab(minute=30, hour="*/6"),
             "options": {"queue": "periodic"},
         },
+        # Daily opportunity digest at 7 AM UTC
+        "daily-opportunity-digest": {
+            "task": "app.tasks.ingest_tasks.send_daily_digest",
+            "schedule": crontab(minute=0, hour=7),
+            "options": {"queue": "periodic"},
+        },
         # Watch SharePoint folders for new RFP documents every 15 minutes
         "watch-sharepoint-folders": {
             "task": "app.tasks.sharepoint_sync_tasks.watch_sharepoint_folders",

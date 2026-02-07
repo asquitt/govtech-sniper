@@ -484,6 +484,90 @@ def periodic_multi_source_scan():
     return run_async(_scan())
 
 
+@celery_app.task(name="app.tasks.ingest_tasks.send_daily_digest")
+def send_daily_digest():
+    """Send daily opportunity digest to subscribed users."""
+    from datetime import datetime, timedelta
+
+    from app.models.market_signal import (
+        DigestFrequency,
+        MarketSignal,
+        SignalSubscription,
+        SignalType,
+    )
+
+    logger.info("Running daily opportunity digest")
+
+    async def _digest():
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+
+        async with get_celery_session_context() as session:
+            # Get users with daily digest enabled
+            sub_result = await session.execute(
+                select(SignalSubscription).where(
+                    SignalSubscription.email_digest_enabled == True,
+                    SignalSubscription.digest_frequency == DigestFrequency.DAILY,
+                )
+            )
+            subscriptions = sub_result.scalars().all()
+
+            sent_count = 0
+            for sub in subscriptions:
+                # Find new high-scoring opportunities for this user
+                rfp_result = await session.execute(
+                    select(RFP)
+                    .where(
+                        RFP.user_id == sub.user_id,
+                        RFP.created_at >= cutoff,
+                        RFP.match_score >= 60,
+                    )
+                    .order_by(desc(RFP.match_score))
+                    .limit(10)
+                )
+                rfps = rfp_result.scalars().all()
+
+                if not rfps:
+                    continue
+
+                # Build digest content
+                lines = [f"Daily Opportunity Digest - {len(rfps)} new matches\n"]
+                for rfp in rfps:
+                    score = rfp.match_score or 0
+                    lines.append(f"  [{score:.0f}%] {rfp.title}")
+                    lines.append(f"         Agency: {rfp.agency}")
+                    if rfp.response_deadline:
+                        lines.append(
+                            f"         Deadline: {rfp.response_deadline.strftime('%Y-%m-%d')}"
+                        )
+                    lines.append("")
+
+                digest_text = "\n".join(lines)
+                logger.info(
+                    "Digest prepared",
+                    user_id=sub.user_id,
+                    opportunities=len(rfps),
+                    digest_preview=digest_text[:200],
+                )
+
+                # Create MarketSignal for tracking
+                signal = MarketSignal(
+                    user_id=sub.user_id,
+                    title=f"Daily Digest: {len(rfps)} new matches",
+                    signal_type=SignalType.NEWS,
+                    content=digest_text,
+                    relevance_score=max(rfp.match_score or 0 for rfp in rfps),
+                )
+                session.add(signal)
+                sent_count += 1
+
+            await session.commit()
+
+        logger.info("Daily digest complete", digests_sent=sent_count)
+        return {"status": "completed", "digests_sent": sent_count}
+
+    return run_async(_digest())
+
+
 def _parse_date(date_str: str | None):
     """Best-effort parse of date strings from various providers."""
     if not date_str:
