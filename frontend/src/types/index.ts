@@ -10,3 +10,6 @@ export * from "./revenue";
 export * from "./forecast";
 export * from "./collaboration";
 export * from "./sharepoint";
+export * from "./salesforce";
+export * from "./data-sources";
+export * from "./analytics";

@@ -74,6 +74,7 @@ from app.models.collaboration import (
     WorkspaceRole,
     SharedDataType,
 )
+from app.models.salesforce_mapping import SalesforceFieldMapping
 
 __all__ = [
     "User",
@@ -151,4 +152,5 @@ __all__ = [
     "SharedDataPermission",
     "WorkspaceRole",
     "SharedDataType",
+    "SalesforceFieldMapping",
 ]

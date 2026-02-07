@@ -10,6 +10,11 @@ import type {
   AuditEvent,
   AuditSummary,
   ObservabilityMetrics,
+  WinRateData,
+  PipelineByStageData,
+  ConversionRatesData,
+  ProposalTurnaroundData,
+  NAICSPerformanceData,
 } from "@/types";
 
 // =============================================================================
@@ -301,6 +306,39 @@ export const analyticsApi = {
 
   getObservability: async (params?: { days?: number }): Promise<ObservabilityMetrics> => {
     const { data } = await api.get("/analytics/observability", { params });
+    return data;
+  },
+
+  getWinRate: async (): Promise<WinRateData> => {
+    const { data } = await api.get("/analytics/win-rate");
+    return data;
+  },
+
+  getPipelineByStage: async (): Promise<PipelineByStageData> => {
+    const { data } = await api.get("/analytics/pipeline-by-stage");
+    return data;
+  },
+
+  getConversionRates: async (): Promise<ConversionRatesData> => {
+    const { data } = await api.get("/analytics/conversion-rates");
+    return data;
+  },
+
+  getProposalTurnaround: async (): Promise<ProposalTurnaroundData> => {
+    const { data } = await api.get("/analytics/proposal-turnaround");
+    return data;
+  },
+
+  getNaicsPerformance: async (): Promise<NAICSPerformanceData> => {
+    const { data } = await api.get("/analytics/naics-performance");
+    return data;
+  },
+
+  exportReport: async (reportType: string, format: string = "csv"): Promise<string> => {
+    const { data } = await api.post("/analytics/export", { report_type: reportType, format }, {
+      responseType: "text",
+      headers: { Accept: "text/csv" },
+    });
     return data;
   },
 };

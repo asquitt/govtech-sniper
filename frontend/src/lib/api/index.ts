@@ -25,3 +25,5 @@ export { forecastApi } from "./forecasts";
 export { teamingBoardApi } from "./teaming";
 export { collaborationApi } from "./collaboration";
 export { sharepointApi } from "./sharepoint";
+export { salesforceApi } from "./salesforce";
+export { dataSourcesApi } from "./data-sources";

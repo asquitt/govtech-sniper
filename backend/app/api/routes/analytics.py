@@ -425,40 +425,6 @@ async def get_ai_usage(
         "estimated_cost_usd": round(estimated_cost, 2),
         "average_tokens_per_generation": round(total_tokens / generations, 0) if generations > 0 else 0,
     }
-
-
-# =============================================================================
-# Win Rate Analytics (Future)
-# =============================================================================
-
-@router.get("/win-rate")
-async def get_win_rate_analytics(
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
-    """
-    Get win/loss tracking analytics.
-    (Placeholder - requires outcome tracking)
-    """
-    user_id = current_user.id
-
-    # Count submitted proposals
-    submitted = await session.execute(
-        select(func.count(RFP.id)).where(
-            RFP.user_id == user_id,
-            RFP.status == RFPStatus.SUBMITTED,
-        )
-    )
-    total_submitted = submitted.scalar() or 0
-
-    # Placeholder for when win/loss tracking is implemented
-    return {
-        "total_submitted": total_submitted,
-        "wins": 0,
-        "losses": 0,
-        "pending": total_submitted,
-        "win_rate": 0.0,
-        "note": "Win/loss tracking requires marking proposal outcomes",
     }
 
 

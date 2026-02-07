@@ -58,6 +58,9 @@ from app.api.routes import (
     teaming_board_router,
     collaboration_router,
     sharepoint_router,
+    salesforce_router,
+    data_sources_router,
+    analytics_reporting_router,
 )
 
 # Configure structured logging
@@ -268,6 +271,9 @@ app.include_router(forecasts_router, prefix=api_prefix)
 app.include_router(teaming_board_router, prefix=api_prefix)
 app.include_router(collaboration_router, prefix=api_prefix)
 app.include_router(sharepoint_router, prefix=api_prefix)
+app.include_router(salesforce_router, prefix=api_prefix)
+app.include_router(data_sources_router, prefix=api_prefix)
+app.include_router(analytics_reporting_router, prefix=api_prefix)
 
 
 # =============================================================================

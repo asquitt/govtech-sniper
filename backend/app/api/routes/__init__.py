@@ -38,6 +38,9 @@ from app.api.routes.forecasts import router as forecasts_router
 from app.api.routes.teaming_board import router as teaming_board_router
 from app.api.routes.collaboration import router as collaboration_router
 from app.api.routes.sharepoint import router as sharepoint_router
+from app.api.routes.data_sources import router as data_sources_router
+from app.api.routes.salesforce import router as salesforce_router
+from app.api.routes.analytics_reporting import router as analytics_reporting_router
 
 __all__ = [
     "ingest_router",
@@ -74,4 +77,7 @@ __all__ = [
     "teaming_board_router",
     "collaboration_router",
     "sharepoint_router",
+    "data_sources_router",
+    "salesforce_router",
+    "analytics_reporting_router",
 ]
