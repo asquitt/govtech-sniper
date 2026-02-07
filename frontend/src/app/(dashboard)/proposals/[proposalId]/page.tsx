@@ -448,6 +448,7 @@ export default function ProposalWorkspacePage() {
             />
 
             <WordAssistantPanel
+              proposalId={proposalId}
               sessions={wordSessions}
               events={wordEvents}
               docName={wordDocName}

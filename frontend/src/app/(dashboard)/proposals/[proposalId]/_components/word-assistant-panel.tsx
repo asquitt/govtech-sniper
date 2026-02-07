@@ -5,9 +5,11 @@ import { FileText, Plus, RefreshCw } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { SharePointSyncConfigPanel } from "@/app/(dashboard)/settings/integrations/_components/sharepoint-sync-config";
 import type { WordAddinSession, WordAddinEvent } from "@/types";
 
 interface WordAssistantPanelProps {
+  proposalId: number;
   sessions: WordAddinSession[];
   events: Record<number, WordAddinEvent[]>;
   docName: string;
@@ -21,6 +23,7 @@ interface WordAssistantPanelProps {
 }
 
 export function WordAssistantPanel({
+  proposalId,
   sessions,
   events,
   docName,
@@ -33,6 +36,7 @@ export function WordAssistantPanel({
   updatingSessionId,
 }: WordAssistantPanelProps) {
   return (
+    <>
     <Card className="border border-border">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -143,5 +147,8 @@ export function WordAssistantPanel({
         </div>
       </CardContent>
     </Card>
+
+    <SharePointSyncConfigPanel proposalId={proposalId} />
+    </>
   );
 }
