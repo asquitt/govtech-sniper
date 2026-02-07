@@ -66,6 +66,14 @@ from app.models.contract import (
     CLINType,
 )
 from app.models.forecast import ProcurementForecast, ForecastAlert, ForecastSource
+from app.models.collaboration import (
+    SharedWorkspace,
+    WorkspaceInvitation,
+    WorkspaceMember,
+    SharedDataPermission,
+    WorkspaceRole,
+    SharedDataType,
+)
 
 __all__ = [
     "User",
@@ -137,4 +145,10 @@ __all__ = [
     "ForecastSource",
     "TeamingRequest",
     "TeamingRequestStatus",
+    "SharedWorkspace",
+    "WorkspaceInvitation",
+    "WorkspaceMember",
+    "SharedDataPermission",
+    "WorkspaceRole",
+    "SharedDataType",
 ]

@@ -36,6 +36,7 @@ from app.api.routes.revenue import router as revenue_router
 from app.api.routes.capture_timeline import router as capture_timeline_router
 from app.api.routes.forecasts import router as forecasts_router
 from app.api.routes.teaming_board import router as teaming_board_router
+from app.api.routes.collaboration import router as collaboration_router
 
 __all__ = [
     "ingest_router",
@@ -70,4 +71,5 @@ __all__ = [
     "capture_timeline_router",
     "forecasts_router",
     "teaming_board_router",
+    "collaboration_router",
 ]

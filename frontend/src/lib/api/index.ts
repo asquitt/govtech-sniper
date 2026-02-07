@@ -23,3 +23,4 @@ export { revenueApi } from "./revenue";
 export { captureTimelineApi } from "./capture-timeline";
 export { forecastApi } from "./forecasts";
 export { teamingBoardApi } from "./teaming";
+export { collaborationApi } from "./collaboration";

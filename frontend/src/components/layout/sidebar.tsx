@@ -15,6 +15,7 @@ import {
   LogOut,
   User,
   Users,
+  Share2,
   DollarSign,
   GitBranch,
   TrendingUp,
@@ -71,6 +72,11 @@ const navItems: NavItem[] = [
     title: "Teaming",
     href: "/teaming",
     icon: Users,
+  },
+  {
+    title: "Collaboration",
+    href: "/collaboration",
+    icon: Share2,
   },
   {
     title: "Contracts",

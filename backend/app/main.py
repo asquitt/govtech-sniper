@@ -56,6 +56,7 @@ from app.api.routes import (
     capture_timeline_router,
     forecasts_router,
     teaming_board_router,
+    collaboration_router,
 )
 
 # Configure structured logging
@@ -264,6 +265,7 @@ app.include_router(revenue_router, prefix=api_prefix)
 app.include_router(capture_timeline_router, prefix=api_prefix)
 app.include_router(forecasts_router, prefix=api_prefix)
 app.include_router(teaming_board_router, prefix=api_prefix)
+app.include_router(collaboration_router, prefix=api_prefix)
 
 
 # =============================================================================
