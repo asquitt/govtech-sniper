@@ -63,6 +63,7 @@ from app.models.contract import (
     ModType,
     CLINType,
 )
+from app.models.forecast import ProcurementForecast, ForecastAlert, ForecastSource
 
 __all__ = [
     "User",
@@ -129,4 +130,7 @@ __all__ = [
     "ContractType",
     "ModType",
     "CLINType",
+    "ProcurementForecast",
+    "ForecastAlert",
+    "ForecastSource",
 ]

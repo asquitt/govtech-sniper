@@ -7,3 +7,4 @@ export * from "./integration";
 export * from "./proposal";
 export * from "./knowledge-base";
 export * from "./revenue";
+export * from "./forecast";

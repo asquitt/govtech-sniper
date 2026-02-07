@@ -21,3 +21,4 @@ export type {
 } from "./misc";
 export { revenueApi } from "./revenue";
 export { captureTimelineApi } from "./capture-timeline";
+export { forecastApi } from "./forecasts";

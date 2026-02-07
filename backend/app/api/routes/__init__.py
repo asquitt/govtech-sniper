@@ -34,6 +34,7 @@ from app.api.routes.secrets import router as secrets_router
 from app.api.routes.budget_intel import router as budget_intel_router
 from app.api.routes.revenue import router as revenue_router
 from app.api.routes.capture_timeline import router as capture_timeline_router
+from app.api.routes.forecasts import router as forecasts_router
 
 __all__ = [
     "ingest_router",
@@ -66,4 +67,5 @@ __all__ = [
     "budget_intel_router",
     "revenue_router",
     "capture_timeline_router",
+    "forecasts_router",
 ]
