@@ -14,6 +14,7 @@ from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.capture import TeamingPartner, TeamingRequest, TeamingRequestStatus
 from app.schemas.teaming import (
+    CapabilityGapResult,
     TeamingPartnerExtended,
     TeamingPartnerPublicProfile,
     TeamingRequestCreate,
@@ -22,6 +23,7 @@ from app.schemas.teaming import (
 )
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
+from app.services.capability_gap_service import analyze_capability_gaps
 
 router = APIRouter(prefix="/teaming", tags=["Teaming Board"])
 
@@ -327,4 +329,25 @@ async def update_teaming_request(
         partner_name=partner.name,
         created_at=request.created_at,
         updated_at=request.updated_at,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Capability Gap Analysis
+# -----------------------------------------------------------------------------
+
+
+@router.get("/gap-analysis/{rfp_id}", response_model=CapabilityGapResult)
+async def get_gap_analysis(
+    rfp_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CapabilityGapResult:
+    """AI-powered capability gap analysis for an RFP."""
+    result = await analyze_capability_gaps(rfp_id, current_user.id, session)
+    return CapabilityGapResult(
+        rfp_id=result.rfp_id,
+        gaps=result.gaps,
+        recommended_partners=result.recommended_partners,
+        analysis_summary=result.analysis_summary,
     )

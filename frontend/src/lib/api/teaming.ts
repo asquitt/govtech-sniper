@@ -1,5 +1,6 @@
 import api from "./client";
 import type {
+  CapabilityGapResult,
   TeamingPartnerPublicProfile,
   TeamingRequest,
 } from "@/types";
@@ -37,6 +38,11 @@ export const teamingBoardApi = {
 
   updateRequest: async (requestId: number, status: "accepted" | "declined"): Promise<TeamingRequest> => {
     const { data } = await api.patch(`/teaming/requests/${requestId}`, { status });
+    return data;
+  },
+
+  getGapAnalysis: async (rfpId: number): Promise<CapabilityGapResult> => {
+    const { data } = await api.get(`/teaming/gap-analysis/${rfpId}`);
     return data;
   },
 };

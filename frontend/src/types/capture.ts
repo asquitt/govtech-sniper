@@ -207,3 +207,27 @@ export interface BidDecisionSummary {
   no_bid_count: number;
   conditional_count: number;
 }
+
+// ---------------------------------------------------------------------------
+// Capability Gap Analysis
+// ---------------------------------------------------------------------------
+
+export interface CapabilityGapItem {
+  gap_type: string;
+  description: string;
+  required_value?: string | null;
+  matching_partner_ids: number[];
+}
+
+export interface RecommendedPartner {
+  partner_id: number;
+  name: string;
+  reason: string;
+}
+
+export interface CapabilityGapResult {
+  rfp_id: number;
+  gaps: CapabilityGapItem[];
+  recommended_partners: RecommendedPartner[];
+  analysis_summary: string;
+}

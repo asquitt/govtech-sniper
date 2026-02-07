@@ -76,3 +76,28 @@ class TeamingRequestRead(BaseModel):
 
 class TeamingRequestUpdate(BaseModel):
     status: str  # "accepted" or "declined"
+
+
+# ---------------------------------------------------------------------------
+# Capability Gap Analysis
+# ---------------------------------------------------------------------------
+
+
+class CapabilityGapItem(BaseModel):
+    gap_type: str  # technical | clearance | naics | past_performance | set_aside
+    description: str
+    required_value: str | None = None
+    matching_partner_ids: list[int] = []
+
+
+class RecommendedPartner(BaseModel):
+    partner_id: int
+    name: str
+    reason: str
+
+
+class CapabilityGapResult(BaseModel):
+    rfp_id: int
+    gaps: list[CapabilityGapItem] = []
+    recommended_partners: list[RecommendedPartner] = []
+    analysis_summary: str = ""
