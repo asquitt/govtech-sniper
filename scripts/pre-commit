@@ -10,19 +10,40 @@ STAGED=$(git diff --cached --name-only --diff-filter=ACM)
 # ── Python checks ──────────────────────────────────────────────
 BACKEND_PY=$(echo "$STAGED" | grep -E '^backend/.*\.py$' || true)
 if [ -n "$BACKEND_PY" ]; then
-    echo "Running ruff lint on staged Python files..."
     # Strip backend/ prefix so per-file-ignores resolve correctly
     PY_RELATIVE=$(echo "$BACKEND_PY" | sed 's|^backend/||')
+    echo "Running ruff lint on staged Python files..."
     (cd backend && echo "$PY_RELATIVE" | xargs ruff check)
     echo "Running ruff format check..."
     (cd backend && echo "$PY_RELATIVE" | xargs ruff format --check)
 fi
 
 # ── TypeScript checks ─────────────────────────────────────────
-TS_FILES=$(echo "$STAGED" | grep -E '\.(ts|tsx)$' || true)
+TS_FILES=$(echo "$STAGED" | grep -E '^frontend/.*\.(ts|tsx)$' || true)
 if [ -n "$TS_FILES" ]; then
     echo "Running tsc on frontend..."
-    cd frontend && npx tsc --noEmit && cd ..
+    (cd frontend && npx tsc --noEmit)
+fi
+
+# ── Model import check ────────────────────────────────────────
+# New model files under backend/app/models/ must be imported in database.py
+NEW_MODELS=$(echo "$STAGED" | grep -E '^backend/app/models/[a-z].*\.py$' | grep -v '__init__' || true)
+if [ -n "$NEW_MODELS" ]; then
+    DB_FILE="backend/app/database.py"
+    MISSING=""
+    for model_path in $NEW_MODELS; do
+        MODULE=$(basename "$model_path" .py)
+        if ! grep -q "$MODULE" "$DB_FILE"; then
+            MISSING="${MISSING}  ${MODULE}\n"
+        fi
+    done
+    if [ -n "$MISSING" ]; then
+        echo ""
+        echo "ERROR: Model files staged but not imported in database.py init_db():"
+        echo -e "$MISSING"
+        echo "Add them to the import block in backend/app/database.py."
+        exit 1
+    fi
 fi
 
 echo "Pre-commit checks passed."
