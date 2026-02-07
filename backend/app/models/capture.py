@@ -312,3 +312,54 @@ class TeamingPerformanceRating(SQLModel, table=True):
     timeliness: int | None = Field(default=None, ge=1, le=5)
     comment: str | None = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# =============================================================================
+# Win/Loss Debrief
+# =============================================================================
+
+
+class DebriefSource(str, Enum):
+    AGENCY_LETTER = "agency_letter"
+    VERBAL_DEBRIEF = "verbal_debrief"
+    FOIA_REQUEST = "foia_request"
+    INTERNAL_REVIEW = "internal_review"
+    OTHER = "other"
+
+
+class WinLossDebrief(SQLModel, table=True):
+    """Post-award debrief tracking for win/loss analysis."""
+
+    __tablename__ = "win_loss_debriefs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    capture_plan_id: int = Field(foreign_key="capture_plans.id", index=True, unique=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+
+    outcome: CaptureStage = Field()  # won or lost
+    source: DebriefSource = Field(default=DebriefSource.INTERNAL_REVIEW)
+    debrief_date: date | None = None
+
+    # Agency feedback
+    agency_feedback: str | None = Field(default=None, sa_column=Column(Text))
+    technical_score: float | None = None
+    management_score: float | None = None
+    price_score: float | None = None
+    past_performance_score: float | None = None
+
+    # Win themes / loss factors
+    win_themes: list = Field(default=[], sa_column=Column(JSON))
+    loss_factors: list = Field(default=[], sa_column=Column(JSON))
+
+    # Competitor info
+    winning_vendor: str | None = Field(default=None, max_length=255)
+    winning_price: int | None = None
+    our_price: int | None = None
+    num_offerors: int | None = None
+
+    # Lessons learned
+    lessons_learned: str | None = Field(default=None, sa_column=Column(Text))
+    recommendations: list = Field(default=[], sa_column=Column(JSON))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

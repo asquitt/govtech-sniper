@@ -26,3 +26,4 @@ export * from "./unanet";
 export * from "./report";
 export * from "./template-marketplace";
 export * from "./activity";
+export * from "./intelligence";

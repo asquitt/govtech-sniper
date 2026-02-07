@@ -30,6 +30,7 @@ from app.api.routes.graphics import router as graphics_router
 from app.api.routes.health import router as health_router
 from app.api.routes.ingest import router as ingest_router
 from app.api.routes.integrations import router as integrations_router
+from app.api.routes.intelligence import router as intelligence_router
 from app.api.routes.notifications import router as notifications_router
 from app.api.routes.reports import router as reports_router
 from app.api.routes.revenue import router as revenue_router
@@ -106,4 +107,5 @@ __all__ = [
     "unanet_router",
     "reports_router",
     "activity_router",
+    "intelligence_router",
 ]

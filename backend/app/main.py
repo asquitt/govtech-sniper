@@ -39,6 +39,7 @@ from app.api.routes import (
     health_router,
     ingest_router,
     integrations_router,
+    intelligence_router,
     notifications_router,
     reports_router,
     revenue_router,
@@ -348,6 +349,7 @@ app.include_router(compliance_router, prefix=api_prefix)
 app.include_router(unanet_router, prefix=api_prefix)
 app.include_router(reports_router, prefix=api_prefix)
 app.include_router(activity_router, prefix=api_prefix)
+app.include_router(intelligence_router, prefix=api_prefix)
 
 
 # =============================================================================

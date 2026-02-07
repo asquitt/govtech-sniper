@@ -121,6 +121,11 @@ const navItems: NavItem[] = [
     icon: BarChart2,
   },
   {
+    title: "Intelligence",
+    href: "/intelligence",
+    icon: BarChart3,
+  },
+  {
     title: "Events",
     href: "/events",
     icon: Calendar,
