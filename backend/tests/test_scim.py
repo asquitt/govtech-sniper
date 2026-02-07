@@ -10,8 +10,8 @@ import pytest
 from httpx import AsyncClient
 from sqlmodel import select
 
+from app.api.routes.teams import Team, TeamMember
 from app.config import settings
-from app.api.routes.teams import TeamMember, Team
 
 
 class TestScimProvisioning:
@@ -39,9 +39,7 @@ class TestScimProvisioning:
         payload = response.json()
         assert payload["userName"] == "scim-user@example.com"
 
-        team_result = await db_session.execute(
-            select(Team).where(Team.name == "GovTech Team")
-        )
+        team_result = await db_session.execute(select(Team).where(Team.name == "GovTech Team"))
         team = team_result.scalar_one()
 
         membership_result = await db_session.execute(

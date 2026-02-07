@@ -215,7 +215,7 @@ Respond with ONLY valid JSON in this format:
                     importance = ImportanceLevel.INFORMATIONAL
 
                 req = ComplianceRequirement(
-                    id=req_data.get("id", f"REQ-{len(requirements)+1:03d}"),
+                    id=req_data.get("id", f"REQ-{len(requirements) + 1:03d}"),
                     section=req_data.get("section", "Unknown"),
                     source_section=req_data.get("source_section"),
                     requirement_text=req_data.get("requirement_text", ""),
@@ -277,10 +277,10 @@ Respond with ONLY valid JSON in this format:
             combined_text = ""
             for doc in documents:
                 if doc.full_text:
-                    combined_text += f"\n\n{'='*50}\n"
+                    combined_text += f"\n\n{'=' * 50}\n"
                     combined_text += f"DOCUMENT: {doc.original_filename}\n"
                     combined_text += f"TYPE: {doc.document_type.value}\n"
-                    combined_text += f"{'='*50}\n\n"
+                    combined_text += f"{'=' * 50}\n\n"
                     combined_text += doc.full_text
 
             if not combined_text:
@@ -385,7 +385,7 @@ Write the response now:"""
         """
         if settings.mock_ai:
             citation_text = "[[Source: Mock_Document.pdf, Page 1]]"
-            raw_text = "This is a mock response generated for testing purposes. " f"{citation_text}"
+            raw_text = f"This is a mock response generated for testing purposes. {citation_text}"
             return GeneratedContent(
                 raw_text=raw_text,
                 clean_text="This is a mock response generated for testing purposes.",
@@ -505,6 +505,168 @@ Write the response now:"""
             )
 
         return citations
+
+    # =========================================================================
+    # Rewrite & Expand
+    # =========================================================================
+
+    REWRITE_PROMPT = """You are an expert government proposal writer. Rewrite the following proposal content.
+
+CURRENT CONTENT:
+{content}
+
+REQUIREMENT BEING ADDRESSED:
+{requirement_text}
+
+INSTRUCTIONS:
+1. Rewrite in a {tone} tone
+2. Maintain all factual claims and citations from the original
+3. Use this EXACT citation format: [[Source: filename.pdf, Page XX]]
+4. Preserve the meaning but improve clarity, flow, and compliance
+{custom_instructions}
+
+Rewrite the content now:"""
+
+    async def rewrite_section(
+        self,
+        content: str,
+        requirement_text: str,
+        tone: str = "professional",
+        instructions: str | None = None,
+        documents_text: str | None = None,
+    ) -> GeneratedContent:
+        """Rewrite existing section content with a new tone or instructions."""
+        if settings.mock_ai:
+            return GeneratedContent(
+                raw_text=f"[Rewritten] {content}",
+                clean_text=f"[Rewritten] {re.sub(self.CITATION_PATTERN, '', content).strip()}",
+                citations=self._extract_citations(content),
+                model_used="mock",
+                tokens_used=0,
+                generation_time_seconds=0.0,
+            )
+
+        if not self.pro_model:
+            raise ValueError("Gemini model not available")
+
+        start_time = datetime.utcnow()
+
+        custom = f"5. Additional instructions: {instructions}" if instructions else ""
+        prompt = self.REWRITE_PROMPT.format(
+            content=content,
+            requirement_text=requirement_text or "N/A",
+            tone=tone,
+            custom_instructions=custom,
+        )
+
+        if documents_text:
+            prompt = f"KNOWLEDGE BASE DOCUMENTS:\n{documents_text}\n\n{prompt}"
+
+        response = await self.pro_model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=len(content.split()) * 4,
+            ),
+        )
+
+        raw_text = response.text
+        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        citations = self._extract_citations(raw_text)
+        clean_text = re.sub(self.CITATION_PATTERN, "", raw_text).strip()
+        clean_text = re.sub(r"\s+", " ", clean_text)
+        tokens_used = (
+            response.usage_metadata.total_token_count if hasattr(response, "usage_metadata") else 0
+        )
+
+        return GeneratedContent(
+            raw_text=raw_text,
+            clean_text=clean_text,
+            citations=citations,
+            model_used=settings.gemini_model_pro,
+            tokens_used=tokens_used,
+            generation_time_seconds=elapsed,
+        )
+
+    EXPAND_PROMPT = """You are an expert government proposal writer. Expand the following proposal content with more detail.
+
+CURRENT CONTENT:
+{content}
+
+REQUIREMENT BEING ADDRESSED:
+{requirement_text}
+
+INSTRUCTIONS:
+1. Expand the content to approximately {target_words} words
+2. Add more specific details, metrics, and evidence
+3. Maintain the existing tone and style
+4. Use this EXACT citation format: [[Source: filename.pdf, Page XX]]
+5. Every new factual claim MUST cite the source document
+{focus_instructions}
+
+Expand the content now:"""
+
+    async def expand_section(
+        self,
+        content: str,
+        requirement_text: str,
+        target_words: int = 800,
+        focus_area: str | None = None,
+        documents_text: str | None = None,
+    ) -> GeneratedContent:
+        """Expand existing section content with more detail."""
+        if settings.mock_ai:
+            expanded = f"{content}\n\n[Expanded with additional detail on the requirement.]"
+            return GeneratedContent(
+                raw_text=expanded,
+                clean_text=re.sub(self.CITATION_PATTERN, "", expanded).strip(),
+                citations=self._extract_citations(content),
+                model_used="mock",
+                tokens_used=0,
+                generation_time_seconds=0.0,
+            )
+
+        if not self.pro_model:
+            raise ValueError("Gemini model not available")
+
+        start_time = datetime.utcnow()
+
+        focus = f"6. Focus especially on: {focus_area}" if focus_area else ""
+        prompt = self.EXPAND_PROMPT.format(
+            content=content,
+            requirement_text=requirement_text or "N/A",
+            target_words=target_words,
+            focus_instructions=focus,
+        )
+
+        if documents_text:
+            prompt = f"KNOWLEDGE BASE DOCUMENTS:\n{documents_text}\n\n{prompt}"
+
+        response = await self.pro_model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=target_words * 3,
+            ),
+        )
+
+        raw_text = response.text
+        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        citations = self._extract_citations(raw_text)
+        clean_text = re.sub(self.CITATION_PATTERN, "", raw_text).strip()
+        clean_text = re.sub(r"\s+", " ", clean_text)
+        tokens_used = (
+            response.usage_metadata.total_token_count if hasattr(response, "usage_metadata") else 0
+        )
+
+        return GeneratedContent(
+            raw_text=raw_text,
+            clean_text=clean_text,
+            citations=citations,
+            model_used=settings.gemini_model_pro,
+            tokens_used=tokens_used,
+            generation_time_seconds=elapsed,
+        )
 
     # =========================================================================
     # Outline Generation

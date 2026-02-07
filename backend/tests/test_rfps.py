@@ -4,13 +4,14 @@ RFP Sniper - RFP Management Tests
 Tests for RFP CRUD operations.
 """
 
-import pytest
 from datetime import datetime
+
+import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
 from app.models.rfp import RFP
+from app.models.user import User
 
 
 class TestRFPList:
@@ -27,9 +28,7 @@ class TestRFPList:
         assert response.json() == []
 
     @pytest.mark.asyncio
-    async def test_list_rfps_with_data(
-        self, client: AsyncClient, test_user: User, test_rfp: RFP
-    ):
+    async def test_list_rfps_with_data(self, client: AsyncClient, test_user: User, test_rfp: RFP):
         """Test listing RFPs with existing data."""
         response = await client.get(
             "/api/v1/rfps",
@@ -227,9 +226,7 @@ class TestRFPStats:
         assert data["total"] == 0
 
     @pytest.mark.asyncio
-    async def test_get_stats_with_data(
-        self, client: AsyncClient, test_user: User, test_rfp: RFP
-    ):
+    async def test_get_stats_with_data(self, client: AsyncClient, test_user: User, test_rfp: RFP):
         """Test getting stats with RFPs."""
         response = await client.get(
             "/api/v1/rfps/stats/summary",

@@ -4,7 +4,6 @@ RFP Sniper - Subscription Service
 Plan definitions, feature access checks, usage stats, and Stripe stubs.
 """
 
-
 import structlog
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession

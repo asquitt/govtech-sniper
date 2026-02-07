@@ -7,11 +7,9 @@ Tests for proposal and section version history.
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
-from app.models.user import User
-from app.models.rfp import RFP
 from app.models.proposal import Proposal, ProposalSection, SectionVersion
+from app.models.user import User
 
 
 class TestProposalVersions:
@@ -30,9 +28,7 @@ class TestProposalVersions:
         assert response.json() == []
 
     @pytest.mark.asyncio
-    async def test_list_proposal_versions_not_found(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_list_proposal_versions_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test listing versions for non-existent proposal."""
         response = await client.get(
             "/api/v1/versions/proposals/99999",
@@ -51,7 +47,7 @@ class TestSectionVersions:
         auth_headers: dict,
         db_session: AsyncSession,
         test_proposal: Proposal,
-        test_user: User
+        test_user: User,
     ):
         """Test creating and listing section versions."""
         # Create a section
@@ -97,7 +93,7 @@ class TestSectionVersions:
         auth_headers: dict,
         db_session: AsyncSession,
         test_proposal: Proposal,
-        test_user: User
+        test_user: User,
     ):
         """Test getting detailed section version."""
         # Create section and version
@@ -141,7 +137,7 @@ class TestSectionVersions:
         auth_headers: dict,
         db_session: AsyncSession,
         test_proposal: Proposal,
-        test_user: User
+        test_user: User,
     ):
         """Test restoring a section to a previous version."""
         # Create section
@@ -190,7 +186,7 @@ class TestSectionVersions:
         auth_headers: dict,
         db_session: AsyncSession,
         test_proposal: Proposal,
-        test_user: User
+        test_user: User,
     ):
         """Test comparing two section versions."""
         # Create section
@@ -277,7 +273,7 @@ class TestVersionAccessControl:
         """Test that users cannot access other users' proposal versions."""
         # Create another user and get their auth headers
         from app.models.user import User
-        from app.services.auth_service import hash_password, create_token_pair
+        from app.services.auth_service import create_token_pair, hash_password
 
         other_user = User(
             email="other@example.com",

@@ -8,16 +8,12 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
-
 
 class TestTemplateList:
     """Tests for template listing."""
 
     @pytest.mark.asyncio
-    async def test_list_templates_empty(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_list_templates_empty(self, client: AsyncClient, auth_headers: dict):
         """Test listing templates when none exist."""
         response = await client.get(
             "/api/v1/templates/",
@@ -38,9 +34,7 @@ class TestTemplateCreate:
     """Tests for template creation."""
 
     @pytest.mark.asyncio
-    async def test_create_template_success(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_create_template_success(self, client: AsyncClient, auth_headers: dict):
         """Test creating a custom template."""
         response = await client.post(
             "/api/v1/templates/",
@@ -64,9 +58,7 @@ class TestTemplateCreate:
         assert len(data["placeholders"]) == 2
 
     @pytest.mark.asyncio
-    async def test_create_template_minimal(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_create_template_minimal(self, client: AsyncClient, auth_headers: dict):
         """Test creating template with minimal fields."""
         response = await client.post(
             "/api/v1/templates/",
@@ -115,9 +107,7 @@ class TestTemplateDetail:
         assert data["name"] == "Test Template"
 
     @pytest.mark.asyncio
-    async def test_get_template_not_found(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_get_template_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test getting non-existent template."""
         response = await client.get(
             "/api/v1/templates/99999",

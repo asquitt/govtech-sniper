@@ -4,7 +4,6 @@ RFP Sniper - SSO Service
 Token exchange helpers for Okta and Microsoft Entra ID.
 """
 
-
 import httpx
 
 from app.config import settings

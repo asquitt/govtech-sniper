@@ -7,7 +7,7 @@ Tests for compliance matrix editing endpoints.
 import pytest
 from httpx import AsyncClient
 
-from app.models.rfp import ComplianceMatrix, RFP
+from app.models.rfp import RFP, ComplianceMatrix
 from app.models.user import User
 
 
@@ -89,7 +89,5 @@ async def test_compliance_matrix_editing(
     assert gaps["rfp_id"] == test_rfp.id
 
     # Delete requirement
-    response = await client.delete(
-        f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001"
-    )
+    response = await client.delete(f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001")
     assert response.status_code == 200

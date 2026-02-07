@@ -11,9 +11,11 @@ STAGED=$(git diff --cached --name-only --diff-filter=ACM)
 PY_FILES=$(echo "$STAGED" | grep -E '\.py$' || true)
 if [ -n "$PY_FILES" ]; then
     echo "Running ruff lint on staged Python files..."
-    echo "$PY_FILES" | xargs ruff check --config backend/pyproject.toml
+    # Strip backend/ prefix so per-file-ignores resolve correctly
+    PY_RELATIVE=$(echo "$PY_FILES" | sed 's|^backend/||')
+    (cd backend && echo "$PY_RELATIVE" | xargs ruff check)
     echo "Running ruff format check..."
-    echo "$PY_FILES" | xargs ruff format --check --config backend/pyproject.toml
+    (cd backend && echo "$PY_RELATIVE" | xargs ruff format --check)
 fi
 
 # ── TypeScript checks ─────────────────────────────────────────

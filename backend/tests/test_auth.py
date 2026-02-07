@@ -4,12 +4,12 @@ RFP Sniper - Authentication Tests
 Tests for user registration, login, and token management.
 """
 
-import pytest
 import pyotp
+import pytest
 from httpx import AsyncClient
 
 from app.models.user import User
-from app.services.auth_service import create_token_pair, hash_password
+from app.services.auth_service import create_token_pair
 
 
 class TestRegistration:
@@ -223,9 +223,7 @@ class TestPasswordChange:
     """Tests for password change."""
 
     @pytest.mark.asyncio
-    async def test_change_password_success(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_change_password_success(self, client: AsyncClient, auth_headers: dict):
         """Test successful password change."""
         response = await client.post(
             "/api/v1/auth/change-password",
@@ -266,9 +264,7 @@ class TestMFA:
         assert disable.status_code == 200
 
     @pytest.mark.asyncio
-    async def test_change_password_wrong_current(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_change_password_wrong_current(self, client: AsyncClient, auth_headers: dict):
         """Test password change with wrong current password."""
         response = await client.post(
             "/api/v1/auth/change-password",
@@ -282,9 +278,7 @@ class TestMFA:
         assert "incorrect" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_change_password_weak_new(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_change_password_weak_new(self, client: AsyncClient, auth_headers: dict):
         """Test password change with weak new password."""
         response = await client.post(
             "/api/v1/auth/change-password",

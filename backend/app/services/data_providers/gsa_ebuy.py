@@ -5,7 +5,6 @@ Fetches opportunities from the GSA eBuy system via the SAM.gov API.
 GSA eBuy opportunities are published through SAM.gov with specific filters.
 """
 
-
 import httpx
 import structlog
 

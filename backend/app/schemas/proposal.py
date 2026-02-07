@@ -219,6 +219,20 @@ class SubmissionPackageRead(BaseModel):
 # =============================================================================
 
 
+class RewriteRequest(BaseModel):
+    """Request to rewrite a section with a new tone or instructions."""
+
+    tone: str = Field(default="professional", pattern="^(professional|technical|executive)$")
+    instructions: str | None = None
+
+
+class ExpandRequest(BaseModel):
+    """Request to expand a section with more detail."""
+
+    target_words: int = Field(default=800, ge=100, le=3000)
+    focus_area: str | None = None
+
+
 class DraftRequest(BaseModel):
     """Request to generate draft for a requirement."""
 

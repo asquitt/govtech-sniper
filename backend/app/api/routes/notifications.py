@@ -226,13 +226,13 @@ class EmailService:
             <div style="padding: 20px;">
                 <h2>⏰ Deadline Reminder</h2>
 
-                <p>The response deadline for the following opportunity is in <strong>{days_until} day{'s' if days_until != 1 else ''}</strong>:</p>
+                <p>The response deadline for the following opportunity is in <strong>{days_until} day{"s" if days_until != 1 else ""}</strong>:</p>
 
                 <div style="background: #f7f7f7; padding: 15px; border-left: 4px solid #e53e3e; margin: 20px 0;">
                     <h3 style="margin-top: 0;">{rfp.title}</h3>
                     <p><strong>Solicitation:</strong> {rfp.solicitation_number}</p>
                     <p><strong>Agency:</strong> {rfp.agency}</p>
-                    <p><strong>Deadline:</strong> {rfp.response_deadline.strftime('%B %d, %Y at %I:%M %p') if rfp.response_deadline else 'TBD'}</p>
+                    <p><strong>Deadline:</strong> {rfp.response_deadline.strftime("%B %d, %Y at %I:%M %p") if rfp.response_deadline else "TBD"}</p>
                 </div>
 
                 <p>
@@ -254,12 +254,12 @@ class EmailService:
         text_body = f"""
 RFP Sniper - Deadline Reminder
 
-The response deadline for the following opportunity is in {days_until} day{'s' if days_until != 1 else ''}:
+The response deadline for the following opportunity is in {days_until} day{"s" if days_until != 1 else ""}:
 
 {rfp.title}
 Solicitation: {rfp.solicitation_number}
 Agency: {rfp.agency}
-Deadline: {rfp.response_deadline.strftime('%B %d, %Y at %I:%M %p') if rfp.response_deadline else 'TBD'}
+Deadline: {rfp.response_deadline.strftime("%B %d, %Y at %I:%M %p") if rfp.response_deadline else "TBD"}
 
 View in RFP Sniper: {settings.app_url}/opportunities/{rfp.id}
         """

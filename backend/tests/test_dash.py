@@ -7,9 +7,9 @@ Tests for Dash session and ask endpoints.
 import pytest
 from httpx import AsyncClient
 
-from app.models.user import User
-from app.models.rfp import RFP
 from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.rfp import RFP
+from app.models.user import User
 
 
 class TestDash:

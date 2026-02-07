@@ -1,6 +1,5 @@
 """Search schemas."""
 
-
 from pydantic import BaseModel, Field
 
 

@@ -2,7 +2,6 @@
 Revenue forecasting schemas.
 """
 
-
 from pydantic import BaseModel
 
 

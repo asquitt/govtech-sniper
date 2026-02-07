@@ -4,7 +4,6 @@ USAspending Data Provider
 Fetches federal spending / award data from the USAspending.gov REST API.
 """
 
-
 import httpx
 import structlog
 

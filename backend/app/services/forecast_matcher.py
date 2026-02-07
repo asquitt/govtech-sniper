@@ -2,7 +2,6 @@
 Forecast matching service — matches procurement forecasts to existing RFPs.
 """
 
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 

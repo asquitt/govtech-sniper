@@ -297,8 +297,7 @@ class SAMGovService:
                 "type": "o",
                 "uiLink": "https://sam.gov/opp/mock-001",
                 "description": (
-                    f"Mock opportunity for {keywords} modernization support. "
-                    f"{description_suffix}"
+                    f"Mock opportunity for {keywords} modernization support. {description_suffix}"
                 ),
                 "resourceLinks": [
                     {"url": "https://sam.gov/files/mock-001-base.pdf", "name": "RFP.pdf"}

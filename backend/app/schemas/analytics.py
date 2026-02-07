@@ -4,7 +4,6 @@ RFP Sniper - Analytics Schemas
 Request/response models for analytics reporting endpoints.
 """
 
-
 from pydantic import BaseModel, Field
 
 # =============================================================================

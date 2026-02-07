@@ -4,7 +4,6 @@ RFP Sniper - SharePoint Integration Routes
 Browse, download, and upload files to SharePoint via Microsoft Graph API.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel

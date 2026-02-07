@@ -8,17 +8,15 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
 from app.models.proposal import Proposal, ProposalSection
+from app.models.user import User
 
 
 class TestTeamManagement:
     """Tests for team CRUD operations."""
 
     @pytest.mark.asyncio
-    async def test_create_team_success(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_create_team_success(self, client: AsyncClient, auth_headers: dict):
         """Test creating a new team."""
         response = await client.post(
             "/api/v1/teams/",
@@ -35,9 +33,7 @@ class TestTeamManagement:
         assert data["member_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_list_teams(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_list_teams(self, client: AsyncClient, auth_headers: dict):
         """Test listing user's teams."""
         # Create a team first
         await client.post(
@@ -56,9 +52,7 @@ class TestTeamManagement:
         assert any(t["name"] == "Test Team" for t in teams)
 
     @pytest.mark.asyncio
-    async def test_get_team_details(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_get_team_details(self, client: AsyncClient, auth_headers: dict):
         """Test getting team details."""
         # Create team
         create_response = await client.post(
@@ -146,9 +140,7 @@ class TestTeamInvitations:
         assert "added to team" in response.json()["message"]
 
     @pytest.mark.asyncio
-    async def test_invite_nonexistent_user(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_invite_nonexistent_user(self, client: AsyncClient, auth_headers: dict):
         """Test inviting a non-existing user creates invitation."""
         # Create team
         team_response = await client.post(
@@ -184,8 +176,6 @@ class TestTeamInvitations:
         await db_session.flush()
 
         # Get test user id from conftest fixture
-        from app.services.auth_service import decode_access_token
-        from app.api.deps import get_current_user
 
         member = TeamMember(
             team_id=team.id,
@@ -215,7 +205,6 @@ class TestTeamMemberManagement:
     ):
         """Test removing a member from team."""
         from app.services.auth_service import hash_password
-        from app.api.routes.teams import TeamMember
 
         # Create another user
         member_user = User(
@@ -375,7 +364,7 @@ class TestProposalComments:
             comment = ProposalComment(
                 proposal_section_id=section.id,
                 user_id=1,
-                content=f"Comment {i+1}",
+                content=f"Comment {i + 1}",
             )
             db_session.add(comment)
         await db_session.commit()

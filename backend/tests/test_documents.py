@@ -6,9 +6,7 @@ Tests for document management in the knowledge base.
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
 from app.models.knowledge_base import KnowledgeBaseDocument
 
 
@@ -16,9 +14,7 @@ class TestDocumentList:
     """Tests for document listing."""
 
     @pytest.mark.asyncio
-    async def test_list_documents_empty(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_list_documents_empty(self, client: AsyncClient, auth_headers: dict):
         """Test listing documents when none exist."""
         response = await client.get(
             "/api/v1/documents",
@@ -83,9 +79,7 @@ class TestDocumentDetail:
         assert data["title"] == test_document.title
 
     @pytest.mark.asyncio
-    async def test_get_document_not_found(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_get_document_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test getting non-existent document."""
         response = await client.get(
             "/api/v1/documents/99999",
@@ -154,9 +148,7 @@ class TestDocumentDelete:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_document_not_found(
-        self, client: AsyncClient, auth_headers: dict
-    ):
+    async def test_delete_document_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test deleting non-existent document."""
         response = await client.delete(
             "/api/v1/documents/99999",

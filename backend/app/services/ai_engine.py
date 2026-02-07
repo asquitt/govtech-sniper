@@ -239,9 +239,9 @@ Remember: NO claim without a citation. The government evaluator must be able to 
                 filename = file_info.get("filename", f"document_{i}.txt")
                 content = file_info.get("content", "")
 
-                combined_content.append(f"{'='*60}\n")
+                combined_content.append(f"{'=' * 60}\n")
                 combined_content.append(f"DOCUMENT {i}: {filename}\n")
-                combined_content.append(f"{'='*60}\n\n")
+                combined_content.append(f"{'=' * 60}\n\n")
                 combined_content.append(content)
                 combined_content.append("\n\n")
 
@@ -373,7 +373,7 @@ Extract all requirements and return as JSON."""
             requirements = []
             for req_data in result.get("requirements", []):
                 req = ExtractedRequirement(
-                    id=req_data.get("id", f"REQ-{len(requirements)+1:03d}"),
+                    id=req_data.get("id", f"REQ-{len(requirements) + 1:03d}"),
                     section=req_data.get("section", "Unknown"),
                     text=req_data.get("text", ""),
                     requirement_type=req_data.get("type", "General"),

@@ -2,7 +2,6 @@
 Draft Routes - Section Generation & Status
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +12,10 @@ from app.config import settings
 from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection
 from app.models.rfp import ComplianceMatrix
-from app.schemas.proposal import DraftRequest, DraftResponse
+from app.schemas.proposal import (
+    DraftRequest,
+    DraftResponse,
+)
 from app.services.auth_service import UserAuth
 from app.tasks.generation_tasks import (
     generate_all_sections,
@@ -59,7 +61,7 @@ async def generate_sections_from_matrix(
         section = ProposalSection(
             proposal_id=proposal_id,
             title=f"Response to {req.get('section', 'Requirement')}",
-            section_number=f"R{i+1:03d}",
+            section_number=f"R{i + 1:03d}",
             requirement_id=req.get("id"),
             requirement_text=req.get("requirement_text"),
             display_order=i,

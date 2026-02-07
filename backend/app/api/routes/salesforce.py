@@ -4,7 +4,6 @@ RFP Sniper - Salesforce Integration Routes
 Salesforce CRM sync, field mappings, and webhook ingestion.
 """
 
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select

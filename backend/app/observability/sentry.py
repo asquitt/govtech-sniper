@@ -4,7 +4,6 @@ RFP Sniper - Sentry Integration
 Error tracking and performance monitoring with Sentry.
 """
 
-
 import structlog
 
 logger = structlog.get_logger(__name__)

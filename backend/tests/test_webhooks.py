@@ -9,8 +9,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.models.webhook import WebhookDelivery
 from app.models.user import User
+from app.models.webhook import WebhookDelivery
 
 
 class TestWebhooks:
