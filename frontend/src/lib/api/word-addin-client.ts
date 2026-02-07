@@ -12,16 +12,18 @@ export interface SectionPullData {
   last_modified: string | null;
 }
 
+export interface ComplianceIssueItem {
+  issue: string;
+  severity: string;
+  suggestion?: string;
+  far_reference?: string;
+}
+
 export interface ComplianceCheckResult {
   section_id: number;
   compliant: boolean;
-  score?: number;
-  issues: Array<{
-    paragraph_snippet?: string;
-    issue: string;
-    severity?: string;
-    suggestion?: string;
-  }>;
+  score: number;
+  issues: ComplianceIssueItem[];
   suggestions: string[];
 }
 

@@ -257,10 +257,18 @@ class SectionPushPayload(BaseModel):
     content: str
 
 
+class ComplianceIssueItem(BaseModel):
+    issue: str
+    severity: str = "warning"  # critical, warning, info
+    suggestion: str | None = None
+    far_reference: str | None = None
+
+
 class ComplianceCheckResult(BaseModel):
     section_id: int
     compliant: bool
-    issues: list[str] = []
+    score: float = 100.0
+    issues: list[ComplianceIssueItem] = []
     suggestions: list[str] = []
 
 
@@ -341,7 +349,7 @@ async def check_section_compliance(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ComplianceCheckResult:
-    """Check section content against its requirements."""
+    """Check section content against its requirements using FAR compliance rules."""
     section = await _get_section_for_user(section_id, current_user.id, session)
 
     content = section.final_content or ""
@@ -350,28 +358,61 @@ async def check_section_compliance(
             content = section.generated_content.get("content", "")
         else:
             content = str(section.generated_content)
+
+    issues: list[ComplianceIssueItem] = []
+    suggestions: list[str] = []
+
+    # Basic content checks
+    if not content.strip():
+        issues.append(ComplianceIssueItem(issue="Section has no content", severity="critical"))
+
     requirements: list[str] = []
     if isinstance(section.requirement_text, str) and section.requirement_text:
         requirements = [section.requirement_text]
 
-    issues: list[str] = []
-    suggestions: list[str] = []
-
-    if not content.strip():
-        issues.append("Section has no content")
-
     if len(content) < 100 and requirements:
-        issues.append("Content appears too short for the requirements")
+        issues.append(
+            ComplianceIssueItem(
+                issue="Content appears too short for the requirements",
+                severity="warning",
+                suggestion="Expand the section to fully address all requirement details.",
+            )
+        )
 
+    # Requirement keyword check
     for req in requirements:
         req_lower = req.lower()
         if req_lower not in content.lower():
-            keyword = req_lower[:50]
+            keyword = req_lower[:80]
             suggestions.append(f"Consider addressing: {keyword}")
+
+    # FAR compliance checks via FARComplianceChecker
+    from app.services.compliance_checker import FARComplianceChecker
+
+    checker = FARComplianceChecker()
+    report = checker.check_proposal(content)
+    for ci in report.issues:
+        issues.append(
+            ComplianceIssueItem(
+                issue=ci.description,
+                severity=ci.level.value,
+                suggestion=ci.suggestion,
+                far_reference=ci.far_reference,
+            )
+        )
+
+    # Calculate score: start at 100, deduct per issue
+    score = max(
+        0.0,
+        100.0
+        - (len([i for i in issues if i.severity == "critical"]) * 25)
+        - (len([i for i in issues if i.severity == "warning"]) * 10),
+    )
 
     return ComplianceCheckResult(
         section_id=section.id,
-        compliant=len(issues) == 0,
+        compliant=not any(i.severity == "critical" for i in issues),
+        score=score,
         issues=issues,
         suggestions=suggestions[:10],
     )

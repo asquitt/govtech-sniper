@@ -8,6 +8,7 @@ import { ProposalSelector } from "./_components/proposal-selector";
 import { SectionList } from "./_components/section-list";
 import { SectionSyncPanel } from "./_components/section-sync-panel";
 import { AiRewritePanel } from "./_components/ai-rewrite-panel";
+import { ComplianceCheckPanel } from "./_components/compliance-check-panel";
 import type { Proposal, ProposalSection } from "@/types";
 
 type TabId = "sections" | "sync" | "rewrite" | "compliance" | "search" | "generate";
@@ -96,9 +97,10 @@ export default function TaskPanePage() {
         )}
 
         {activeTab === "compliance" && (
-          <p className="text-xs text-muted-foreground py-4 text-center">
-            Compliance check panel — coming next.
-          </p>
+          <ComplianceCheckPanel
+            section={selectedSection}
+            isInOffice={isInOffice}
+          />
         )}
 
         {activeTab === "search" && (
@@ -114,7 +116,7 @@ export default function TaskPanePage() {
         )}
 
         {/* Selected section info (shown when not on sync tab) */}
-        {selectedSection && activeTab !== "sync" && (
+        {selectedSection && activeTab !== "sync" && activeTab !== "compliance" && (
           <div className="rounded-md border border-border bg-card/50 p-2">
             <p className="text-[10px] text-muted-foreground">
               Selected Section
