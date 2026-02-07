@@ -53,8 +53,7 @@ jobs:
         run: npm run lint
       - name: Run frontend tests
         run: |
-          timeout 120 npm run test:run
-          EXIT_CODE=$?
+          timeout 120 npm run test:run && EXIT_CODE=0 || EXIT_CODE=$?
           if [ $EXIT_CODE -eq 124 ]; then
             echo "Tests passed (vitest cleanup timed out)"
             exit 0

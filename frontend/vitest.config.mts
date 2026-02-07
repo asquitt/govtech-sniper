@@ -16,6 +16,6 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     clearMocks: true,
     teardownTimeout: 5000,
-    pool: "forks",
+    exclude: ["e2e/**", "node_modules/**"],
   },
 });

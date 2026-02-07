@@ -28,6 +28,8 @@ ignore = [
     "SIM118", # key in dict vs dict.keys() (stylistic)
     "UP007",  # X | Y for annotations (pre-existing)
     "UP038",  # X | Y in isinstance (pre-existing)
+    "UP042",  # str(Enum) → StrEnum (50+ classes, SQLAlchemy compat)
+    "UP045",  # Optional[X] → X | None (pre-existing, fix incrementally)
 ]
 
 [tool.ruff.lint.per-file-ignores]
