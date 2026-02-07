@@ -6,6 +6,7 @@ Export proposals to DOCX and PDF formats.
 
 import io
 import os
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -24,6 +25,77 @@ from app.config import settings
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/export", tags=["Export"])
+
+
+# =============================================================================
+# HTML-to-DOCX helpers
+# =============================================================================
+
+_TAG_RE = re.compile(r"<[^>]+>")
+_HEADING_RE = re.compile(r"<h([1-4])[^>]*>(.*?)</h\1>", re.DOTALL)
+_LI_RE = re.compile(r"<li[^>]*>(.*?)</li>", re.DOTALL)
+_BLOCK_RE = re.compile(
+    r"<(p|blockquote|li|h[1-4])[^>]*>(.*?)</\1>", re.DOTALL
+)
+
+
+def _strip_tags(html: str) -> str:
+    """Remove all HTML tags, returning plain text."""
+    return _TAG_RE.sub("", html).strip()
+
+
+def _has_html(text: str) -> bool:
+    return bool(re.search(r"<[a-z][\s\S]*>", text, re.IGNORECASE))
+
+
+def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[name-defined]
+    """Convert HTML content from TipTap into python-docx paragraphs.
+
+    Handles <h1>-<h4>, <p>, <blockquote>, <ul>/<ol> <li>, and strips
+    inline tags (<strong>, <em>) into plain text. For content that isn't
+    HTML (legacy plain-text), falls back to newline splitting.
+    """
+    if not _has_html(html):
+        # Legacy plain-text content
+        for para in html.split("\n\n"):
+            if para.strip():
+                doc.add_paragraph(para.strip())
+        return
+
+    # Process headings
+    pos = 0
+    parts: list[tuple[str, str]] = []  # (type, text)
+
+    # Walk through HTML extracting blocks in order
+    block_pattern = re.compile(
+        r"<(h[1-4]|p|blockquote|li|ul|ol)[^>]*>(.*?)</\1>",
+        re.DOTALL,
+    )
+    for m in block_pattern.finditer(html):
+        tag = m.group(1)
+        inner = _strip_tags(m.group(2))
+        if not inner:
+            continue
+        parts.append((tag, inner))
+
+    if not parts:
+        # Fallback: strip all tags and add as single paragraph
+        plain = _strip_tags(html)
+        if plain:
+            doc.add_paragraph(plain)
+        return
+
+    for tag, text in parts:
+        if tag.startswith("h") and len(tag) == 2:
+            level = int(tag[1])
+            doc.add_heading(text, level=min(level + 1, 4))
+        elif tag == "blockquote":
+            p = doc.add_paragraph(text)
+            p.style = "Quote" if "Quote" in [s.name for s in doc.styles] else None
+        elif tag == "li":
+            doc.add_paragraph(text, style="List Bullet")
+        else:
+            doc.add_paragraph(text)
 
 
 # =============================================================================
@@ -108,11 +180,7 @@ def create_docx_proposal(
             content = section.generated_content.get("clean_text", "")
 
         if content:
-            # Split into paragraphs
-            paragraphs = content.split("\n\n")
-            for para_text in paragraphs:
-                if para_text.strip():
-                    doc.add_paragraph(para_text.strip())
+            _render_html_to_docx(doc, content)
         else:
             doc.add_paragraph("[Section content pending]")
 
@@ -310,11 +378,15 @@ def create_pdf_proposal(
             content = section.generated_content.get("clean_text", "")
 
         if content:
-            # Convert newlines to paragraphs
-            paragraphs = content.split("\n\n")
-            for para in paragraphs:
-                if para.strip():
-                    html_content += f"<p>{para.strip()}</p>"
+            if _has_html(content):
+                # TipTap HTML — inject directly
+                html_content += f'<div class="section-content">{content}</div>'
+            else:
+                # Legacy plain text
+                paragraphs = content.split("\n\n")
+                for para in paragraphs:
+                    if para.strip():
+                        html_content += f"<p>{para.strip()}</p>"
         else:
             html_content += "<p><em>[Section content pending]</em></p>"
 

@@ -3,29 +3,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import {
-  CheckCircle2,
-  AlertCircle,
-  Save,
-  Plus,
-  Link2,
-  Package,
-  ArrowLeft,
-  FileText,
-  RefreshCw,
-  Palette,
-  Trash2,
-} from "lucide-react";
+import { AlertCircle, ArrowLeft } from "lucide-react";
 import { Header } from "@/components/layout/header";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { WritingPlanPanel } from "@/components/proposals/writing-plan-panel";
 import { FocusDocumentSelector } from "@/components/proposals/focus-document-selector";
-import { OutlineView } from "@/components/proposals/outline-view";
+import { SectionSidebar } from "./_components/section-sidebar";
+import { SectionEditor } from "./_components/section-editor";
+import { EvidencePanel } from "./_components/evidence-panel";
+import { WordAssistantPanel } from "./_components/word-assistant-panel";
+import { GraphicsPanel } from "./_components/graphics-panel";
+import { SubmissionPanel } from "./_components/submission-panel";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
 import type {
   Proposal,
   ProposalSection,
@@ -414,419 +402,82 @@ export default function ProposalWorkspacePage() {
       <div className="flex-1 p-6 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
           <div className="lg:col-span-3 h-full">
-            <Card className="border border-border h-full">
-              <CardContent className="p-4 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Sections</p>
-                    <p className="text-xs text-muted-foreground">
-                      {proposal.completed_sections}/{proposal.total_sections} complete
-                    </p>
-                  </div>
-                </div>
-                <ScrollArea className="flex-1 -mx-2 px-2">
-                  <div className="space-y-2">
-                    {sections.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No sections yet.</div>
-                    ) : (
-                      sections.map((section) => (
-                        <button
-                          key={section.id}
-                          type="button"
-                          onClick={() => setSelectedSectionId(section.id)}
-                          className={`w-full text-left rounded-lg border px-3 py-2 transition-colors ${
-                            selectedSectionId === section.id
-                              ? "border-primary/40 bg-primary/10"
-                              : "border-border hover:border-primary/30"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {section.section_number}
-                            </span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {section.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-foreground mt-1 line-clamp-2">
-                            {section.title}
-                          </p>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-            <div className="mt-4">
-              <OutlineView proposalId={proposalId} onApproved={refreshWorkspace} />
-            </div>
+            <SectionSidebar
+              proposal={proposal}
+              sections={sections}
+              selectedSectionId={selectedSectionId}
+              onSelectSection={setSelectedSectionId}
+              proposalId={proposalId}
+              onOutlineApproved={refreshWorkspace}
+            />
           </div>
 
           <div className="lg:col-span-6 h-full">
-            <Card className="border border-border h-full flex flex-col">
-              <CardContent className="p-4 flex-1 flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {selectedSection ? selectedSection.title : "Select a Section"}
-                    </p>
-                    {selectedSection && (
-                      <p className="text-xs text-muted-foreground">
-                        {selectedSection.section_number}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={handleApproveSection} disabled={!selectedSection}>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Approve
-                    </Button>
-                    <Button onClick={handleSaveSection} disabled={!selectedSection || isSaving}>
-                      <Save className="w-4 h-4" />
-                      Save
-                    </Button>
-                  </div>
-                </div>
-                {selectedSection && (
-                  <WritingPlanPanel
-                    writingPlan={writingPlan}
-                    onChange={setWritingPlan}
-                    onSave={handleSaveWritingPlan}
-                    isSaving={isSavingPlan}
-                    disabled={!selectedSection}
-                  />
-                )}
-                <textarea
-                  className="flex-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  placeholder="Write or edit proposal content..."
-                  value={editorContent}
-                  onChange={(e) => setEditorContent(e.target.value)}
-                  disabled={!selectedSection}
-                />
-              </CardContent>
-            </Card>
+            <SectionEditor
+              selectedSection={selectedSection}
+              editorContent={editorContent}
+              onEditorContentChange={setEditorContent}
+              writingPlan={writingPlan}
+              onWritingPlanChange={setWritingPlan}
+              onSaveWritingPlan={handleSaveWritingPlan}
+              isSavingPlan={isSavingPlan}
+              onSave={handleSaveSection}
+              onApprove={handleApproveSection}
+              isSaving={isSaving}
+            />
           </div>
 
           <div className="lg:col-span-3 h-full space-y-6">
-            <Card className="border border-border">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Link2 className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Evidence</p>
-                </div>
-                <div className="space-y-2 text-xs text-muted-foreground">
-                  {evidence.length === 0 ? (
-                    <p>No evidence linked yet.</p>
-                  ) : (
-                    evidence.map((link) => (
-                      <div key={link.id} className="border border-border rounded-md p-2">
-                        <p className="text-sm text-foreground">
-                          {link.document_title || link.document_filename || "Document"}
-                        </p>
-                        {link.citation && <p className="text-xs">{link.citation}</p>}
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <select
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    value={selectedDocumentId ?? ""}
-                    onChange={(e) => setSelectedDocumentId(Number(e.target.value) || null)}
-                  >
-                    <option value="">Select document</option>
-                    {documents.map((doc) => (
-                      <option key={doc.id} value={doc.id}>
-                        {doc.title}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Citation or page reference"
-                    value={citationText}
-                    onChange={(e) => setCitationText(e.target.value)}
-                  />
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Notes"
-                    value={notesText}
-                    onChange={(e) => setNotesText(e.target.value)}
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleAddEvidence}
-                    disabled={!selectedSection || !selectedDocumentId}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Evidence
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <EvidencePanel
+              evidence={evidence}
+              documents={documents}
+              selectedDocumentId={selectedDocumentId}
+              onDocumentChange={setSelectedDocumentId}
+              citationText={citationText}
+              onCitationChange={setCitationText}
+              notesText={notesText}
+              onNotesChange={setNotesText}
+              onAddEvidence={handleAddEvidence}
+              disabled={!selectedSection}
+            />
 
-            <Card className="border border-border">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Word Assistant</p>
-                </div>
-                <div className="space-y-2">
-                  {wordSessions.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No Word sessions yet.</p>
-                  ) : (
-                    wordSessions.map((session) => (
-                      <div key={session.id} className="border border-border rounded-md p-2 space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm text-foreground">{session.document_name}</p>
-                            <p className="text-xs text-muted-foreground">Status: {session.status}</p>
-                            {session.last_synced_at && (
-                              <p className="text-xs text-muted-foreground">
-                                Last synced {formatDate(session.last_synced_at)}
-                              </p>
-                            )}
-                            {wordEvents[session.id] && (
-                              <p className="text-xs text-muted-foreground">
-                                Events: {wordEvents[session.id].length}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleLoadWordEvents(session.id)}
-                            >
-                              History
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleSyncWordSession(session.id)}
-                              disabled={isSyncingWord}
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                              Sync
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="grid gap-2 text-xs">
-                          <label className="text-muted-foreground">
-                            Status
-                            <select
-                              className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-                              value={session.status}
-                              onChange={(e) =>
-                                handleUpdateWordSessionStatus(
-                                  session.id,
-                                  e.target.value as WordAddinSession["status"]
-                                )
-                              }
-                              disabled={updatingWordSessionId === session.id}
-                            >
-                              <option value="active">Active</option>
-                              <option value="paused">Paused</option>
-                              <option value="completed">Completed</option>
-                            </select>
-                          </label>
-                        </div>
-                        {wordEvents[session.id] && (
-                          <div className="rounded-md border border-border bg-background/40 p-2 space-y-1 text-xs">
-                            {wordEvents[session.id].length === 0 ? (
-                              <p className="text-muted-foreground">No events recorded yet.</p>
-                            ) : (
-                              wordEvents[session.id].map((event) => (
-                                <div key={event.id} className="flex items-start justify-between gap-2">
-                                  <div>
-                                    <p className="text-foreground">{event.event_type}</p>
-                                    {event.payload && Object.keys(event.payload).length > 0 && (
-                                      <p className="text-muted-foreground">
-                                        {JSON.stringify(event.payload)}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <span className="text-muted-foreground">
-                                    {formatDate(event.created_at)}
-                                  </span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Document name"
-                    value={wordDocName}
-                    onChange={(e) => setWordDocName(e.target.value)}
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleCreateWordSession}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Word Session
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <WordAssistantPanel
+              sessions={wordSessions}
+              events={wordEvents}
+              docName={wordDocName}
+              onDocNameChange={setWordDocName}
+              onCreateSession={handleCreateWordSession}
+              onSyncSession={handleSyncWordSession}
+              onLoadEvents={handleLoadWordEvents}
+              onUpdateStatus={handleUpdateWordSessionStatus}
+              isSyncing={isSyncingWord}
+              updatingSessionId={updatingWordSessionId}
+            />
 
-            <Card className="border border-border">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Palette className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Graphics Requests</p>
-                </div>
-                <div className="space-y-2">
-                  {graphicsRequests.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No graphics requests yet.</p>
-                  ) : (
-                    graphicsRequests.map((request) => (
-                      <div key={request.id} className="border border-border rounded-md p-2 space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm text-foreground">{request.title}</p>
-                            {request.section_id && (
-                              <p className="text-xs text-muted-foreground">
-                                Section {request.section_id}
-                              </p>
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                              Status: {request.status}
-                            </p>
-                            {request.due_date && (
-                              <p className="text-xs text-muted-foreground">
-                                Due {formatDate(request.due_date)}
-                              </p>
-                            )}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveGraphicsRequest(request.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        <select
-                          className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs"
-                          value={request.status}
-                          onChange={(e) =>
-                            handleUpdateGraphicsStatus(
-                              request.id,
-                              e.target.value as ProposalGraphicRequest["status"]
-                            )
-                          }
-                        >
-                          <option value="requested">Requested</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="delivered">Delivered</option>
-                          <option value="rejected">Rejected</option>
-                        </select>
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Graphic title"
-                    value={graphicsTitle}
-                    onChange={(e) => setGraphicsTitle(e.target.value)}
-                  />
-                  <textarea
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Description or layout guidance"
-                    value={graphicsDescription}
-                    onChange={(e) => setGraphicsDescription(e.target.value)}
-                    rows={3}
-                  />
-                  <select
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    value={graphicsSectionId ?? ""}
-                    onChange={(e) => setGraphicsSectionId(Number(e.target.value) || null)}
-                  >
-                    <option value="">Link to section (optional)</option>
-                    {sections.map((section) => (
-                      <option key={section.id} value={section.id}>
-                        {section.section_number} {section.title}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Due date (YYYY-MM-DD)"
-                    value={graphicsDueDate}
-                    onChange={(e) => setGraphicsDueDate(e.target.value)}
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleCreateGraphicsRequest}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Request
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <GraphicsPanel
+              requests={graphicsRequests}
+              sections={sections}
+              title={graphicsTitle}
+              onTitleChange={setGraphicsTitle}
+              description={graphicsDescription}
+              onDescriptionChange={setGraphicsDescription}
+              sectionId={graphicsSectionId}
+              onSectionIdChange={setGraphicsSectionId}
+              dueDate={graphicsDueDate}
+              onDueDateChange={setGraphicsDueDate}
+              onCreateRequest={handleCreateGraphicsRequest}
+              onUpdateStatus={handleUpdateGraphicsStatus}
+              onRemoveRequest={handleRemoveGraphicsRequest}
+            />
 
-            <Card className="border border-border">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-semibold">Submission Packages</p>
-                </div>
-                <div className="space-y-2">
-                  {submissionPackages.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No packages yet.</p>
-                  ) : (
-                    submissionPackages.map((pkg) => (
-                      <div key={pkg.id} className="border border-border rounded-md p-2">
-                        <p className="text-sm text-foreground">{pkg.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Status: {pkg.status}
-                        </p>
-                        {pkg.due_date && (
-                          <p className="text-xs text-muted-foreground">
-                            Due {formatDate(pkg.due_date)}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Package title"
-                    value={newPackageTitle}
-                    onChange={(e) => setNewPackageTitle(e.target.value)}
-                  />
-                  <input
-                    className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Due date (YYYY-MM-DD)"
-                    value={newPackageDueDate}
-                    onChange={(e) => setNewPackageDueDate(e.target.value)}
-                  />
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleCreatePackage}
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Package
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <SubmissionPanel
+              packages={submissionPackages}
+              title={newPackageTitle}
+              onTitleChange={setNewPackageTitle}
+              dueDate={newPackageDueDate}
+              onDueDateChange={setNewPackageDueDate}
+              onCreatePackage={handleCreatePackage}
+            />
           </div>
         </div>
       </div>
