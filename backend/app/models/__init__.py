@@ -89,7 +89,7 @@ from app.models.salesforce_mapping import SalesforceFieldMapping
 from app.models.saved_search import SavedSearch
 from app.models.secret import SecretRecord
 from app.models.sharepoint_sync import SharePointSyncConfig, SharePointSyncLog, SyncDirection
-from app.models.user import User, UserProfile
+from app.models.user import CompanySize, User, UserProfile
 from app.models.webhook import WebhookDelivery, WebhookDeliveryStatus, WebhookSubscription
 from app.models.word_addin import WordAddinEvent, WordAddinSession, WordAddinSessionStatus
 from app.models.workflow import ExecutionStatus, TriggerType, WorkflowExecution, WorkflowRule
@@ -97,6 +97,7 @@ from app.models.workflow import ExecutionStatus, TriggerType, WorkflowExecution,
 __all__ = [
     "User",
     "UserProfile",
+    "CompanySize",
     "RFP",
     "ComplianceRequirement",
     "ComplianceMatrix",

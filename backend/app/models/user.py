@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlmodel import JSON, Column, Field, Relationship, SQLModel
+from sqlmodel import JSON, Column, Field, Relationship, SQLModel, Text
 
 if TYPE_CHECKING:
     from app.models.knowledge_base import KnowledgeBaseDocument
@@ -97,6 +97,14 @@ class User(UserBase, table=True):
 # =============================================================================
 
 
+class CompanySize(str, Enum):
+    """Company size classification."""
+
+    SMALL = "small"
+    MIDSIZE = "midsize"
+    LARGE = "large"
+
+
 class UserProfileBase(SQLModel):
     """User profile for RFP qualification filtering."""
 
@@ -119,6 +127,18 @@ class UserProfileBase(SQLModel):
     # Keywords to always match/exclude
     include_keywords: list[str] = Field(default=[], sa_column=Column(JSON))
     exclude_keywords: list[str] = Field(default=[], sa_column=Column(JSON))
+
+    # Company capability fields (for AI matching + bid/no-bid)
+    company_size: CompanySize | None = Field(default=None)
+    company_duns: str | None = Field(default=None, max_length=20)
+    cage_code: str | None = Field(default=None, max_length=10)
+    certifications: list[str] = Field(default=[], sa_column=Column(JSON))
+    past_performance_summary: str | None = Field(default=None, sa_column=Column(Text))
+    core_competencies: list[str] = Field(default=[], sa_column=Column(JSON))
+    years_in_business: int | None = Field(default=None)
+    annual_revenue: int | None = Field(default=None)
+    employee_count: int | None = Field(default=None)
+    enabled_sources: list[str] = Field(default=["sam_gov"], sa_column=Column(JSON))
 
 
 class UserProfile(UserProfileBase, table=True):
