@@ -53,3 +53,24 @@ export interface PortalView {
   shared_items: SharedDataPermission[];
   members: WorkspaceMember[];
 }
+
+// Real-Time Presence & Section Locking
+
+export interface DocumentPresenceUser {
+  user_id: number;
+  user_name: string;
+  joined_at: string;
+}
+
+export interface SectionLock {
+  section_id: number;
+  user_id: number;
+  user_name: string;
+  locked_at: string;
+}
+
+export interface DocumentPresence {
+  proposal_id: number;
+  users: DocumentPresenceUser[];
+  locks: SectionLock[];
+}

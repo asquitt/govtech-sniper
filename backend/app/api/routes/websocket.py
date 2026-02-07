@@ -1,12 +1,12 @@
 """
 RFP Sniper - WebSocket Routes
 ==============================
-Real-time updates for long-running tasks.
+Real-time updates for long-running tasks and collaborative editing.
 """
 
 import asyncio
 import json
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
@@ -36,7 +36,7 @@ def normalize_status(result: AsyncResult) -> str:
 
 class ConnectionManager:
     """
-    Manages WebSocket connections for real-time updates.
+    Manages WebSocket connections for real-time updates and collaborative editing.
     """
 
     def __init__(self):
@@ -44,6 +44,10 @@ class ConnectionManager:
         self.active_connections: Dict[int, Set[WebSocket]] = {}
         # Map of task_id -> set of user_ids watching
         self.task_watchers: Dict[str, Set[int]] = {}
+        # Document presence: proposal_id -> set of {user_id, user_name, ...}
+        self.document_presence: Dict[int, Dict[int, dict]] = {}
+        # Section locks: section_id -> {user_id, user_name, locked_at}
+        self.section_locks: Dict[int, dict] = {}
 
     async def connect(self, websocket: WebSocket, user_id: int):
         """Accept and register a new connection."""
@@ -105,6 +109,95 @@ class ConnectionManager:
             for user_id in self.task_watchers[task_id]:
                 await self.send_to_user(user_id, message)
 
+    # -------------------------------------------------------------------------
+    # Document Presence
+    # -------------------------------------------------------------------------
+
+    async def join_document(self, proposal_id: int, user_id: int, user_name: str):
+        """Register a user as present in a document."""
+        if proposal_id not in self.document_presence:
+            self.document_presence[proposal_id] = {}
+        self.document_presence[proposal_id][user_id] = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "joined_at": datetime.utcnow().isoformat(),
+        }
+        await self._broadcast_presence(proposal_id)
+
+    async def leave_document(self, proposal_id: int, user_id: int):
+        """Remove a user from document presence."""
+        if proposal_id in self.document_presence:
+            self.document_presence[proposal_id].pop(user_id, None)
+            if not self.document_presence[proposal_id]:
+                del self.document_presence[proposal_id]
+        # Release any locks held by this user in this proposal
+        for section_id in list(self.section_locks.keys()):
+            lock = self.section_locks[section_id]
+            if lock["user_id"] == user_id:
+                del self.section_locks[section_id]
+        await self._broadcast_presence(proposal_id)
+
+    def get_presence(self, proposal_id: int) -> list:
+        """Get list of users present in a document."""
+        if proposal_id not in self.document_presence:
+            return []
+        return list(self.document_presence[proposal_id].values())
+
+    async def _broadcast_presence(self, proposal_id: int):
+        """Broadcast presence update to all users in a document."""
+        users = self.get_presence(proposal_id)
+        locks = self.get_locks_for_proposal(proposal_id)
+        message = {
+            "type": "presence_update",
+            "proposal_id": proposal_id,
+            "users": users,
+            "locks": locks,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        # Send to all present users
+        for info in users:
+            await self.send_to_user(info["user_id"], message)
+
+    # -------------------------------------------------------------------------
+    # Section Locking
+    # -------------------------------------------------------------------------
+
+    def lock_section(
+        self, section_id: int, user_id: int, user_name: str
+    ) -> Optional[dict]:
+        """
+        Attempt to lock a section. Returns the lock if successful, None if already locked.
+        """
+        existing = self.section_locks.get(section_id)
+        if existing and existing["user_id"] != user_id:
+            return None  # Already locked by someone else
+        lock = {
+            "section_id": section_id,
+            "user_id": user_id,
+            "user_name": user_name,
+            "locked_at": datetime.utcnow().isoformat(),
+        }
+        self.section_locks[section_id] = lock
+        return lock
+
+    def unlock_section(self, section_id: int, user_id: int) -> bool:
+        """Release a section lock. Returns True if unlocked."""
+        existing = self.section_locks.get(section_id)
+        if not existing:
+            return True
+        if existing["user_id"] != user_id:
+            return False  # Not the lock owner
+        del self.section_locks[section_id]
+        return True
+
+    def get_lock(self, section_id: int) -> Optional[dict]:
+        """Get the current lock on a section."""
+        return self.section_locks.get(section_id)
+
+    def get_locks_for_proposal(self, proposal_id: int) -> list:
+        """Get all section locks (returned as flat list)."""
+        return list(self.section_locks.values())
+
 
 # Global connection manager
 manager = ConnectionManager()
@@ -132,6 +225,11 @@ async def websocket_endpoint(
     Client can send:
     - {"type": "watch_task", "task_id": "xxx"} - Subscribe to task updates
     - {"type": "unwatch_task", "task_id": "xxx"} - Unsubscribe from task
+    - {"type": "join_document", "proposal_id": N, "user_name": "..."} - Join document
+    - {"type": "leave_document", "proposal_id": N} - Leave document
+    - {"type": "lock_section", "section_id": N, "user_name": "..."} - Lock a section
+    - {"type": "unlock_section", "section_id": N} - Unlock a section
+    - {"type": "cursor_update", "proposal_id": N, "section_id": N, "position": N}
     - {"type": "ping"} - Keep-alive ping
     """
     # Authenticate the connection
@@ -182,6 +280,62 @@ async def websocket_endpoint(
                     if task_id:
                         manager.unwatch_task(task_id, user_id)
 
+                elif msg_type == "join_document":
+                    proposal_id = data.get("proposal_id")
+                    user_name = data.get("user_name", f"User {user_id}")
+                    if proposal_id:
+                        await manager.join_document(proposal_id, user_id, user_name)
+
+                elif msg_type == "leave_document":
+                    proposal_id = data.get("proposal_id")
+                    if proposal_id:
+                        await manager.leave_document(proposal_id, user_id)
+
+                elif msg_type == "lock_section":
+                    section_id = data.get("section_id")
+                    user_name = data.get("user_name", f"User {user_id}")
+                    proposal_id = data.get("proposal_id")
+                    if section_id:
+                        lock = manager.lock_section(section_id, user_id, user_name)
+                        if lock:
+                            await websocket.send_json({"type": "lock_acquired", **lock})
+                            if proposal_id:
+                                await manager._broadcast_presence(proposal_id)
+                        else:
+                            existing = manager.get_lock(section_id)
+                            await websocket.send_json({
+                                "type": "lock_denied",
+                                "section_id": section_id,
+                                "held_by": existing,
+                            })
+
+                elif msg_type == "unlock_section":
+                    section_id = data.get("section_id")
+                    proposal_id = data.get("proposal_id")
+                    if section_id:
+                        manager.unlock_section(section_id, user_id)
+                        await websocket.send_json({
+                            "type": "lock_released",
+                            "section_id": section_id,
+                        })
+                        if proposal_id:
+                            await manager._broadcast_presence(proposal_id)
+
+                elif msg_type == "cursor_update":
+                    # Broadcast cursor position to other users in the document
+                    proposal_id = data.get("proposal_id")
+                    if proposal_id and proposal_id in manager.document_presence:
+                        cursor_msg = {
+                            "type": "cursor_update",
+                            "user_id": user_id,
+                            "section_id": data.get("section_id"),
+                            "position": data.get("position"),
+                            "timestamp": datetime.utcnow().isoformat(),
+                        }
+                        for uid in manager.document_presence[proposal_id]:
+                            if uid != user_id:
+                                await manager.send_to_user(uid, cursor_msg)
+
             except asyncio.TimeoutError:
                 # Send ping to keep connection alive
                 try:
@@ -190,9 +344,16 @@ async def websocket_endpoint(
                     break
 
     except WebSocketDisconnect:
+        # Clean up presence from all documents
+        for pid in list(manager.document_presence.keys()):
+            if user_id in manager.document_presence.get(pid, {}):
+                await manager.leave_document(pid, user_id)
         manager.disconnect(websocket, user_id)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+        for pid in list(manager.document_presence.keys()):
+            if user_id in manager.document_presence.get(pid, {}):
+                await manager.leave_document(pid, user_id)
         manager.disconnect(websocket, user_id)
 
 

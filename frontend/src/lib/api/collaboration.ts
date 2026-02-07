@@ -6,6 +6,8 @@ import type {
   SharedDataPermission,
   PortalView,
   SharedDataType,
+  DocumentPresence,
+  SectionLock,
 } from "@/types";
 
 export const collaborationApi = {
@@ -120,5 +122,24 @@ export const collaborationApi = {
       `/collaboration/portal/${workspaceId}`
     );
     return data;
+  },
+
+  // Real-Time Presence & Locking
+  getPresence: async (proposalId: number): Promise<DocumentPresence> => {
+    const { data } = await api.get(
+      `/collaboration/proposals/${proposalId}/presence`
+    );
+    return data;
+  },
+
+  lockSection: async (sectionId: number): Promise<SectionLock> => {
+    const { data } = await api.post(
+      `/collaboration/sections/${sectionId}/lock`
+    );
+    return data;
+  },
+
+  unlockSection: async (sectionId: number): Promise<void> => {
+    await api.delete(`/collaboration/sections/${sectionId}/lock`);
   },
 };
