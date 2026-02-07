@@ -9,3 +9,4 @@ export * from "./knowledge-base";
 export * from "./revenue";
 export * from "./forecast";
 export * from "./collaboration";
+export * from "./sharepoint";
