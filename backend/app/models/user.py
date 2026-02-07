@@ -66,6 +66,11 @@ class User(UserBase, table=True):
     api_calls_limit: int = Field(default=100)  # Based on tier
     last_api_reset: datetime = Field(default_factory=datetime.utcnow)
 
+    # Subscription / Billing
+    subscription_expires_at: Optional[datetime] = Field(default=None)
+    stripe_customer_id: Optional[str] = Field(default=None, max_length=255)
+    stripe_subscription_id: Optional[str] = Field(default=None, max_length=255)
+
     # MFA
     mfa_enabled: bool = Field(default=False)
     mfa_secret: Optional[str] = Field(default=None, max_length=255)

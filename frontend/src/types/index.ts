@@ -13,3 +13,5 @@ export * from "./sharepoint";
 export * from "./salesforce";
 export * from "./data-sources";
 export * from "./analytics";
+export * from "./subscription";
+export * from "./review";

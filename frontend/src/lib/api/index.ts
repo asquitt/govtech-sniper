@@ -27,3 +27,5 @@ export { collaborationApi } from "./collaboration";
 export { sharepointApi } from "./sharepoint";
 export { salesforceApi } from "./salesforce";
 export { dataSourcesApi } from "./data-sources";
+export { subscriptionApi } from "./subscription";
+export { reviewApi } from "./reviews";

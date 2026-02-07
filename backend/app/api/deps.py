@@ -14,7 +14,7 @@ from sqlmodel import select
 import structlog
 
 from app.database import get_session
-from app.models.user import User, UserProfile
+from app.models.user import User, UserProfile, UserTier
 from app.services.auth_service import decode_token, TokenData, UserAuth
 
 logger = structlog.get_logger(__name__)
@@ -255,6 +255,55 @@ def resolve_user_id(
 
 
 # =============================================================================
+# Feature Gates
+# =============================================================================
+
+TIER_LEVELS: dict[str, int] = {
+    "free": 0,
+    "starter": 1,
+    "professional": 2,
+    "enterprise": 3,
+}
+
+FEATURE_GATES: dict[str, UserTier] = {
+    "deep_read": UserTier.STARTER,
+    "ai_draft": UserTier.STARTER,
+    "export_docx": UserTier.PROFESSIONAL,
+    "export_pdf": UserTier.PROFESSIONAL,
+    "color_reviews": UserTier.PROFESSIONAL,
+    "salesforce_sync": UserTier.ENTERPRISE,
+    "semantic_search": UserTier.PROFESSIONAL,
+    "custom_workflows": UserTier.ENTERPRISE,
+}
+
+
+def require_feature(feature_name: str):
+    """
+    Dependency factory that checks if the user's tier grants access to a feature.
+
+    Usage:
+        @router.get("/deep-read", dependencies=[Depends(require_feature("deep_read"))])
+    """
+    min_tier = FEATURE_GATES.get(feature_name)
+    if min_tier is None:
+        raise ValueError(f"Unknown feature: {feature_name}")
+
+    async def feature_checker(current_user: UserAuth = Depends(get_current_user)):
+        user_level = TIER_LEVELS.get(current_user.tier, 0)
+        required_level = TIER_LEVELS.get(min_tier.value, 0)
+
+        if user_level < required_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Feature '{feature_name}' requires {min_tier.value} tier or higher. Current tier: {current_user.tier}",
+            )
+
+        return current_user
+
+    return feature_checker
+
+
+# =============================================================================
 # Tier-Based Access Control
 # =============================================================================
 
@@ -265,16 +314,9 @@ def require_tier(minimum_tier: str):
     Usage:
         @router.get("/premium-feature", dependencies=[Depends(require_tier("professional"))])
     """
-    tier_levels = {
-        "free": 0,
-        "starter": 1,
-        "professional": 2,
-        "enterprise": 3,
-    }
-
     async def tier_checker(current_user: UserAuth = Depends(get_current_user)):
-        user_level = tier_levels.get(current_user.tier, 0)
-        required_level = tier_levels.get(minimum_tier, 0)
+        user_level = TIER_LEVELS.get(current_user.tier, 0)
+        required_level = TIER_LEVELS.get(minimum_tier, 0)
 
         if user_level < required_level:
             raise HTTPException(

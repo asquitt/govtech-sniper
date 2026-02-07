@@ -43,7 +43,7 @@ from app.models.capture import (
     TeamingRequestStatus,
 )
 from app.models.award import AwardRecord
-from app.models.contact import OpportunityContact
+from app.models.contact import OpportunityContact, AgencyContactDatabase
 from app.models.word_addin import WordAddinSession, WordAddinEvent, WordAddinSessionStatus
 from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
 from app.models.secret import SecretRecord
@@ -75,6 +75,16 @@ from app.models.collaboration import (
     SharedDataType,
 )
 from app.models.salesforce_mapping import SalesforceFieldMapping
+from app.models.review import (
+    ProposalReview,
+    ReviewAssignment,
+    ReviewComment,
+    ReviewType,
+    ReviewStatus,
+    AssignmentStatus,
+    CommentSeverity,
+    CommentStatus,
+)
 
 __all__ = [
     "User",
@@ -117,6 +127,7 @@ __all__ = [
     "ActivityStatus",
     "AwardRecord",
     "OpportunityContact",
+    "AgencyContactDatabase",
     "WordAddinSession",
     "WordAddinEvent",
     "WordAddinSessionStatus",
@@ -153,4 +164,12 @@ __all__ = [
     "WorkspaceRole",
     "SharedDataType",
     "SalesforceFieldMapping",
+    "ProposalReview",
+    "ReviewAssignment",
+    "ReviewComment",
+    "ReviewType",
+    "ReviewStatus",
+    "AssignmentStatus",
+    "CommentSeverity",
+    "CommentStatus",
 ]

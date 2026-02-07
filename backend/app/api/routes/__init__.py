@@ -41,6 +41,8 @@ from app.api.routes.sharepoint import router as sharepoint_router
 from app.api.routes.data_sources import router as data_sources_router
 from app.api.routes.salesforce import router as salesforce_router
 from app.api.routes.analytics_reporting import router as analytics_reporting_router
+from app.api.routes.reviews import router as reviews_router
+from app.api.routes.subscription import router as subscription_router
 
 __all__ = [
     "ingest_router",
@@ -80,4 +82,6 @@ __all__ = [
     "data_sources_router",
     "salesforce_router",
     "analytics_reporting_router",
+    "reviews_router",
+    "subscription_router",
 ]
