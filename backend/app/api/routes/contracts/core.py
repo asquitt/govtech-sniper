@@ -24,7 +24,7 @@ from app.services.webhook_service import dispatch_webhook_event
 router = APIRouter()
 
 
-@router.get("", response_model=ContractListResponse)
+@router.get("/", response_model=ContractListResponse)
 async def list_contracts(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -37,7 +37,7 @@ async def list_contracts(
     return ContractListResponse(contracts=data, total=len(data))
 
 
-@router.post("", response_model=ContractRead)
+@router.post("/", response_model=ContractRead)
 async def create_contract(
     payload: ContractCreate,
     current_user: UserAuth = Depends(get_current_user),

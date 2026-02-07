@@ -597,11 +597,11 @@ GovDash and Govly represent two distinct competitive threats:
 
 ### P2 — Medium Priority (Ship Within 90 Days)
 
-#### 12. Procurement Forecasts
+#### 12. Procurement Forecasts ✅
 **Gap**: Govly surfaces solicitations before they're publicly posted.
-- [ ] **12a. Agency forecast data ingestion** — Pull procurement forecasts from agency planning documents and forecast feeds
-- [ ] **12b. Forecast-to-opportunity linking** — Match forecasts to eventual solicitations when posted
-- [ ] **12c. Forecast alerts** — Notify users when forecasted opportunities match their profile
+- [x] **12a. Agency forecast data ingestion** — Pull procurement forecasts from agency planning documents and forecast feeds
+- [x] **12b. Forecast-to-opportunity linking** — Match forecasts to eventual solicitations when posted
+- [x] **12c. Forecast alerts** — Notify users when forecasted opportunities match their profile
 
 #### 13. Cross-Organization Collaboration
 **Gap**: Govly's workspaces allow primes, subs, and partners to collaborate on a shared platform.
