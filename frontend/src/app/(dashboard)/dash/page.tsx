@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { dashApi, rfpApi } from "@/lib/api";
+import { VoiceControls } from "@/components/dash/voice-controls";
 import type { RFPListItem } from "@/types";
 
 interface ChatMessage {
@@ -38,6 +39,16 @@ export default function DashPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRfps, setIsLoadingRfps] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const handleVoiceTranscript = useCallback((text: string) => {
+    if (text.trim()) {
+      setQuestion(text);
+    }
+  }, []);
+
+  const lastAssistantMessage = messages
+    .filter((m) => m.role === "assistant")
+    .pop()?.content;
 
   useEffect(() => {
     const fetchRfps = async () => {
@@ -185,12 +196,19 @@ export default function DashPage() {
                 className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
                 placeholder="Ask Dash a question..."
                 value={question}
-                onChange={(e) => setQuestion(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuestion(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Enter" && !isLoading) handleAsk();
+                }}
               />
               <Button onClick={() => handleAsk()} disabled={isLoading}>
                 {isLoading ? "Thinking..." : "Ask"}
               </Button>
             </div>
+            <VoiceControls
+              onTranscript={handleVoiceTranscript}
+              lastAssistantMessage={lastAssistantMessage}
+            />
           </CardContent>
         </Card>
       </div>

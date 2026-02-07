@@ -18,6 +18,7 @@ from app.services.auth_service import UserAuth
 from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
 from app.models.proposal import Proposal
 from app.services.audit_service import log_audit_event
+from app.services.graphics_generator import generate_graphic, TEMPLATE_TYPES
 
 router = APIRouter(prefix="/graphics", tags=["Proposal Graphics"])
 
@@ -175,3 +176,89 @@ async def delete_request(
 
     await session.delete(request)
     await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# AI Graphics Generation
+# ---------------------------------------------------------------------------
+
+class GraphicGeneratePayload(BaseModel):
+    content: str
+    template_type: str
+    title: Optional[str] = None
+
+
+class GraphicGenerateResponse(BaseModel):
+    mermaid_code: str
+    template_type: str
+    title: str
+    error: Optional[str] = None
+
+
+class TemplateInfo(BaseModel):
+    type: str
+    label: str
+
+
+@router.get("/templates", response_model=List[TemplateInfo])
+async def list_templates(
+    current_user: UserAuth = Depends(get_current_user),
+) -> List[TemplateInfo]:
+    """List available graphic template types."""
+    return [
+        TemplateInfo(type=t, label=t.replace("_", " ").title())
+        for t in TEMPLATE_TYPES
+    ]
+
+
+@router.post("/generate", response_model=GraphicGenerateResponse)
+async def generate_graphic_endpoint(
+    payload: GraphicGeneratePayload,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> GraphicGenerateResponse:
+    """Generate a Mermaid diagram from content using AI."""
+    result = await generate_graphic(
+        content=payload.content,
+        template_type=payload.template_type,
+        title=payload.title,
+    )
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="proposal_graphics",
+        entity_id=0,
+        action="graphics.generated",
+        metadata={"template_type": payload.template_type},
+    )
+    await session.commit()
+
+    return GraphicGenerateResponse(**result)
+
+
+@router.post("/{request_id}/asset", response_model=GraphicsRequestResponse)
+async def store_graphic_asset(
+    request_id: int,
+    asset_url: str = Query(...),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> GraphicsRequestResponse:
+    """Store a generated graphic asset URL on an existing request."""
+    result = await session.execute(
+        select(ProposalGraphicRequest).where(
+            ProposalGraphicRequest.id == request_id,
+            ProposalGraphicRequest.user_id == current_user.id,
+        )
+    )
+    request = result.scalar_one_or_none()
+    if not request:
+        raise HTTPException(status_code=404, detail="Graphics request not found")
+
+    request.asset_url = asset_url
+    request.status = GraphicsRequestStatus.DELIVERED
+    request.updated_at = datetime.utcnow()
+    session.add(request)
+    await session.commit()
+    await session.refresh(request)
+    return GraphicsRequestResponse.model_validate(request)
