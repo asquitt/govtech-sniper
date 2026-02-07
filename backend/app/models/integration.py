@@ -19,6 +19,7 @@ class IntegrationProvider(str, Enum):
     WORD_ADDIN = "word_addin"
     WEBHOOK = "webhook"
     SLACK = "slack"
+    UNANET = "unanet"
 
 
 class IntegrationSyncStatus(str, Enum):

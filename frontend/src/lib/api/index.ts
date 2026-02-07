@@ -36,3 +36,4 @@ export { signalApi } from "./signals";
 export { workflowApi } from "./workflows";
 export { emailIngestApi } from "./email-ingest";
 export { complianceApi } from "./compliance";
+export { unanetApi } from "./unanet";

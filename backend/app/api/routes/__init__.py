@@ -49,6 +49,7 @@ from app.api.routes.signals import router as signals_router
 from app.api.routes.email_ingest import router as email_ingest_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.compliance_dashboard import router as compliance_router
+from app.api.routes.unanet import router as unanet_router
 
 __all__ = [
     "ingest_router",
@@ -96,4 +97,5 @@ __all__ = [
     "email_ingest_router",
     "workflows_router",
     "compliance_router",
+    "unanet_router",
 ]
