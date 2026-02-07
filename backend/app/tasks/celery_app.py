@@ -81,6 +81,12 @@ celery_app.conf.update(
             "schedule": crontab(minute=0, hour="*/1"),
             "options": {"queue": "maintenance"},
         },
+        # Scan all non-SAM data sources every 6 hours (offset by 30 min from SAM)
+        "scan-all-sources-periodic": {
+            "task": "app.tasks.ingest_tasks.periodic_multi_source_scan",
+            "schedule": crontab(minute=30, hour="*/6"),
+            "options": {"queue": "periodic"},
+        },
         # Watch SharePoint folders for new RFP documents every 15 minutes
         "watch-sharepoint-folders": {
             "task": "app.tasks.sharepoint_sync_tasks.watch_sharepoint_folders",

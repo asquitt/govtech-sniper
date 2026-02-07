@@ -346,3 +346,153 @@ def periodic_sam_scan():
 
     run_async(_scan_all())
     return {"status": "scans_queued"}
+
+
+@celery_app.task(
+    bind=True,
+    name="app.tasks.ingest_tasks.ingest_from_data_source",
+    max_retries=2,
+    default_retry_delay=120,
+)
+def ingest_from_data_source(
+    self,
+    user_id: int,
+    provider_name: str,
+    keywords: str | None = None,
+    naics_codes: list[str] | None = None,
+    days_back: int = 30,
+    limit: int = 25,
+) -> dict:
+    """Ingest opportunities from a non-SAM data source provider."""
+    from app.services.data_providers import get_provider
+    from app.services.data_providers.base import SearchParams
+
+    task_id = self.request.id
+    logger.info(
+        "Starting data source ingest",
+        task_id=task_id,
+        provider=provider_name,
+        user_id=user_id,
+    )
+
+    async def _ingest():
+        provider = get_provider(provider_name)
+        if not provider:
+            logger.error("Unknown provider", provider=provider_name)
+            return {
+                "task_id": task_id,
+                "status": "error",
+                "error": f"Unknown provider: {provider_name}",
+            }
+
+        params = SearchParams(
+            keywords=keywords,
+            naics_codes=naics_codes,
+            days_back=days_back,
+            limit=limit,
+        )
+
+        try:
+            opportunities = await provider.search(params)
+        except Exception as exc:
+            logger.error("Provider search failed", provider=provider_name, error=str(exc))
+            raise self.retry(exc=exc)
+
+        if not opportunities:
+            return {"task_id": task_id, "status": "completed", "saved": 0, "skipped": 0}
+
+        saved = 0
+        skipped = 0
+        async with get_celery_session_context() as session:
+            for opp in opportunities:
+                existing = await session.execute(
+                    select(RFP).where(RFP.solicitation_number == opp.external_id)
+                )
+                if existing.scalar_one_or_none():
+                    skipped += 1
+                    continue
+
+                rfp = RFP(
+                    user_id=user_id,
+                    title=opp.title,
+                    solicitation_number=opp.external_id,
+                    agency=opp.agency or "Unknown",
+                    naics_code=opp.naics_code,
+                    posted_date=_parse_date(opp.posted_date),
+                    response_deadline=_parse_date(opp.response_deadline),
+                    source_url=opp.source_url,
+                    source_type=opp.source_type,
+                    description=opp.description,
+                    status=RFPStatus.NEW,
+                )
+                if opp.estimated_value:
+                    rfp.estimated_value = int(opp.estimated_value)
+                session.add(rfp)
+                saved += 1
+
+            await session.commit()
+
+        return {
+            "task_id": task_id,
+            "status": "completed",
+            "provider": provider_name,
+            "saved": saved,
+            "skipped": skipped,
+        }
+
+    return run_async(_ingest())
+
+
+@celery_app.task(name="app.tasks.ingest_tasks.periodic_multi_source_scan")
+def periodic_multi_source_scan():
+    """Scan all enabled non-SAM data sources for all active users."""
+    logger.info("Running periodic multi-source scan")
+
+    async def _scan():
+        async with get_celery_session_context() as session:
+            result = await session.execute(
+                select(User, UserProfile)
+                .join(UserProfile, User.id == UserProfile.user_id)
+                .where(User.is_active == True)
+            )
+            users_with_profiles = result.all()
+
+        queued = 0
+        for user, profile in users_with_profiles:
+            sources = profile.enabled_sources or ["sam_gov"]
+            keywords_list = (profile.include_keywords or [])[:3]
+            if not keywords_list:
+                continue
+
+            for source in sources:
+                if source == "sam_gov":
+                    continue  # Handled by periodic_sam_scan
+                for keyword in keywords_list:
+                    ingest_from_data_source.delay(
+                        user_id=user.id,
+                        provider_name=source,
+                        keywords=keyword,
+                        naics_codes=profile.naics_codes or None,
+                        days_back=7,
+                        limit=10,
+                    )
+                    queued += 1
+
+        logger.info("Multi-source scan queued", total_tasks=queued)
+        return {"status": "scans_queued", "queued": queued}
+
+    return run_async(_scan())
+
+
+def _parse_date(date_str: str | None):
+    """Best-effort parse of date strings from various providers."""
+    if not date_str:
+        return None
+    from datetime import datetime
+
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    return None
