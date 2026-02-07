@@ -52,6 +52,7 @@ from app.api.routes import (
     scim_router,
     secrets_router,
     budget_intel_router,
+    revenue_router,
 )
 
 # Configure structured logging
@@ -256,6 +257,7 @@ app.include_router(graphics_router, prefix=api_prefix)
 app.include_router(scim_router, prefix=api_prefix)
 app.include_router(secrets_router, prefix=api_prefix)
 app.include_router(budget_intel_router, prefix=api_prefix)
+app.include_router(revenue_router, prefix=api_prefix)
 
 
 # =============================================================================

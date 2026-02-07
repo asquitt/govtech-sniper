@@ -14,6 +14,7 @@ import {
   Sparkles,
   LogOut,
   User,
+  DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,11 @@ const navItems: NavItem[] = [
     title: "Contracts",
     href: "/contracts",
     icon: FileSearch,
+  },
+  {
+    title: "Revenue",
+    href: "/revenue",
+    icon: DollarSign,
   },
   {
     title: "Settings",

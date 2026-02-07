@@ -32,6 +32,7 @@ from app.api.routes.graphics import router as graphics_router
 from app.api.routes.scim import router as scim_router
 from app.api.routes.secrets import router as secrets_router
 from app.api.routes.budget_intel import router as budget_intel_router
+from app.api.routes.revenue import router as revenue_router
 
 __all__ = [
     "ingest_router",
@@ -62,4 +63,5 @@ __all__ = [
     "scim_router",
     "secrets_router",
     "budget_intel_router",
+    "revenue_router",
 ]

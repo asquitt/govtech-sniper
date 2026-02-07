@@ -19,3 +19,4 @@ export type {
   ProposalTemplate, DashboardMetrics, Notification, NotificationPreferences,
   ProposalVersion, SectionVersion, VersionDetail,
 } from "./misc";
+export { revenueApi } from "./revenue";
