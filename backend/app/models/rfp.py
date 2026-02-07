@@ -64,6 +64,7 @@ class ComplianceRequirement(BaseModel):
     """
     id: str                          # Unique ID (e.g., "REQ-001")
     section: str                     # Source section (e.g., "Section L.3.2")
+    source_section: Optional[str] = None  # RFP structural section (e.g., "Section C", "Section H")
     requirement_text: str            # The actual requirement
     importance: ImportanceLevel      # How critical is this?
     category: Optional[str] = None   # Grouping (e.g., "Technical", "Past Performance")

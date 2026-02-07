@@ -97,24 +97,31 @@ class GeminiService:
     # Deep Read: Compliance Matrix Extraction
     # =========================================================================
     
-    DEEP_READ_PROMPT = """You are an expert government proposal analyst. Your task is to extract ALL compliance requirements from this RFP document.
+    DEEP_READ_PROMPT = """You are an expert government proposal analyst. Extract ALL compliance requirements from this RFP by systematically analyzing every section.
 
-For EACH requirement found, provide:
-1. A unique ID (e.g., REQ-001)
-2. The source section (e.g., "Section L.3.2")
-3. The exact requirement text
-4. Importance level: MANDATORY, EVALUATED, OPTIONAL, or INFORMATIONAL
-5. Category (Technical, Management, Past Performance, Pricing, etc.)
-6. Page reference if available
-7. Key terms/keywords
+IMPORTANT: Government RFPs scatter requirements across multiple sections. You MUST analyze ALL of the following if present:
 
-CRITICAL: 
-- MANDATORY requirements MUST be addressed or the proposal is non-compliant
-- Look for "shall", "must", "required" language for mandatory items
+1. **Section C / SOW / PWS**: Technical requirements, deliverables, performance standards, SLAs, acceptance criteria
+2. **Section H**: Key personnel, security clearances, OCI provisions, insurance/bonding/licensing
+3. **Section L**: Proposal format, page limits, volume structure, submission instructions, certifications
+4. **Section M**: Evaluation factors/subfactors, scoring methodology, relative importance
+5. **Other sections** (J, F, etc.): CDRLs, data items, delivery schedules, reporting requirements
+
+For EACH requirement provide:
+1. Unique ID (e.g., REQ-001)
+2. Granular source reference (e.g., "Section L.3.2 - Proposal Format")
+3. source_section: one of "Section C", "Section H", "Section L", "Section M", "PWS", "SOW", "Section J", "Section F", "Other"
+4. Exact requirement text
+5. Importance: MANDATORY, EVALUATED, OPTIONAL, or INFORMATIONAL
+6. Category: Technical, Management, Past Performance, Pricing, Administrative, Personnel, Quality, or Security
+7. Page reference if available
+8. Key terms/keywords
+
+CRITICAL:
+- MANDATORY requirements use "shall", "must", "required" language
 - Look for evaluation criteria in Section M for scored items
 - Include ALL deliverables, certifications, and format requirements
-
-Return as a JSON array of requirements.
+- Do NOT skip Section C/PWS requirements — these are often the most critical
 
 RFP DOCUMENT:
 {rfp_text}
@@ -124,7 +131,8 @@ Respond with ONLY valid JSON in this format:
     "requirements": [
         {{
             "id": "REQ-001",
-            "section": "Section L.3.2",
+            "section": "Section C.3.1 - Software Development",
+            "source_section": "Section C",
             "requirement_text": "The contractor shall provide...",
             "importance": "mandatory",
             "category": "Technical",
@@ -159,6 +167,7 @@ Respond with ONLY valid JSON in this format:
             requirement = ComplianceRequirement(
                 id="REQ-001",
                 section="Section L.1",
+                source_section="Section L",
                 requirement_text="The contractor shall provide the required services.",
                 importance=ImportanceLevel.MANDATORY,
                 category="Technical",
@@ -205,6 +214,7 @@ Respond with ONLY valid JSON in this format:
                 req = ComplianceRequirement(
                     id=req_data.get("id", f"REQ-{len(requirements)+1:03d}"),
                     section=req_data.get("section", "Unknown"),
+                    source_section=req_data.get("source_section"),
                     requirement_text=req_data.get("requirement_text", ""),
                     importance=importance,
                     category=req_data.get("category"),

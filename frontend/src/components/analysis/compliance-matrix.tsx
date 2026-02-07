@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import {
   CheckCircle2,
   Circle,
   AlertTriangle,
+  Filter,
   Info,
   Loader2,
   Sparkles,
@@ -59,10 +60,31 @@ export function ComplianceMatrix({
   isGenerating,
   generatingId,
 }: ComplianceMatrixProps) {
+  const [sourceSectionFilter, setSourceSectionFilter] = useState<string>("all");
+
+  // Collect unique source sections for the filter dropdown
+  const sourceSections = useMemo(() => {
+    const sections = new Set<string>();
+    requirements.forEach((r) => {
+      if (r.source_section) sections.add(r.source_section);
+    });
+    return Array.from(sections).sort();
+  }, [requirements]);
+
+  // Apply filter
+  const filtered = useMemo(
+    () =>
+      sourceSectionFilter === "all"
+        ? requirements
+        : requirements.filter((r) => r.source_section === sourceSectionFilter),
+    [requirements, sourceSectionFilter]
+  );
+
   const stats = {
     total: requirements.length,
     mandatory: requirements.filter((r) => r.importance === "mandatory").length,
     addressed: requirements.filter((r) => r.is_addressed).length,
+    filtered: filtered.length,
   };
 
   return (
@@ -74,6 +96,7 @@ export function ComplianceMatrix({
             <h2 className="font-semibold text-foreground">Compliance Matrix</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {stats.addressed}/{stats.total} requirements addressed
+              {sourceSectionFilter !== "all" && ` (showing ${stats.filtered})`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -83,11 +106,30 @@ export function ComplianceMatrix({
           </div>
         </div>
 
+        {/* Source section filter */}
+        {sourceSections.length > 0 && (
+          <div className="flex items-center gap-2 mt-2">
+            <Filter className="w-3 h-3 text-muted-foreground" />
+            <select
+              value={sourceSectionFilter}
+              onChange={(e) => setSourceSectionFilter(e.target.value)}
+              className="text-xs bg-secondary border border-border rounded px-2 py-1 text-foreground"
+            >
+              <option value="all">All Sections</option>
+              {sourceSections.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Progress bar */}
         <div className="mt-3 h-1.5 bg-secondary rounded-full overflow-hidden">
           <div
             className="h-full bg-accent transition-all duration-500"
-            style={{ width: `${(stats.addressed / stats.total) * 100}%` }}
+            style={{ width: `${stats.total > 0 ? (stats.addressed / stats.total) * 100 : 0}%` }}
           />
         </div>
       </div>
@@ -95,7 +137,7 @@ export function ComplianceMatrix({
       {/* Requirements List */}
       <ScrollArea className="split-panel-content">
         <div className="p-2 space-y-1">
-          {requirements.map((requirement) => {
+          {filtered.map((requirement) => {
             const isSelected = requirement.id === selectedId;
             const isThisGenerating =
               isGenerating && generatingId === requirement.id;
@@ -166,11 +208,18 @@ export function ComplianceMatrix({
                       {truncate(requirement.requirement_text, 150)}
                     </p>
 
-                    {requirement.category && (
-                      <span className="inline-block mt-1.5 text-xs text-muted-foreground">
-                        {requirement.category}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {requirement.source_section && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                          {requirement.source_section}
+                        </Badge>
+                      )}
+                      {requirement.category && (
+                        <span className="text-xs text-muted-foreground">
+                          {requirement.category}
+                        </span>
+                      )}
+                    </div>
 
                     {requirement.assigned_to && (
                       <span className="block mt-1 text-xs text-muted-foreground">

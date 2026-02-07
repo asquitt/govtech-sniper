@@ -241,6 +241,7 @@ class ComplianceRequirementRead(BaseModel):
     """Single requirement from compliance matrix."""
     id: str
     section: str
+    source_section: Optional[str] = None
     requirement_text: str
     importance: ImportanceLevel
     category: Optional[str]
@@ -268,6 +269,7 @@ class ComplianceRequirementCreate(BaseModel):
     """Create a new compliance requirement."""
     id: Optional[str] = None
     section: str
+    source_section: Optional[str] = None
     requirement_text: str
     importance: ImportanceLevel
     category: Optional[str] = None
@@ -283,6 +285,7 @@ class ComplianceRequirementCreate(BaseModel):
 class ComplianceRequirementUpdate(BaseModel):
     """Update fields on a compliance requirement."""
     section: Optional[str] = None
+    source_section: Optional[str] = None
     requirement_text: Optional[str] = None
     importance: Optional[ImportanceLevel] = None
     category: Optional[str] = None

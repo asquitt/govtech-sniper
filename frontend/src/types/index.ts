@@ -595,6 +595,7 @@ export type RequirementStatus =
 export interface ComplianceRequirement {
   id: string;
   section: string;
+  source_section?: string;
   requirement_text: string;
   importance: ImportanceLevel;
   category?: string;
