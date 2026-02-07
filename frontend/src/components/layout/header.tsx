@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Bell, Search, User, HelpCircle } from "lucide-react";
+import { Search, User, HelpCircle } from "lucide-react";
+import { NotificationCenter } from "@/components/notifications/notification-center";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -41,15 +42,7 @@ export function Header({ title, description, actions }: HeaderProps) {
           </Tooltip>
 
           {/* Notifications */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Notifications</TooltipContent>
-          </Tooltip>
+          <NotificationCenter />
 
           {/* Help */}
           <Tooltip>

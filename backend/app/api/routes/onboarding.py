@@ -1,0 +1,221 @@
+"""
+RFP Sniper - Onboarding Routes
+================================
+Track user onboarding progress through the first-proposal wizard.
+"""
+
+from datetime import datetime
+
+import structlog
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import JSON, Column, Field, SQLModel, select
+
+from app.api.deps import UserAuth, get_current_user, resolve_user_id
+from app.database import get_session
+from app.models.knowledge_base import KnowledgeBaseDocument
+from app.models.proposal import Proposal
+from app.models.rfp import RFP
+
+logger = structlog.get_logger(__name__)
+router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
+
+
+# =============================================================================
+# Model
+# =============================================================================
+
+
+class OnboardingProgress(SQLModel, table=True):
+    """Tracks user onboarding step completion."""
+
+    __tablename__ = "onboarding_progress"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", unique=True, index=True)
+    completed_steps: list[str] = Field(default=[], sa_column=Column(JSON))
+    is_dismissed: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# =============================================================================
+# Step definitions
+# =============================================================================
+
+ONBOARDING_STEPS = [
+    {
+        "id": "create_account",
+        "title": "Create your account",
+        "description": "Sign up and set up your profile",
+        "href": "/settings",
+    },
+    {
+        "id": "upload_rfp",
+        "title": "Upload your first RFP",
+        "description": "Upload a solicitation document to get started",
+        "href": "/opportunities",
+    },
+    {
+        "id": "analyze_rfp",
+        "title": "Analyze an RFP",
+        "description": "Run AI analysis on your uploaded solicitation",
+        "href": "/analysis",
+    },
+    {
+        "id": "upload_documents",
+        "title": "Build your Knowledge Base",
+        "description": "Upload resumes, past performance, and capability docs",
+        "href": "/knowledge-base",
+    },
+    {
+        "id": "create_proposal",
+        "title": "Create a proposal",
+        "description": "Generate your first AI-assisted proposal draft",
+        "href": "/proposals",
+    },
+    {
+        "id": "export_proposal",
+        "title": "Export a proposal",
+        "description": "Export to Word or PDF for submission",
+        "href": "/proposals",
+    },
+]
+
+
+# =============================================================================
+# Endpoints
+# =============================================================================
+
+
+@router.get("/progress")
+async def get_progress(
+    user_id: int | None = Query(default=None),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Get onboarding progress with auto-detection of completed steps."""
+    uid = resolve_user_id(user_id, current_user)
+
+    progress = (
+        await session.exec(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
+    ).first()
+
+    if not progress:
+        progress = OnboardingProgress(user_id=uid, completed_steps=["create_account"])
+        session.add(progress)
+        await session.flush()
+
+    # Auto-detect completed steps from actual data
+    completed = set(progress.completed_steps)
+    completed.add("create_account")  # Always true if they're calling this
+
+    rfp_count = (await session.exec(select(func.count()).where(RFP.user_id == uid))).first() or 0
+    if rfp_count > 0:
+        completed.add("upload_rfp")
+
+    analyzed_count = (
+        await session.exec(
+            select(func.count()).where(RFP.user_id == uid, RFP.analysis_status == "completed")
+        )
+    ).first() or 0
+    if analyzed_count > 0:
+        completed.add("analyze_rfp")
+
+    doc_count = (
+        await session.exec(select(func.count()).where(KnowledgeBaseDocument.user_id == uid))
+    ).first() or 0
+    if doc_count > 0:
+        completed.add("upload_documents")
+
+    proposal_count = (
+        await session.exec(select(func.count()).where(Proposal.user_id == uid))
+    ).first() or 0
+    if proposal_count > 0:
+        completed.add("create_proposal")
+
+    # Update stored progress
+    progress.completed_steps = sorted(completed)
+    progress.updated_at = datetime.utcnow()
+    session.add(progress)
+    await session.commit()
+
+    # Build response
+    steps = []
+    for step_def in ONBOARDING_STEPS:
+        is_done = step_def["id"] in completed
+        steps.append(
+            {
+                "id": step_def["id"],
+                "title": step_def["title"],
+                "description": step_def["description"],
+                "href": step_def["href"],
+                "completed": is_done,
+                "completed_at": progress.updated_at.isoformat() if is_done else None,
+            }
+        )
+
+    return {
+        "steps": steps,
+        "completed_count": len(completed),
+        "total_steps": len(ONBOARDING_STEPS),
+        "is_complete": len(completed) >= len(ONBOARDING_STEPS),
+        "is_dismissed": progress.is_dismissed,
+    }
+
+
+@router.post("/steps/{step_id}/complete")
+async def mark_step_complete(
+    step_id: str,
+    user_id: int | None = Query(default=None),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Manually mark a step as complete."""
+    uid = resolve_user_id(user_id, current_user)
+
+    valid_ids = {s["id"] for s in ONBOARDING_STEPS}
+    if step_id not in valid_ids:
+        return {"error": "Invalid step ID"}
+
+    progress = (
+        await session.exec(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
+    ).first()
+
+    if not progress:
+        progress = OnboardingProgress(user_id=uid, completed_steps=[])
+        session.add(progress)
+
+    completed = set(progress.completed_steps)
+    completed.add(step_id)
+    progress.completed_steps = sorted(completed)
+    progress.updated_at = datetime.utcnow()
+    session.add(progress)
+    await session.commit()
+
+    return {"status": "completed", "step_id": step_id}
+
+
+@router.post("/dismiss")
+async def dismiss_onboarding(
+    user_id: int | None = Query(default=None),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Dismiss the onboarding wizard."""
+    uid = resolve_user_id(user_id, current_user)
+
+    progress = (
+        await session.exec(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
+    ).first()
+
+    if not progress:
+        progress = OnboardingProgress(user_id=uid, completed_steps=[], is_dismissed=True)
+    else:
+        progress.is_dismissed = True
+
+    session.add(progress)
+    await session.commit()
+
+    return {"status": "dismissed"}

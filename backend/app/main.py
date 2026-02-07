@@ -41,7 +41,9 @@ from app.api.routes import (
     ingest_router,
     integrations_router,
     intelligence_router,
+    kb_intelligence_router,
     notifications_router,
+    onboarding_router,
     reports_router,
     revenue_router,
     reviews_router,
@@ -352,6 +354,8 @@ app.include_router(reports_router, prefix=api_prefix)
 app.include_router(activity_router, prefix=api_prefix)
 app.include_router(intelligence_router, prefix=api_prefix)
 app.include_router(admin_router, prefix=api_prefix)
+app.include_router(kb_intelligence_router, prefix=api_prefix)
+app.include_router(onboarding_router, prefix=api_prefix)
 
 
 # =============================================================================

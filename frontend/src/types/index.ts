@@ -28,3 +28,4 @@ export * from "./template-marketplace";
 export * from "./activity";
 export * from "./intelligence";
 export * from "./admin";
+export * from "./notification";

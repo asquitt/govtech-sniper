@@ -37,6 +37,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/auth-context";
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 
 interface NavItem {
   title: string;
@@ -235,9 +236,10 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           })}
         </nav>
 
-        {/* Feature Cards (when expanded) */}
+        {/* Onboarding + Feature Cards (when expanded) */}
         {!collapsed && (
           <div className="px-3 py-4 space-y-2">
+            <OnboardingWizard />
             <div className="p-3 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 border border-primary/20">
               <div className="flex items-center gap-2 mb-1">
                 <Sparkles className="w-4 h-4 text-primary" />
