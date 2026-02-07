@@ -37,6 +37,8 @@ from app.models.capture import (
     CaptureFieldValue,
     CaptureFieldType,
     CaptureCompetitor,
+    CaptureActivity,
+    ActivityStatus,
 )
 from app.models.award import AwardRecord
 from app.models.contact import OpportunityContact
@@ -94,6 +96,8 @@ __all__ = [
     "CaptureFieldValue",
     "CaptureFieldType",
     "CaptureCompetitor",
+    "CaptureActivity",
+    "ActivityStatus",
     "AwardRecord",
     "OpportunityContact",
     "WordAddinSession",

@@ -15,6 +15,7 @@ import {
   LogOut,
   User,
   DollarSign,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,11 @@ const navItems: NavItem[] = [
     title: "Revenue",
     href: "/revenue",
     icon: DollarSign,
+  },
+  {
+    title: "Pipeline",
+    href: "/pipeline",
+    icon: GitBranch,
   },
   {
     title: "Settings",

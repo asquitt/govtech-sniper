@@ -53,6 +53,7 @@ from app.api.routes import (
     secrets_router,
     budget_intel_router,
     revenue_router,
+    capture_timeline_router,
 )
 
 # Configure structured logging
@@ -258,6 +259,7 @@ app.include_router(scim_router, prefix=api_prefix)
 app.include_router(secrets_router, prefix=api_prefix)
 app.include_router(budget_intel_router, prefix=api_prefix)
 app.include_router(revenue_router, prefix=api_prefix)
+app.include_router(capture_timeline_router, prefix=api_prefix)
 
 
 # =============================================================================

@@ -20,3 +20,4 @@ export type {
   ProposalVersion, SectionVersion, VersionDetail,
 } from "./misc";
 export { revenueApi } from "./revenue";
+export { captureTimelineApi } from "./capture-timeline";

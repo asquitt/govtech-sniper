@@ -103,3 +103,29 @@ export interface TeamingPartnerLink {
   role?: string | null;
   created_at: string;
 }
+
+export type ActivityStatus = "planned" | "in_progress" | "completed" | "overdue";
+
+export interface CaptureActivity {
+  id: number;
+  capture_plan_id: number;
+  title: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_milestone: boolean;
+  status: ActivityStatus;
+  sort_order: number;
+  depends_on_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GanttPlanRow {
+  plan_id: number;
+  rfp_id: number;
+  rfp_title: string;
+  agency?: string | null;
+  stage: CaptureStage;
+  response_deadline?: string | null;
+  activities: CaptureActivity[];
+}

@@ -4,7 +4,7 @@ RFP Sniper - Capture Models
 Capture pipeline, bid decisions, and teaming partners.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 from enum import Enum
 
@@ -154,6 +154,36 @@ class CaptureCompetitor(SQLModel, table=True):
     strengths: Optional[str] = None
     weaknesses: Optional[str] = None
     notes: Optional[str] = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ActivityStatus(str, Enum):
+    PLANNED = "planned"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    OVERDUE = "overdue"
+
+
+class CaptureActivity(SQLModel, table=True):
+    """
+    Timeline activity for a capture plan (Gantt chart items).
+    """
+    __tablename__ = "capture_activities"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    capture_plan_id: int = Field(foreign_key="capture_plans.id", index=True)
+
+    title: str = Field(max_length=500)
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    is_milestone: bool = Field(default=False)
+    status: ActivityStatus = Field(default=ActivityStatus.PLANNED)
+    sort_order: int = Field(default=0)
+    depends_on_id: Optional[int] = Field(
+        default=None, foreign_key="capture_activities.id"
+    )
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
