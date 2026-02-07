@@ -39,6 +39,8 @@ from app.models.capture import (
     CaptureCompetitor,
     CaptureActivity,
     ActivityStatus,
+    TeamingRequest,
+    TeamingRequestStatus,
 )
 from app.models.award import AwardRecord
 from app.models.contact import OpportunityContact
@@ -133,4 +135,6 @@ __all__ = [
     "ProcurementForecast",
     "ForecastAlert",
     "ForecastSource",
+    "TeamingRequest",
+    "TeamingRequestStatus",
 ]

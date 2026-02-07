@@ -14,6 +14,7 @@ import {
   Sparkles,
   LogOut,
   User,
+  Users,
   DollarSign,
   GitBranch,
   TrendingUp,
@@ -65,6 +66,11 @@ const navItems: NavItem[] = [
     title: "Capture",
     href: "/capture",
     icon: Target,
+  },
+  {
+    title: "Teaming",
+    href: "/teaming",
+    icon: Users,
   },
   {
     title: "Contracts",

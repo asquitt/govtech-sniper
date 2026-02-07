@@ -92,6 +92,45 @@ export interface TeamingPartner {
   contact_name?: string | null;
   contact_email?: string | null;
   notes?: string | null;
+  company_duns?: string | null;
+  cage_code?: string | null;
+  naics_codes?: string[];
+  set_asides?: string[];
+  capabilities?: string[];
+  clearance_level?: string | null;
+  past_performance_summary?: string | null;
+  website?: string | null;
+  is_public?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamingPartnerPublicProfile {
+  id: number;
+  name: string;
+  partner_type?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  company_duns?: string | null;
+  cage_code?: string | null;
+  naics_codes: string[];
+  set_asides: string[];
+  capabilities: string[];
+  clearance_level?: string | null;
+  past_performance_summary?: string | null;
+  website?: string | null;
+}
+
+export type TeamingRequestStatus = "pending" | "accepted" | "declined";
+
+export interface TeamingRequest {
+  id: number;
+  from_user_id: number;
+  to_partner_id: number;
+  rfp_id?: number | null;
+  message?: string | null;
+  status: TeamingRequestStatus;
+  partner_name?: string | null;
   created_at: string;
   updated_at: string;
 }

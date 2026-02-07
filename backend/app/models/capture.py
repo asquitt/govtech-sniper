@@ -78,6 +78,17 @@ class TeamingPartner(SQLModel, table=True):
     contact_email: Optional[str] = Field(default=None, max_length=255)
     notes: Optional[str] = None
 
+    # Extended fields for teaming board
+    company_duns: Optional[str] = Field(default=None, max_length=20)
+    cage_code: Optional[str] = Field(default=None, max_length=10)
+    naics_codes: list = Field(default=[], sa_column=Column(JSON))
+    set_asides: list = Field(default=[], sa_column=Column(JSON))
+    capabilities: list = Field(default=[], sa_column=Column(JSON))
+    clearance_level: Optional[str] = Field(default=None, max_length=50)
+    past_performance_summary: Optional[str] = None
+    website: Optional[str] = Field(default=None, max_length=500)
+    is_public: bool = Field(default=False)
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -184,6 +195,29 @@ class CaptureActivity(SQLModel, table=True):
     depends_on_id: Optional[int] = Field(
         default=None, foreign_key="capture_activities.id"
     )
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TeamingRequestStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+
+
+class TeamingRequest(SQLModel, table=True):
+    """
+    Teaming request between users and partners.
+    """
+    __tablename__ = "teaming_requests"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    from_user_id: int = Field(foreign_key="users.id", index=True)
+    to_partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
+    rfp_id: Optional[int] = Field(default=None, foreign_key="rfps.id", index=True)
+    message: Optional[str] = None
+    status: TeamingRequestStatus = Field(default=TeamingRequestStatus.PENDING)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
