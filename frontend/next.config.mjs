@@ -8,10 +8,11 @@ const nextConfig = {
 
   // API routes proxy to FastAPI backend
   async rewrites() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:8000/api/v1/:path*",
+        destination: `${apiUrl}/api/v1/:path*`,
       },
     ];
   },

@@ -425,7 +425,6 @@ async def get_ai_usage(
         "estimated_cost_usd": round(estimated_cost, 2),
         "average_tokens_per_generation": round(total_tokens / generations, 0) if generations > 0 else 0,
     }
-    }
 
 
 # =============================================================================

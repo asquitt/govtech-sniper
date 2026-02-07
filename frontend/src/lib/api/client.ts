@@ -5,10 +5,16 @@ import type { TaskStatus } from "@/types";
 // API Client Configuration
 // =============================================================================
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Direct backend URL (used for SSR, WebSocket, and token refresh)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
+
+// Client-side requests go through the Next.js rewrite proxy (/api/* → backend)
+// to avoid CORS issues. SSR requests use the direct backend URL.
+const isServer = typeof window === "undefined";
+const CLIENT_BASE_URL = isServer ? `${API_BASE_URL}/api/v1` : "/api";
 
 const api = axios.create({
-  baseURL: `${API_BASE_URL}/api/v1`,
+  baseURL: CLIENT_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -73,7 +79,10 @@ api.interceptors.response.use(
       const refreshToken = tokenManager.getRefreshToken();
       if (refreshToken) {
         try {
-          const { data } = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {
+          const refreshUrl = isServer
+            ? `${API_BASE_URL}/api/v1/auth/refresh`
+            : "/api/auth/refresh";
+          const { data } = await axios.post(refreshUrl, {
             refresh_token: refreshToken,
           });
 
