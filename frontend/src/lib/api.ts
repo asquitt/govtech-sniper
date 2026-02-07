@@ -7,6 +7,8 @@ import type {
   Proposal,
   ProposalSection,
   ProposalFocusDocument,
+  ProposalOutline,
+  OutlineSection,
   SectionEvidence,
   SubmissionPackage,
   KnowledgeBaseDocument,
@@ -773,6 +775,45 @@ export const draftApi = {
 
   removeFocusDocument: async (proposalId: number, documentId: number): Promise<void> => {
     await api.delete(`/draft/proposals/${proposalId}/focus-documents/${documentId}`);
+  },
+
+  generateOutline: async (proposalId: number): Promise<TaskResponse> => {
+    const { data } = await api.post(`/draft/proposals/${proposalId}/generate-outline`);
+    return data;
+  },
+
+  getOutline: async (proposalId: number): Promise<ProposalOutline> => {
+    const { data } = await api.get(`/draft/proposals/${proposalId}/outline`);
+    return data;
+  },
+
+  addOutlineSection: async (
+    proposalId: number,
+    payload: { title: string; parent_id?: number; description?: string; display_order?: number }
+  ): Promise<OutlineSection> => {
+    const { data } = await api.post(`/draft/proposals/${proposalId}/outline/sections`, payload);
+    return data;
+  },
+
+  updateOutlineSection: async (
+    proposalId: number,
+    sectionId: number,
+    payload: Partial<OutlineSection>
+  ): Promise<OutlineSection> => {
+    const { data } = await api.patch(
+      `/draft/proposals/${proposalId}/outline/sections/${sectionId}`,
+      payload
+    );
+    return data;
+  },
+
+  deleteOutlineSection: async (proposalId: number, sectionId: number): Promise<void> => {
+    await api.delete(`/draft/proposals/${proposalId}/outline/sections/${sectionId}`);
+  },
+
+  approveOutline: async (proposalId: number): Promise<{ sections_created: number }> => {
+    const { data } = await api.post(`/draft/proposals/${proposalId}/outline/approve`);
+    return data;
   },
 };
 

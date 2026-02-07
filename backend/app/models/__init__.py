@@ -45,6 +45,7 @@ from app.models.graphics import ProposalGraphicRequest, GraphicsRequestStatus
 from app.models.secret import SecretRecord
 from app.models.budget_intel import BudgetIntelligence
 from app.models.proposal_focus_document import ProposalFocusDocument
+from app.models.outline import ProposalOutline, OutlineSection, OutlineStatus
 from app.models.contract import (
     ContractAward,
     ContractStatus,
@@ -103,6 +104,9 @@ __all__ = [
     "SecretRecord",
     "BudgetIntelligence",
     "ProposalFocusDocument",
+    "ProposalOutline",
+    "OutlineSection",
+    "OutlineStatus",
     "ContractAward",
     "ContractStatus",
     "ContractDeliverable",

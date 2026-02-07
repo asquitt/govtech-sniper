@@ -707,6 +707,31 @@ export interface SubmissionPackage {
   updated_at: string;
 }
 
+export type OutlineStatus = "generating" | "draft" | "approved";
+
+export interface OutlineSection {
+  id: number;
+  outline_id: number;
+  parent_id?: number | null;
+  title: string;
+  description?: string | null;
+  mapped_requirement_ids: string[];
+  display_order: number;
+  estimated_pages?: number | null;
+  created_at: string;
+  updated_at: string;
+  children: OutlineSection[];
+}
+
+export interface ProposalOutline {
+  id: number;
+  proposal_id: number;
+  status: OutlineStatus;
+  created_at: string;
+  updated_at: string;
+  sections: OutlineSection[];
+}
+
 export interface ProposalFocusDocument {
   id: number;
   proposal_id: number;

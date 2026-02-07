@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { WritingPlanPanel } from "@/components/proposals/writing-plan-panel";
 import { FocusDocumentSelector } from "@/components/proposals/focus-document-selector";
+import { OutlineView } from "@/components/proposals/outline-view";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import type {
@@ -457,6 +458,9 @@ export default function ProposalWorkspacePage() {
                 </ScrollArea>
               </CardContent>
             </Card>
+            <div className="mt-4">
+              <OutlineView proposalId={proposalId} onApproved={refreshWorkspace} />
+            </div>
           </div>
 
           <div className="lg:col-span-6 h-full">

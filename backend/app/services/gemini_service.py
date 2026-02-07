@@ -499,6 +499,98 @@ Write the response now:"""
         return citations
     
     # =========================================================================
+    # Outline Generation
+    # =========================================================================
+
+    OUTLINE_PROMPT = """You are an expert government proposal architect. Generate a structured proposal outline from these compliance requirements.
+
+REQUIREMENTS:
+{requirements_json}
+
+RFP SUMMARY:
+{rfp_summary}
+
+INSTRUCTIONS:
+1. Create a standard government proposal structure (Executive Summary, Technical Approach, Management, Past Performance, etc.)
+2. Map each requirement to the most appropriate section
+3. Nest subsections where logical (e.g., "3.1 Software Development" under "3. Technical Approach")
+4. Estimate page count per section based on requirement complexity
+5. Include a description for each section explaining what it should cover
+
+Respond with ONLY valid JSON:
+{{
+    "sections": [
+        {{
+            "title": "Executive Summary",
+            "description": "High-level overview of the offeror's approach",
+            "mapped_requirement_ids": [],
+            "estimated_pages": 2,
+            "children": []
+        }},
+        {{
+            "title": "Technical Approach",
+            "description": "Detailed technical solution",
+            "mapped_requirement_ids": ["REQ-001"],
+            "estimated_pages": 10,
+            "children": [
+                {{
+                    "title": "Software Development Methodology",
+                    "description": "Agile approach and SDLC processes",
+                    "mapped_requirement_ids": ["REQ-002", "REQ-003"],
+                    "estimated_pages": 3,
+                    "children": []
+                }}
+            ]
+        }}
+    ]
+}}"""
+
+    async def generate_outline(
+        self,
+        requirements_json: str,
+        rfp_summary: str,
+    ) -> dict:
+        """Generate a structured proposal outline from compliance requirements."""
+        if settings.mock_ai:
+            return {
+                "sections": [
+                    {
+                        "title": "Executive Summary",
+                        "description": "Overview of the proposal approach.",
+                        "mapped_requirement_ids": [],
+                        "estimated_pages": 2,
+                        "children": [],
+                    },
+                    {
+                        "title": "Technical Approach",
+                        "description": "Detailed technical solution.",
+                        "mapped_requirement_ids": ["REQ-001"],
+                        "estimated_pages": 8,
+                        "children": [],
+                    },
+                ]
+            }
+
+        if not self.pro_model:
+            raise ValueError("Gemini API not configured")
+
+        prompt = self.OUTLINE_PROMPT.format(
+            requirements_json=requirements_json[:50000],
+            rfp_summary=rfp_summary[:5000],
+        )
+
+        import json
+        response = await self.pro_model.generate_content_async(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=4096,
+                response_mime_type="application/json",
+            ),
+        )
+        return json.loads(response.text)
+
+    # =========================================================================
     # Utility Methods
     # =========================================================================
     
