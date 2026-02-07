@@ -5,6 +5,7 @@ import type {
   ReviewComment,
   ReviewChecklistItem,
   ReviewDashboardItem,
+  ScoringSummary,
   ReviewType,
   CommentSeverity,
   CommentStatus,
@@ -73,7 +74,11 @@ export const reviewApi = {
   updateComment: async (
     reviewId: number,
     commentId: number,
-    payload: { status?: CommentStatus; resolution_note?: string }
+    payload: {
+      status?: CommentStatus;
+      resolution_note?: string;
+      assigned_to_user_id?: number | null;
+    }
   ): Promise<ReviewComment> => {
     const { data } = await api.patch(
       `/reviews/${reviewId}/comments/${commentId}`,
@@ -108,6 +113,12 @@ export const reviewApi = {
       `/reviews/${reviewId}/checklist/${itemId}`,
       payload
     );
+    return data;
+  },
+
+  // Scoring summary
+  getScoringSummary: async (reviewId: number): Promise<ScoringSummary> => {
+    const { data } = await api.get(`/reviews/${reviewId}/scoring-summary`);
     return data;
   },
 

@@ -6,7 +6,7 @@ export type AssignmentStatus = "pending" | "accepted" | "completed";
 
 export type CommentSeverity = "critical" | "major" | "minor" | "suggestion";
 
-export type CommentStatus = "open" | "accepted" | "rejected" | "resolved";
+export type CommentStatus = "open" | "assigned" | "addressed" | "verified" | "closed" | "rejected";
 
 export type ChecklistItemStatus = "pending" | "pass" | "fail" | "na";
 
@@ -43,6 +43,11 @@ export interface ReviewComment {
   severity: CommentSeverity;
   status: CommentStatus;
   resolution_note?: string | null;
+  assigned_to_user_id?: number | null;
+  resolved_by_user_id?: number | null;
+  verified_by_user_id?: number | null;
+  resolved_at?: string | null;
+  verified_at?: string | null;
   created_at: string;
 }
 
@@ -55,6 +60,19 @@ export interface ReviewChecklistItem {
   reviewer_note?: string | null;
   display_order: number;
   created_at: string;
+}
+
+export interface ScoringSummary {
+  review_id: number;
+  review_type: ReviewType;
+  average_score?: number | null;
+  min_score?: number | null;
+  max_score?: number | null;
+  checklist_pass_rate: number;
+  comments_by_severity: Record<string, number>;
+  resolution_rate: number;
+  total_comments: number;
+  resolved_comments: number;
 }
 
 export interface ReviewDashboardItem {

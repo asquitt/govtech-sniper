@@ -38,9 +38,11 @@ class CommentSeverity(str, Enum):
 
 class CommentStatus(str, Enum):
     OPEN = "open"
-    ACCEPTED = "accepted"
+    ASSIGNED = "assigned"
+    ADDRESSED = "addressed"
+    VERIFIED = "verified"
+    CLOSED = "closed"
     REJECTED = "rejected"
-    RESOLVED = "resolved"
 
 
 class ChecklistItemStatus(str, Enum):
@@ -96,6 +98,11 @@ class ReviewComment(SQLModel, table=True):
     severity: CommentSeverity = Field(default=CommentSeverity.MINOR)
     status: CommentStatus = Field(default=CommentStatus.OPEN)
     resolution_note: str | None = Field(default=None, sa_column=Column(Text))
+    assigned_to_user_id: int | None = Field(default=None, foreign_key="users.id")
+    resolved_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    verified_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    resolved_at: datetime | None = None
+    verified_at: datetime | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

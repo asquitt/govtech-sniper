@@ -37,6 +37,7 @@ from app.schemas.review import (
     ReviewCreate,
     ReviewDashboardItem,
     ReviewRead,
+    ScoringSummary,
 )
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
@@ -300,7 +301,11 @@ async def update_comment(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> CommentRead:
-    """Resolve, accept, or reject a review comment."""
+    """Update a comment status through the resolution workflow.
+
+    Transitions: open→assigned, assigned→addressed, addressed→verified/closed,
+    any→rejected.
+    """
     result = await session.execute(
         select(ReviewComment).where(
             ReviewComment.id == comment_id,
@@ -311,8 +316,21 @@ async def update_comment(
     if not comment:
         raise HTTPException(404, "Comment not found")
 
+    if payload.assigned_to_user_id is not None:
+        comment.assigned_to_user_id = payload.assigned_to_user_id
+        if comment.status == CommentStatus.OPEN:
+            comment.status = CommentStatus.ASSIGNED
+
     if payload.status is not None:
-        comment.status = CommentStatus(payload.status)
+        new_status = CommentStatus(payload.status)
+        if new_status == CommentStatus.ADDRESSED:
+            comment.resolved_by_user_id = current_user.id
+            comment.resolved_at = datetime.utcnow()
+        elif new_status in (CommentStatus.VERIFIED, CommentStatus.CLOSED):
+            comment.verified_by_user_id = current_user.id
+            comment.verified_at = datetime.utcnow()
+        comment.status = new_status
+
     if payload.resolution_note is not None:
         comment.resolution_note = payload.resolution_note
 
@@ -330,6 +348,73 @@ async def update_comment(
     )
 
     return CommentRead.model_validate(comment)
+
+
+# ---------------------------------------------------------------------------
+# Scoring Summary
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{review_id}/scoring-summary", response_model=ScoringSummary)
+async def get_scoring_summary(
+    review_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ScoringSummary:
+    """Aggregated scoring summary for a review."""
+    review = await _get_review_or_404(review_id, session)
+
+    # Checklist pass rate
+    checklist_result = await session.execute(
+        select(
+            func.count(ReviewChecklistItem.id),
+            func.count(ReviewChecklistItem.id).filter(
+                ReviewChecklistItem.status == ChecklistItemStatus.PASS
+            ),
+        ).where(ReviewChecklistItem.review_id == review_id)
+    )
+    total_items, passed_items = checklist_result.one()
+    checklist_pass_rate = (passed_items / total_items * 100) if total_items else 0.0
+
+    # Comments by severity + resolution rate
+    comments_result = await session.execute(
+        select(ReviewComment.severity, ReviewComment.status).where(
+            ReviewComment.review_id == review_id
+        )
+    )
+    rows = comments_result.all()
+    severity_counts: dict[str, int] = {}
+    total_comments = 0
+    resolved_comments = 0
+    terminal_statuses = {CommentStatus.VERIFIED, CommentStatus.CLOSED, CommentStatus.REJECTED}
+    for sev, status in rows:
+        sev_val = sev.value if hasattr(sev, "value") else sev
+        severity_counts[sev_val] = severity_counts.get(sev_val, 0) + 1
+        total_comments += 1
+        status_val = status.value if hasattr(status, "value") else status
+        if status_val in {s.value for s in terminal_statuses}:
+            resolved_comments += 1
+
+    resolution_rate = (resolved_comments / total_comments * 100) if total_comments else 0.0
+
+    review_type_val = (
+        review.review_type.value
+        if isinstance(review.review_type, ReviewType)
+        else review.review_type
+    )
+
+    return ScoringSummary(
+        review_id=review_id,
+        review_type=review_type_val,
+        average_score=review.overall_score,
+        min_score=review.overall_score,
+        max_score=review.overall_score,
+        checklist_pass_rate=round(checklist_pass_rate, 1),
+        comments_by_severity=severity_counts,
+        resolution_rate=round(resolution_rate, 1),
+        total_comments=total_comments,
+        resolved_comments=resolved_comments,
+    )
 
 
 # ---------------------------------------------------------------------------

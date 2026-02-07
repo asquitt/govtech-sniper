@@ -19,11 +19,13 @@ const SEVERITY_VARIANT: Record<CommentSeverity, "destructive" | "warning" | "sec
   suggestion: "default",
 };
 
-const STATUS_VARIANT: Record<CommentStatus, "destructive" | "warning" | "success" | "secondary"> = {
+const STATUS_VARIANT: Record<CommentStatus, "destructive" | "warning" | "success" | "secondary" | "default"> = {
   open: "warning",
-  accepted: "success",
+  assigned: "secondary",
+  addressed: "default",
+  verified: "success",
+  closed: "success",
   rejected: "destructive",
-  resolved: "success",
 };
 
 type SortKey = "severity" | "status" | "created_at";
@@ -34,6 +36,30 @@ const SEVERITY_ORDER: Record<CommentSeverity, number> = {
   minor: 2,
   suggestion: 3,
 };
+
+/** Actions available per comment status. */
+function getAvailableActions(status: CommentStatus): { label: string; nextStatus: CommentStatus }[] {
+  switch (status) {
+    case "open":
+      return [
+        { label: "Assign", nextStatus: "assigned" },
+        { label: "Reject", nextStatus: "rejected" },
+      ];
+    case "assigned":
+      return [
+        { label: "Mark Addressed", nextStatus: "addressed" },
+        { label: "Reject", nextStatus: "rejected" },
+      ];
+    case "addressed":
+      return [
+        { label: "Verify", nextStatus: "verified" },
+        { label: "Close", nextStatus: "closed" },
+        { label: "Reject", nextStatus: "rejected" },
+      ];
+    default:
+      return [];
+  }
+}
 
 export function ReviewCommentList({ reviewId, onRefresh }: ReviewCommentListProps) {
   const [comments, setComments] = useState<ReviewComment[]>([]);
@@ -94,10 +120,20 @@ export function ReviewCommentList({ reviewId, onRefresh }: ReviewCommentListProp
     );
   }
 
+  // Resolution stats
+  const terminalStatuses = new Set<CommentStatus>(["verified", "closed", "rejected"]);
+  const resolvedCount = comments.filter((c) => terminalStatuses.has(c.status)).length;
+  const resolutionPct = comments.length ? Math.round((resolvedCount / comments.length) * 100) : 0;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Review Comments ({comments.length})</CardTitle>
+        <div>
+          <CardTitle>Review Comments ({comments.length})</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">
+            {resolvedCount}/{comments.length} resolved ({resolutionPct}%)
+          </p>
+        </div>
         <div className="flex gap-1">
           {(["severity", "status", "created_at"] as SortKey[]).map((key) => (
             <Button
@@ -120,55 +156,52 @@ export function ReviewCommentList({ reviewId, onRefresh }: ReviewCommentListProp
               <div key={section}>
                 <h4 className="mb-2 text-sm font-medium text-muted-foreground">{section}</h4>
                 <div className="space-y-2">
-                  {sectionComments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="rounded-lg border border-border p-3 space-y-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Badge variant={SEVERITY_VARIANT[comment.severity]}>
-                          {comment.severity}
-                        </Badge>
-                        <Badge variant={STATUS_VARIANT[comment.status]}>
-                          {comment.status}
-                        </Badge>
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          {new Date(comment.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="text-sm">{comment.comment_text}</p>
-                      {comment.resolution_note && (
-                        <p className="text-xs text-muted-foreground italic">
-                          Resolution: {comment.resolution_note}
-                        </p>
-                      )}
-                      {comment.status === "open" && (
-                        <div className="flex gap-1 pt-1">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStatusUpdate(comment.id, "accepted")}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStatusUpdate(comment.id, "resolved")}
-                          >
-                            Resolve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStatusUpdate(comment.id, "rejected")}
-                          >
-                            Reject
-                          </Button>
+                  {sectionComments.map((comment) => {
+                    const actions = getAvailableActions(comment.status);
+                    return (
+                      <div
+                        key={comment.id}
+                        className="rounded-lg border border-border p-3 space-y-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Badge variant={SEVERITY_VARIANT[comment.severity]}>
+                            {comment.severity}
+                          </Badge>
+                          <Badge variant={STATUS_VARIANT[comment.status]}>
+                            {comment.status}
+                          </Badge>
+                          {comment.resolved_at && (
+                            <span className="text-xs text-muted-foreground">
+                              Resolved {new Date(comment.resolved_at).toLocaleDateString()}
+                            </span>
+                          )}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            {new Date(comment.created_at).toLocaleDateString()}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <p className="text-sm">{comment.comment_text}</p>
+                        {comment.resolution_note && (
+                          <p className="text-xs text-muted-foreground italic">
+                            Resolution: {comment.resolution_note}
+                          </p>
+                        )}
+                        {actions.length > 0 && (
+                          <div className="flex gap-1 pt-1">
+                            {actions.map(({ label, nextStatus }) => (
+                              <Button
+                                key={nextStatus}
+                                size="sm"
+                                variant={nextStatus === "rejected" ? "destructive" : "outline"}
+                                onClick={() => handleStatusUpdate(comment.id, nextStatus)}
+                              >
+                                {label}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}

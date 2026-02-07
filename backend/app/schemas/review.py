@@ -79,8 +79,9 @@ class CommentCreate(BaseModel):
 
 
 class CommentUpdate(BaseModel):
-    status: str | None = None  # open | accepted | rejected | resolved
+    status: str | None = None  # open | assigned | addressed | verified | closed | rejected
     resolution_note: str | None = None
+    assigned_to_user_id: int | None = None
 
 
 class CommentRead(BaseModel):
@@ -92,6 +93,11 @@ class CommentRead(BaseModel):
     severity: str
     status: str
     resolution_note: str | None = None
+    assigned_to_user_id: int | None = None
+    resolved_by_user_id: int | None = None
+    verified_by_user_id: int | None = None
+    resolved_at: datetime | None = None
+    verified_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -148,6 +154,24 @@ class ReviewDashboardItem(BaseModel):
     open_comments: int = 0
     total_assignments: int = 0
     completed_assignments: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Scoring Summary
+# ---------------------------------------------------------------------------
+
+
+class ScoringSummary(BaseModel):
+    review_id: int
+    review_type: str
+    average_score: float | None = None
+    min_score: float | None = None
+    max_score: float | None = None
+    checklist_pass_rate: float = 0.0
+    comments_by_severity: dict[str, int] = {}
+    resolution_rate: float = 0.0
+    total_comments: int = 0
+    resolved_comments: int = 0
 
 
 # ---------------------------------------------------------------------------
