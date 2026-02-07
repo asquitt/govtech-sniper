@@ -10,13 +10,17 @@ from app.services.data_providers.base import (
     SearchParams,
 )
 from app.services.data_providers.fpds import FPDSProvider
+from app.services.data_providers.grants_gov import GrantsGovProvider
 from app.services.data_providers.gsa_ebuy import GSAEbuyProvider
+from app.services.data_providers.sewp import SEWPProvider
 from app.services.data_providers.usaspending import USAspendingProvider
 
 _PROVIDERS: dict[str, DataSourceProvider] = {
     "gsa_ebuy": GSAEbuyProvider(),
     "fpds": FPDSProvider(),
     "usaspending": USAspendingProvider(),
+    "sewp": SEWPProvider(),
+    "grants_gov": GrantsGovProvider(),
 }
 
 
