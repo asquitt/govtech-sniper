@@ -8,6 +8,7 @@ import {
   FileText,
   Sparkles,
   Target,
+  ClipboardCheck,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ const tabs: MobileTab[] = [
   { title: "Proposals", href: "/proposals", icon: FileText },
   { title: "Dash", href: "/dash", icon: Sparkles },
   { title: "Capture", href: "/capture", icon: Target },
-  { title: "Settings", href: "/settings", icon: Settings },
+  { title: "Reviews", href: "/reviews", icon: ClipboardCheck },
 ];
 
 export function MobileNav() {

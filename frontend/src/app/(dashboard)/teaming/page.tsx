@@ -7,8 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { teamingBoardApi } from "@/lib/api";
 import type { TeamingPartnerPublicProfile, TeamingRequest } from "@/types";
+import { NDATracker } from "@/components/teaming/nda-tracker";
+import { PerformanceRatingForm } from "@/components/teaming/performance-rating-form";
 
-type Tab = "search" | "sent" | "received";
+type Tab = "search" | "sent" | "received" | "ndas" | "ratings";
 
 export default function TeamingBoardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("search");
@@ -120,7 +122,7 @@ export default function TeamingBoardPage() {
 
         {/* Tab Navigation */}
         <div className="flex gap-2 border-b pb-2">
-          {(["search", "sent", "received"] as Tab[]).map((tab) => (
+          {(["search", "sent", "received", "ndas", "ratings"] as Tab[]).map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "ghost"}
@@ -130,6 +132,8 @@ export default function TeamingBoardPage() {
               {tab === "search" && "Partner Search"}
               {tab === "sent" && `Sent (${sentRequests.length})`}
               {tab === "received" && `Inbox (${receivedRequests.length})`}
+              {tab === "ndas" && "NDA Tracking"}
+              {tab === "ratings" && "Ratings"}
             </Button>
           ))}
         </div>
@@ -356,6 +360,26 @@ export default function TeamingBoardPage() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* NDA Tracking Tab */}
+        {activeTab === "ndas" && <NDATracker />}
+
+        {/* Ratings Tab */}
+        {activeTab === "ratings" && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Partner Performance Ratings</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Select a partner from the search tab to rate, or rate a partner below by ID.
+                </p>
+                <PerformanceRatingForm partnerId={0} />
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Send Request Modal */}

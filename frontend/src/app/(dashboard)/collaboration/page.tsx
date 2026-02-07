@@ -13,6 +13,7 @@ import {
   Edit3,
   Shield,
   Trash2,
+  Activity,
 } from "lucide-react";
 import { collaborationApi } from "@/lib/api";
 import type {
@@ -21,6 +22,7 @@ import type {
   WorkspaceMember,
   SharedDataPermission,
 } from "@/types";
+import { ActivityFeed } from "@/components/collaboration/activity-feed";
 
 // ---------------------------------------------------------------------------
 // Workspace List
@@ -346,6 +348,8 @@ export default function CollaborationPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [showFeed, setShowFeed] = useState(false);
+  const [feedProposalId, setFeedProposalId] = useState<number | null>(null);
 
   const loadWorkspaces = useCallback(async () => {
     setLoading(true);
@@ -391,9 +395,17 @@ export default function CollaborationPage() {
         title="Collaboration"
         description="Share workspaces and data with teaming partners"
         actions={
-          <Button onClick={() => setShowCreate(true)}>
-            <Share2 className="w-4 h-4 mr-2" /> New Workspace
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={showFeed ? "default" : "outline"}
+              onClick={() => setShowFeed((p) => !p)}
+            >
+              <Activity className="w-4 h-4 mr-2" /> Activity
+            </Button>
+            <Button onClick={() => setShowCreate(true)}>
+              <Share2 className="w-4 h-4 mr-2" /> New Workspace
+            </Button>
+          </div>
         }
       />
 
@@ -446,9 +458,9 @@ export default function CollaborationPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-12 gap-6">
+            <div className={`grid gap-6 ${showFeed ? "grid-cols-12" : "grid-cols-12"}`}>
               {/* Sidebar: workspace list */}
-              <div className="col-span-4">
+              <div className={showFeed ? "col-span-3" : "col-span-4"}>
                 <WorkspaceList
                   workspaces={workspaces}
                   selectedId={selectedId}
@@ -458,7 +470,7 @@ export default function CollaborationPage() {
               </div>
 
               {/* Detail */}
-              <div className="col-span-8">
+              <div className={showFeed ? "col-span-6" : "col-span-8"}>
                 {selectedWorkspace ? (
                   <WorkspaceDetail
                     workspace={selectedWorkspace}
@@ -473,6 +485,31 @@ export default function CollaborationPage() {
                   </div>
                 )}
               </div>
+
+              {/* Activity Feed Sidebar */}
+              {showFeed && (
+                <div className="col-span-3 space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-xs text-muted-foreground">Proposal ID:</label>
+                    <input
+                      type="number"
+                      className="h-7 w-20 rounded border border-input bg-background px-2 text-xs"
+                      value={feedProposalId ?? ""}
+                      onChange={(e) =>
+                        setFeedProposalId(e.target.value ? Number(e.target.value) : null)
+                      }
+                      placeholder="ID"
+                    />
+                  </div>
+                  {feedProposalId ? (
+                    <ActivityFeed proposalId={feedProposalId} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Enter a proposal ID to view its activity feed.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}

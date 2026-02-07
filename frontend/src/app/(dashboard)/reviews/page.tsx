@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { reviewApi } from "@/lib/api";
 import type { ReviewDashboardItem, ReviewType, ReviewStatus } from "@/types";
-import { ClipboardCheck, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { ClipboardCheck, AlertCircle, CheckCircle2, Clock, ExternalLink } from "lucide-react";
 
 const REVIEW_TYPE_COLORS: Record<ReviewType, string> = {
   pink: "bg-pink-500/10 text-pink-600 border-pink-200",
@@ -45,7 +46,13 @@ function ReviewCard({ item }: { item: ReviewDashboardItem }) {
           <div className="flex items-center gap-2">
             {STATUS_ICONS[item.status]}
             <CardTitle className="text-sm font-medium">
-              {item.proposal_title}
+              <Link
+                href={`/proposals/${item.proposal_id}`}
+                className="hover:underline inline-flex items-center gap-1"
+              >
+                {item.proposal_title}
+                <ExternalLink className="w-3 h-3 opacity-50" />
+              </Link>
             </CardTitle>
           </div>
           <div className="flex items-center gap-2">
