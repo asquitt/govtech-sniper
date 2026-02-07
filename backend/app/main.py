@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.api.routes import (
+    activity_router,
     analytics_reporting_router,
     analytics_router,
     analyze_router,
@@ -346,6 +347,7 @@ app.include_router(workflows_router, prefix=api_prefix)
 app.include_router(compliance_router, prefix=api_prefix)
 app.include_router(unanet_router, prefix=api_prefix)
 app.include_router(reports_router, prefix=api_prefix)
+app.include_router(activity_router, prefix=api_prefix)
 
 
 # =============================================================================

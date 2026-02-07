@@ -4,6 +4,7 @@ RFP Sniper - API Routes
 Route module exports.
 """
 
+from app.api.routes.activity import router as activity_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.analytics_reporting import router as analytics_reporting_router
 from app.api.routes.analyze import router as analyze_router
@@ -104,4 +105,5 @@ __all__ = [
     "compliance_router",
     "unanet_router",
     "reports_router",
+    "activity_router",
 ]

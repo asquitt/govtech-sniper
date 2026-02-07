@@ -51,6 +51,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         # Import all models to ensure they're registered with SQLModel
         from app.models import (  # noqa: F401
+            activity,
             audit,
             award,
             budget_intel,

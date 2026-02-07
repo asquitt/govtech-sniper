@@ -4,6 +4,7 @@ RFP Sniper - Database Models
 Export all models for easy importing.
 """
 
+from app.models.activity import ActivityFeedEntry, ActivityType
 from app.models.audit import AuditEvent
 from app.models.award import AwardRecord
 from app.models.budget_intel import BudgetIntelligence
@@ -211,4 +212,6 @@ __all__ = [
     "SharePointSyncConfig",
     "SharePointSyncLog",
     "SyncDirection",
+    "ActivityFeedEntry",
+    "ActivityType",
 ]
