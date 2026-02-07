@@ -22,6 +22,8 @@ function formatPrice(cents: number): string {
 
 export function PlanCard({ plan, currentTier, annual, onSelect }: PlanCardProps) {
   const isCurrent = plan.tier === currentTier;
+  const isEnterprise = plan.tier === "enterprise";
+  const isFree = plan.tier === "free";
   const price = annual ? plan.price_yearly : plan.price_monthly;
   const period = annual ? "/yr" : "/mo";
 
@@ -46,11 +48,17 @@ export function PlanCard({ plan, currentTier, annual, onSelect }: PlanCardProps)
         </div>
 
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold text-foreground">
-            {formatPrice(price)}
-          </span>
-          {price > 0 && (
-            <span className="text-sm text-muted-foreground">{period}</span>
+          {isEnterprise ? (
+            <span className="text-2xl font-bold text-foreground">Custom</span>
+          ) : (
+            <>
+              <span className="text-3xl font-bold text-foreground">
+                {formatPrice(price)}
+              </span>
+              {price > 0 && (
+                <span className="text-sm text-muted-foreground">{period}</span>
+              )}
+            </>
           )}
         </div>
 
@@ -78,10 +86,16 @@ export function PlanCard({ plan, currentTier, annual, onSelect }: PlanCardProps)
         <Button
           className="w-full"
           variant={isCurrent ? "outline" : "default"}
-          disabled={isCurrent}
+          disabled={isCurrent || isFree}
           onClick={() => onSelect(plan.tier)}
         >
-          {isCurrent ? "Current Plan" : price === 0 ? "Downgrade" : "Upgrade"}
+          {isCurrent
+            ? "Current Plan"
+            : isEnterprise
+              ? "Contact Sales"
+              : isFree
+                ? "Free Plan"
+                : "Start Free Trial"}
         </Button>
       </CardContent>
     </Card>

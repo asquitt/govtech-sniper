@@ -68,6 +68,21 @@ class Settings(BaseSettings):
     sam_mock_attachments_dir: str | None = Field(default=None)
 
     # -------------------------------------------------------------------------
+    # Stripe Billing
+    # -------------------------------------------------------------------------
+    stripe_secret_key: str | None = Field(default=None)
+    stripe_publishable_key: str | None = Field(default=None)
+    stripe_webhook_secret: str | None = Field(default=None)
+    stripe_starter_monthly_price_id: str | None = Field(default=None)
+    stripe_starter_yearly_price_id: str | None = Field(default=None)
+    stripe_professional_monthly_price_id: str | None = Field(default=None)
+    stripe_professional_yearly_price_id: str | None = Field(default=None)
+    stripe_enterprise_monthly_price_id: str | None = Field(default=None)
+    stripe_enterprise_yearly_price_id: str | None = Field(default=None)
+    stripe_free_trial_days: int = Field(default=14)
+    app_url: str = Field(default="http://localhost:3000")
+
+    # -------------------------------------------------------------------------
     # File Storage
     # -------------------------------------------------------------------------
     upload_dir: str = Field(default="/app/uploads")

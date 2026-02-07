@@ -30,3 +30,15 @@ export interface CheckoutSessionResponse {
   checkout_url: string;
   session_id: string;
 }
+
+export interface SubscriptionStatus {
+  tier: string;
+  status: "free" | "active" | "grace_period" | "expired";
+  expires_at: string | null;
+  has_stripe_customer: boolean;
+  has_subscription: boolean;
+}
+
+export interface PortalResponse {
+  portal_url: string;
+}

@@ -3,6 +3,8 @@ import type {
   PlanDefinition,
   UsageStats,
   CheckoutSessionResponse,
+  SubscriptionStatus,
+  PortalResponse,
 } from "@/types";
 
 // =============================================================================
@@ -25,6 +27,11 @@ export const subscriptionApi = {
     return data;
   },
 
+  status: async (): Promise<SubscriptionStatus> => {
+    const { data } = await api.get("/subscription/status");
+    return data;
+  },
+
   checkout: async (
     tier: string,
     annual: boolean = false
@@ -32,6 +39,11 @@ export const subscriptionApi = {
     const { data } = await api.post("/subscription/checkout", null, {
       params: { tier, annual },
     });
+    return data;
+  },
+
+  portal: async (): Promise<PortalResponse> => {
+    const { data } = await api.post("/subscription/portal");
     return data;
   },
 };
