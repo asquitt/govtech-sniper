@@ -91,3 +91,27 @@ async def test_compliance_matrix_editing(
     # Delete requirement
     response = await client.delete(f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001")
     assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_add_requirement_creates_matrix_when_missing(
+    client: AsyncClient,
+    test_rfp: RFP,
+):
+    response = await client.post(
+        f"/api/v1/analyze/{test_rfp.id}/matrix",
+        json={
+            "section": "C.1",
+            "requirement_text": "Provide a cloud modernization plan.",
+            "importance": "mandatory",
+            "category": "Technical",
+            "keywords": ["cloud", "modernization"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["rfp_id"] == test_rfp.id
+    assert payload["total_requirements"] == 1
+    assert payload["mandatory_count"] == 1
+    assert payload["requirements"][0]["section"] == "C.1"

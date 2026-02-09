@@ -34,7 +34,7 @@ class OnboardingProgress(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", unique=True, index=True)
-    completed_steps: list[str] = Field(default=[], sa_column=Column(JSON))
+    completed_steps: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     is_dismissed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -99,8 +99,8 @@ async def get_progress(
     uid = resolve_user_id(user_id, current_user)
 
     progress = (
-        await session.exec(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
-    ).first()
+        await session.execute(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
+    ).scalar_one_or_none()
 
     if not progress:
         progress = OnboardingProgress(user_id=uid, completed_steps=["create_account"])
@@ -111,27 +111,29 @@ async def get_progress(
     completed = set(progress.completed_steps)
     completed.add("create_account")  # Always true if they're calling this
 
-    rfp_count = (await session.exec(select(func.count()).where(RFP.user_id == uid))).first() or 0
+    rfp_count = (
+        await session.execute(select(func.count()).where(RFP.user_id == uid))
+    ).scalar() or 0
     if rfp_count > 0:
         completed.add("upload_rfp")
 
     analyzed_count = (
-        await session.exec(
-            select(func.count()).where(RFP.user_id == uid, RFP.analysis_status == "completed")
+        await session.execute(
+            select(func.count()).where(RFP.user_id == uid, RFP.status == "analyzed")
         )
-    ).first() or 0
+    ).scalar() or 0
     if analyzed_count > 0:
         completed.add("analyze_rfp")
 
     doc_count = (
-        await session.exec(select(func.count()).where(KnowledgeBaseDocument.user_id == uid))
-    ).first() or 0
+        await session.execute(select(func.count()).where(KnowledgeBaseDocument.user_id == uid))
+    ).scalar() or 0
     if doc_count > 0:
         completed.add("upload_documents")
 
     proposal_count = (
-        await session.exec(select(func.count()).where(Proposal.user_id == uid))
-    ).first() or 0
+        await session.execute(select(func.count()).where(Proposal.user_id == uid))
+    ).scalar() or 0
     if proposal_count > 0:
         completed.add("create_proposal")
 
@@ -180,8 +182,8 @@ async def mark_step_complete(
         return {"error": "Invalid step ID"}
 
     progress = (
-        await session.exec(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
-    ).first()
+        await session.execute(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
+    ).scalar_one_or_none()
 
     if not progress:
         progress = OnboardingProgress(user_id=uid, completed_steps=[])
@@ -207,8 +209,8 @@ async def dismiss_onboarding(
     uid = resolve_user_id(user_id, current_user)
 
     progress = (
-        await session.exec(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
-    ).first()
+        await session.execute(select(OnboardingProgress).where(OnboardingProgress.user_id == uid))
+    ).scalar_one_or_none()
 
     if not progress:
         progress = OnboardingProgress(user_id=uid, completed_steps=[], is_dismissed=True)

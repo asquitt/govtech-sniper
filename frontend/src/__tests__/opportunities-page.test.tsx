@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import OpportunitiesPage from "@/app/(dashboard)/opportunities/page";
 import { rfpApi, ingestApi, savedSearchApi } from "@/lib/api";
 import { vi } from "vitest";
@@ -80,5 +81,52 @@ describe("OpportunitiesPage", () => {
     ).toBeInTheDocument();
 
     expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("does not poll task status when ingest completes immediately", async () => {
+    mockedIngestApi.triggerSamSearch.mockResolvedValueOnce({
+      task_id: "sync-task-1",
+      message: "Ingest completed synchronously",
+      status: "completed",
+    });
+
+    render(<OpportunitiesPage />);
+    await screen.findByText("Track and manage government contract opportunities");
+
+    mockedIngestApi.getTaskStatus.mockClear();
+
+    await userEvent.click(screen.getByRole("button", { name: "Sync SAM.gov" }));
+
+    expect(mockedIngestApi.triggerSamSearch).toHaveBeenCalledTimes(1);
+    expect(mockedIngestApi.getTaskStatus).not.toHaveBeenCalled();
+  });
+
+  it("falls back to showing all RFPs when recommended filter has no matches", async () => {
+    mockedRfpApi.list.mockResolvedValueOnce([
+      {
+        id: 2,
+        title: "Unqualified Legacy Support RFP",
+        solicitation_number: "LEGACY-0002",
+        agency: "Department of Legacy Systems",
+        status: "new",
+        is_qualified: false,
+        qualification_score: 22,
+        response_deadline: "2026-03-20T17:00:00Z",
+        created_at: "2026-02-02T12:00:00Z",
+      },
+    ]);
+    mockedRfpApi.getStats.mockResolvedValueOnce({
+      total: 1,
+      qualified: 0,
+      disqualified: 1,
+      pending_filter: 0,
+      by_status: { analyzing: 0 },
+    });
+
+    render(<OpportunitiesPage />);
+
+    expect(
+      await screen.findByText("Unqualified Legacy Support RFP")
+    ).toBeInTheDocument();
   });
 });

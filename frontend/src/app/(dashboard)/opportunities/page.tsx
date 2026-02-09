@@ -179,13 +179,23 @@ export default function OpportunitiesPage() {
         limit: 100,
       });
 
-      // Poll for completion
-      let taskComplete = false;
-      while (!taskComplete) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        const status = await ingestApi.getTaskStatus(result.task_id);
-        if (status.status === "completed" || status.status === "failed") {
-          taskComplete = true;
+      // Some dev/local fallbacks complete synchronously.
+      if (result.status !== "completed" && result.status !== "failed") {
+        // Poll for completion with a cap to avoid hanging forever.
+        let taskComplete = false;
+        let attempts = 0;
+        const maxAttempts = 60;
+        while (!taskComplete && attempts < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const status = await ingestApi.getTaskStatus(result.task_id);
+          if (status.status === "completed" || status.status === "failed") {
+            taskComplete = true;
+          }
+          attempts += 1;
+        }
+
+        if (!taskComplete) {
+          setError("Sync is taking longer than expected. Please refresh shortly.");
         }
       }
 
@@ -296,12 +306,13 @@ export default function OpportunitiesPage() {
       ? filteredRfps.filter((rfp) => activeMatchSet.has(rfp.id))
       : filteredRfps;
 
+  const recommendedOnly = baseRfps.filter(
+    (rfp) =>
+      (rfp.recommendation_score ?? 0) >= 70 &&
+      (rfp.is_qualified ?? false)
+  );
   const recommendedRfps = showRecommended
-    ? baseRfps.filter(
-        (rfp) =>
-          (rfp.recommendation_score ?? 0) >= 70 &&
-          (rfp.is_qualified ?? false)
-      )
+    ? (recommendedOnly.length > 0 ? recommendedOnly : baseRfps)
     : baseRfps;
 
   const sortedRfps = [...recommendedRfps].sort((a, b) => {

@@ -18,6 +18,7 @@ from app.models.opportunity_snapshot import SAMOpportunitySnapshot
 from app.models.rfp import RFP, RFPStatus
 from app.models.user import User, UserProfile
 from app.schemas.rfp import SAMSearchParams
+from app.services.cache_service import cache_clear_prefix
 from app.services.filters import KillerFilterService, quick_disqualify
 from app.services.ingest_service import SAMGovAPIError, SAMGovService
 from app.services.rfp_downloader import get_rfp_downloader
@@ -293,6 +294,9 @@ def ingest_sam_opportunities(
                         filtered_count += 1
 
                 await session.commit()
+
+        # Ingest updates bypass the RFP CRUD routes, so invalidate list caches explicitly.
+        await cache_clear_prefix(f"rfps:list:{user_id}:")
 
         return {
             "task_id": task_id,

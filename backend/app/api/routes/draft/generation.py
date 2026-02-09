@@ -2,9 +2,12 @@
 Draft Routes - Section Generation & Status
 """
 
+import socket
 from datetime import datetime
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from kombu.exceptions import OperationalError
 from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -12,7 +15,7 @@ from sqlmodel import select
 from app.api.deps import get_current_user_optional, resolve_user_id
 from app.config import settings
 from app.database import get_session
-from app.models.proposal import Proposal, ProposalSection
+from app.models.proposal import Proposal, ProposalSection, SectionStatus
 from app.models.rfp import ComplianceMatrix
 from app.schemas.proposal import (
     DraftRequest,
@@ -29,6 +32,84 @@ from app.tasks.generation_tasks import (
 )
 
 router = APIRouter()
+_SYNC_GENERATION_RESULTS: dict[str, dict] = {}
+
+
+def _celery_broker_available() -> bool:
+    """
+    Best-effort broker probe for local/dev fallback when Redis/Celery is down.
+    """
+    broker_url = settings.celery_broker_url
+    parsed = urlparse(broker_url)
+    if parsed.scheme not in {"redis", "rediss"}:
+        return True
+
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6379
+    try:
+        with socket.create_connection((host, port), timeout=0.2):
+            return True
+    except OSError:
+        return False
+
+
+async def _run_synchronous_generation(
+    *,
+    section: ProposalSection,
+    session: AsyncSession,
+    max_words: int,
+    tone: str,
+    additional_context: str | None = None,
+) -> dict:
+    """
+    Local/dev synchronous generation fallback when Celery is unavailable.
+    """
+    from app.services.compliance_checker import AIQualityScorer
+    from app.services.gemini_service import GeminiService
+
+    gemini_service = GeminiService()
+    requirement_text = section.requirement_text or section.title
+    if section.writing_plan:
+        requirement_text += f"\n\nWRITING PLAN:\n{section.writing_plan}"
+    if additional_context:
+        requirement_text += f"\n\nAdditional Context: {additional_context}"
+
+    generated = await gemini_service.generate_section(
+        requirement_text=requirement_text,
+        section=section.section_number,
+        category=None,
+        max_words=max_words,
+        tone=tone,
+    )
+    section.set_generated_content(generated)
+    section.updated_at = datetime.utcnow()
+
+    scorer = AIQualityScorer()
+    scores = scorer.score_content(generated.clean_text, section.requirement_text)
+    section.quality_score = scores["overall_score"]
+    section.quality_breakdown = scores
+
+    proposal_result = await session.execute(
+        select(Proposal).where(Proposal.id == section.proposal_id)
+    )
+    proposal = proposal_result.scalar_one_or_none()
+    if proposal:
+        completed_result = await session.execute(
+            select(ProposalSection).where(
+                ProposalSection.proposal_id == proposal.id,
+                ProposalSection.status.in_([SectionStatus.GENERATED, SectionStatus.APPROVED]),
+            )
+        )
+        proposal.completed_sections = len(completed_result.scalars().all())
+
+    await session.commit()
+
+    return {
+        "section_id": section.id,
+        "requirement_id": section.requirement_id,
+        "word_count": section.word_count or 0,
+        "generated_at": section.generated_at.isoformat() if section.generated_at else None,
+    }
 
 
 @router.post("/proposals/{proposal_id}/generate-from-matrix")
@@ -60,21 +141,32 @@ async def generate_sections_from_matrix(
             detail="RFP has no compliance matrix. Run analysis first.",
         )
 
-    # Create sections for each requirement
+    existing_sections_result = await session.execute(
+        select(ProposalSection).where(ProposalSection.proposal_id == proposal_id)
+    )
+    existing_sections = existing_sections_result.scalars().all()
+    existing_requirement_ids = {s.requirement_id for s in existing_sections if s.requirement_id}
+    display_order_start = len(existing_sections)
+
+    # Create sections for requirements not already represented on the proposal
     sections_created = 0
-    for i, req in enumerate(matrix.requirements):
+    for req in matrix.requirements:
+        requirement_id = req.get("id")
+        if requirement_id and requirement_id in existing_requirement_ids:
+            continue
+
         section = ProposalSection(
             proposal_id=proposal_id,
             title=f"Response to {req.get('section', 'Requirement')}",
-            section_number=f"R{i + 1:03d}",
-            requirement_id=req.get("id"),
+            section_number=f"R{display_order_start + sections_created + 1:03d}",
+            requirement_id=requirement_id,
             requirement_text=req.get("requirement_text"),
-            display_order=i,
+            display_order=display_order_start + sections_created,
         )
         session.add(section)
         sections_created += 1
 
-    proposal.total_sections = sections_created
+    proposal.total_sections = len(existing_sections) + sections_created
     await session.commit()
 
     return {
@@ -261,7 +353,7 @@ async def generate_section_draft(
 
     **Citation Format:** Generated text includes [[Source: filename.pdf, Page XX]] markers.
     """
-    if not settings.gemini_api_key:
+    if not settings.gemini_api_key and not settings.mock_ai:
         raise HTTPException(
             status_code=503,
             detail="Gemini API key not configured",
@@ -274,7 +366,7 @@ async def generate_section_draft(
     resolved_user_id = resolve_user_id(user_id, current_user)
 
     # Find the section for this requirement that belongs to the requesting user
-    result = await session.execute(
+    section_query = (
         select(ProposalSection)
         .join(Proposal, ProposalSection.proposal_id == Proposal.id)
         .where(
@@ -284,6 +376,10 @@ async def generate_section_draft(
         .order_by(desc(ProposalSection.created_at))
         .limit(1)
     )
+    if request.rfp_id is not None:
+        section_query = section_query.where(Proposal.rfp_id == request.rfp_id)
+
+    result = await session.execute(section_query)
     section = result.scalar_one_or_none()
 
     if not section:
@@ -292,16 +388,56 @@ async def generate_section_draft(
             detail=f"No section found for requirement {requirement_id}. Create proposal sections first.",
         )
 
-    resolved_user_id = resolve_user_id(user_id, current_user)
+    # Fall back to sync generation in local/dev when broker is unavailable.
+    if not _celery_broker_available() and (settings.debug or settings.mock_ai):
+        sync_task_id = f"sync-{section.id}-{int(datetime.utcnow().timestamp())}"
+        sync_result = await _run_synchronous_generation(
+            section=section,
+            session=session,
+            max_words=request.max_words,
+            tone=request.tone,
+            additional_context=request.additional_context,
+        )
+        _SYNC_GENERATION_RESULTS[sync_task_id] = sync_result
+        return DraftResponse(
+            task_id=sync_task_id,
+            requirement_id=requirement_id,
+            section_id=section.id,
+            message="Draft generation completed synchronously.",
+            status="completed",
+        )
 
     # Queue generation task
-    task = generate_proposal_section.delay(
-        section_id=section.id,
-        user_id=resolved_user_id,
-        max_words=request.max_words,
-        tone=request.tone,
-        additional_context=request.additional_context,
-    )
+    try:
+        task = generate_proposal_section.delay(
+            section_id=section.id,
+            user_id=resolved_user_id,
+            max_words=request.max_words,
+            tone=request.tone,
+            additional_context=request.additional_context,
+        )
+    except OperationalError as exc:
+        if settings.debug or settings.mock_ai:
+            sync_task_id = f"sync-{section.id}-{int(datetime.utcnow().timestamp())}"
+            sync_result = await _run_synchronous_generation(
+                section=section,
+                session=session,
+                max_words=request.max_words,
+                tone=request.tone,
+                additional_context=request.additional_context,
+            )
+            _SYNC_GENERATION_RESULTS[sync_task_id] = sync_result
+            return DraftResponse(
+                task_id=sync_task_id,
+                requirement_id=requirement_id,
+                section_id=section.id,
+                message="Draft generation completed synchronously.",
+                status="completed",
+            )
+        raise HTTPException(
+            status_code=503,
+            detail="Draft generation worker unavailable. Please try again shortly.",
+        ) from exc
 
     return DraftResponse(
         task_id=task.id,
@@ -326,7 +462,7 @@ async def generate_all_proposal_sections(
 
     Queues generation tasks for each section that hasn't been written yet.
     """
-    if not settings.gemini_api_key:
+    if not settings.gemini_api_key and not settings.mock_ai:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
 
     # Verify proposal exists
@@ -385,6 +521,14 @@ async def get_generation_status(task_id: str) -> dict:
     """
     Get the status of a generation task.
     """
+    sync_result = _SYNC_GENERATION_RESULTS.get(task_id)
+    if sync_result is not None:
+        return {
+            "task_id": task_id,
+            "status": "completed",
+            "result": sync_result,
+        }
+
     from celery.result import AsyncResult
 
     from app.tasks.celery_app import celery_app

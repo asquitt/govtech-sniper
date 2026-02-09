@@ -241,6 +241,7 @@ class DraftRequest(BaseModel):
     """Request to generate draft for a requirement."""
 
     requirement_id: str
+    rfp_id: int | None = None
     additional_context: str | None = None
     max_words: int = Field(default=500, ge=50, le=2000)
     tone: str = Field(default="professional", pattern="^(professional|technical|executive)$")

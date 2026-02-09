@@ -39,7 +39,8 @@ export default function AnalysisPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "shred">("list");
   const [isEditingRequirement, setIsEditingRequirement] = useState(false);
   const [isSavingRequirement, setIsSavingRequirement] = useState(false);
@@ -81,7 +82,7 @@ export default function AnalysisPage() {
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      setError(null);
+      setLoadError(null);
 
       const [rfpData, matrixData] = await Promise.all([
         rfpApi.get(rfpId),
@@ -102,7 +103,7 @@ export default function AnalysisPage() {
       }
     } catch (err) {
       console.error("Failed to load RFP:", err);
-      setError("Failed to load RFP data. Please try again.");
+      setLoadError("Failed to load RFP data. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -140,36 +141,76 @@ export default function AnalysisPage() {
     setIsGenerating(true);
     setGeneratingId(requirement.id);
     setGeneratedContent(undefined);
+    setActionError(null);
 
     try {
-      const result = await draftApi.generateSection(requirement.id);
+      const proposalTitle = rfp?.title
+        ? `Proposal for ${rfp.title}`
+        : `Proposal for RFP ${rfpId}`;
+      const proposals = await draftApi.listProposals({ rfp_id: rfpId });
+      const proposal =
+        proposals[0] ?? (await draftApi.createProposal(rfpId, proposalTitle));
+      const sections = await draftApi.listSections(proposal.id);
+
+      if (!sections.some((section) => section.requirement_id === requirement.id)) {
+        await draftApi.generateFromMatrix(proposal.id);
+      }
+
+      const result = await draftApi.generateSection(requirement.id, {
+        requirement_id: requirement.id,
+        rfp_id: rfpId,
+      });
+
+      const refreshGeneratedResult = async () => {
+        const matrixData = await analysisApi.getComplianceMatrix(rfpId);
+        if (matrixData && matrixData.requirements) {
+          setRequirements(matrixData.requirements);
+          const updated = matrixData.requirements.find(
+            (r: ComplianceRequirement) => r.id === requirement.id
+          );
+          if (updated?.generated_content) {
+            setGeneratedContent(updated.generated_content as GeneratedContent);
+            return;
+          }
+        }
+
+        const refreshedSections = await draftApi.listSections(proposal.id);
+        const generatedSection = refreshedSections.find(
+          (section) => section.requirement_id === requirement.id
+        );
+        if (generatedSection?.generated_content) {
+          setGeneratedContent(generatedSection.generated_content as GeneratedContent);
+        }
+      };
+
+      if (result.status === "completed") {
+        await refreshGeneratedResult();
+        return;
+      }
 
       // Poll for completion
       let completed = false;
-      while (!completed) {
+      let pollCount = 0;
+      const maxPolls = 30;
+      while (!completed && pollCount < maxPolls) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         const status = await draftApi.getGenerationStatus(result.task_id);
+        pollCount += 1;
 
         if (status.status === "completed") {
           completed = true;
-          // Refresh the matrix to get updated content
-          const matrixData = await analysisApi.getComplianceMatrix(rfpId);
-          if (matrixData && matrixData.requirements) {
-            setRequirements(matrixData.requirements);
-            // Find and set the generated content
-            const updated = matrixData.requirements.find((r: ComplianceRequirement) => r.id === requirement.id);
-            if (updated?.generated_content) {
-              setGeneratedContent(updated.generated_content as GeneratedContent);
-            }
-          }
+          await refreshGeneratedResult();
         } else if (status.status === "failed") {
           completed = true;
-          setError("Generation failed. Please try again.");
+          setActionError("Generation failed. Please try again.");
         }
+      }
+      if (!completed) {
+        setActionError("Generation timed out. Please retry.");
       }
     } catch (err) {
       console.error("Generation failed:", err);
-      setError("Failed to generate content. Please try again.");
+      setActionError("Failed to generate content. Please try again.");
     } finally {
       setIsGenerating(false);
       setGeneratingId(undefined);
@@ -192,7 +233,7 @@ export default function AnalysisPage() {
       setRequirements(updated.requirements);
     } catch (err) {
       console.error("Failed to update requirement", err);
-      setError("Failed to update requirement status.");
+      setActionError("Failed to update requirement status.");
     }
   };
 
@@ -239,7 +280,7 @@ export default function AnalysisPage() {
       setIsEditingRequirement(false);
     } catch (err) {
       console.error("Failed to save requirement", err);
-      setError("Failed to save requirement changes.");
+      setActionError("Failed to save requirement changes.");
     } finally {
       setIsSavingRequirement(false);
     }
@@ -256,7 +297,7 @@ export default function AnalysisPage() {
       setIsEditingRequirement(false);
     } catch (err) {
       console.error("Failed to delete requirement", err);
-      setError("Failed to delete requirement.");
+      setActionError("Failed to delete requirement.");
     }
   };
 
@@ -298,7 +339,7 @@ export default function AnalysisPage() {
       });
     } catch (err) {
       console.error("Failed to create requirement", err);
-      setError("Failed to add requirement.");
+      setActionError("Failed to add requirement.");
     } finally {
       setIsSavingRequirement(false);
     }
@@ -324,7 +365,7 @@ export default function AnalysisPage() {
       document.body.removeChild(a);
     } catch (err) {
       console.error("Export failed:", err);
-      setError("Failed to export proposal. Please try again.");
+      setActionError("Failed to export proposal. Please try again.");
     } finally {
       setIsExporting(false);
     }
@@ -360,14 +401,14 @@ export default function AnalysisPage() {
     );
   }
 
-  if (error || !rfp) {
+  if (loadError || !rfp) {
     return (
       <div className="flex flex-col h-full">
         <Header title="Error" description="Unable to load RFP" />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-            <p className="text-destructive mb-4">{error || "RFP not found"}</p>
+            <p className="text-destructive mb-4">{loadError || "RFP not found"}</p>
             <Button asChild>
               <Link href="/opportunities">Back to Opportunities</Link>
             </Button>
@@ -466,6 +507,17 @@ export default function AnalysisPage() {
           </div>
         </div>
       </div>
+
+      {actionError && (
+        <div className="px-6 pt-4">
+          <Card className="border border-destructive/30 bg-destructive/5">
+            <CardContent className="p-3 flex items-center gap-2 text-destructive text-sm">
+              <AlertCircle className="w-4 h-4" />
+              {actionError}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {snapshotDiff && snapshotDiff.changes.length > 0 && (
         <div className="px-6 pt-4">

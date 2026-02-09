@@ -22,6 +22,7 @@ export default function RegisterPage() {
     { label: "Contains uppercase letter", met: /[A-Z]/.test(password) },
     { label: "Contains lowercase letter", met: /[a-z]/.test(password) },
     { label: "Contains a number", met: /\d/.test(password) },
+    { label: "Contains special character", met: /[^A-Za-z0-9]/.test(password) },
   ];
 
   const allRequirementsMet = passwordRequirements.every((req) => req.met);

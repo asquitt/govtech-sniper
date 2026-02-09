@@ -31,6 +31,11 @@ Every feature must include:
 - Prefer contract tests for external integrations.
 - Add regression tests for every bug fixed.
 
+## Live UI Validation
+- Validate critical paths in a real browser with Playwright before closing work.
+- For local development without external dependencies (Redis, third-party APIs), use deterministic mock data and synchronous fallbacks so ingest -> analyze -> draft -> export can still be exercised end-to-end.
+- Capture and fix live UI/API failures immediately, then add/extend regression tests for each fix.
+
 ## CI / CD Expectations
 - CI runs on every push: lint, type check, unit, integration, and E2E.
 - Failing CI means no merge.

@@ -4,17 +4,135 @@ RFP Sniper - Ingest Routes
 Endpoints for SAM.gov data ingestion.
 """
 
+import socket
+from datetime import datetime
+from urllib.parse import urlparse
+
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from kombu.exceptions import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.api.deps import check_rate_limit, get_current_user_optional, resolve_user_id
 from app.config import settings
 from app.database import get_session
+from app.models.rfp import RFP, RFPStatus
 from app.schemas.rfp import SAMIngestResponse, SAMSearchParams
 from app.services.auth_service import UserAuth
+from app.services.cache_service import cache_clear_prefix
+from app.services.ingest_service import SAMGovService
 from app.tasks.ingest_tasks import ingest_sam_opportunities
 
 router = APIRouter(prefix="/ingest", tags=["Ingest"])
+logger = structlog.get_logger(__name__)
+
+
+def _celery_broker_available() -> bool:
+    """
+    Best-effort broker probe so local/dev environments can gracefully
+    fall back to synchronous ingest when Redis/Celery is unavailable.
+    """
+    broker_url = settings.celery_broker_url
+    parsed = urlparse(broker_url)
+    if parsed.scheme not in {"redis", "rediss"}:
+        return True
+
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6379
+    try:
+        with socket.create_connection((host, port), timeout=0.2):
+            return True
+    except OSError:
+        return False
+
+
+async def _run_synchronous_ingest(
+    *,
+    user_id: int,
+    session: AsyncSession,
+    params: SAMSearchParams,
+    apply_filter: bool,  # kept for API parity; not used in inline fallback
+    mock_variant: str | None,
+) -> SAMIngestResponse:
+    service = SAMGovService(mock_variant=mock_variant)
+    opportunities = await service.search_opportunities(params)
+
+    saved_count = 0
+    seen_solicitations = set()
+    for opp in opportunities:
+        if opp.solicitation_number in seen_solicitations:
+            continue
+        seen_solicitations.add(opp.solicitation_number)
+
+        existing_for_user = await session.execute(
+            select(RFP).where(
+                RFP.user_id == user_id,
+                RFP.solicitation_number == opp.solicitation_number,
+            )
+        )
+        if existing_for_user.scalar_one_or_none():
+            continue
+
+        solicitation_number = opp.solicitation_number
+        existing_global = await session.execute(
+            select(RFP).where(RFP.solicitation_number == solicitation_number)
+        )
+        global_rfp = existing_global.scalar_one_or_none()
+        if global_rfp and global_rfp.user_id != user_id:
+            # SQLite test/dev schema currently enforces globally unique solicitation
+            # numbers, so namespaced mock IDs keep local ingest deterministic per user.
+            if settings.mock_sam_gov:
+                base = f"{opp.solicitation_number}-U{user_id}"
+                solicitation_number = base[:100]
+                suffix = 1
+                while True:
+                    candidate_check = await session.execute(
+                        select(RFP).where(RFP.solicitation_number == solicitation_number)
+                    )
+                    if candidate_check.scalar_one_or_none() is None:
+                        break
+                    suffix_str = f"-{suffix}"
+                    solicitation_number = f"{base[: 100 - len(suffix_str)]}{suffix_str}"
+                    suffix += 1
+            else:
+                logger.debug(
+                    "Skipping globally duplicate solicitation",
+                    solicitation_number=solicitation_number,
+                    user_id=user_id,
+                )
+                continue
+
+        session.add(
+            RFP(
+                user_id=user_id,
+                title=opp.title,
+                solicitation_number=solicitation_number,
+                agency=opp.agency,
+                sub_agency=opp.sub_agency,
+                naics_code=opp.naics_code,
+                set_aside=opp.set_aside,
+                rfp_type=opp.rfp_type,
+                posted_date=opp.posted_date,
+                response_deadline=opp.response_deadline,
+                sam_gov_link=opp.ui_link,
+                description=opp.description,
+                status=RFPStatus.NEW,
+            )
+        )
+        saved_count += 1
+
+    await session.commit()
+    await cache_clear_prefix(f"rfps:list:{user_id}:")
+
+    task_id = f"sync-{int(datetime.utcnow().timestamp())}"
+
+    return SAMIngestResponse(
+        task_id=task_id,
+        message=f"Ingest completed synchronously (saved {saved_count}).",
+        status="completed",
+        opportunities_found=len(opportunities),
+    )
 
 
 @router.post("/sam", response_model=SAMIngestResponse, dependencies=[Depends(check_rate_limit)])
@@ -48,16 +166,44 @@ async def trigger_sam_ingest(
 
     resolved_user_id = resolve_user_id(user_id, current_user)
 
-    # Queue the Celery task
-    task = ingest_sam_opportunities.delay(
-        user_id=resolved_user_id,
-        keywords=params.keywords,
-        days_back=params.days_back,
-        limit=params.limit,
-        naics_codes=params.naics_codes,
-        apply_filter=apply_filter,
-        mock_variant=mock_variant,
-    )
+    # Prefer background task, but fall back to sync mode for local/dev when broker is down.
+    if not _celery_broker_available() and (settings.debug or settings.mock_sam_gov):
+        logger.warning("Celery broker unavailable; running ingest synchronously")
+        return await _run_synchronous_ingest(
+            user_id=resolved_user_id,
+            session=session,
+            params=params,
+            apply_filter=apply_filter,
+            mock_variant=mock_variant,
+        )
+
+    try:
+        task = ingest_sam_opportunities.delay(
+            user_id=resolved_user_id,
+            keywords=params.keywords,
+            days_back=params.days_back,
+            limit=params.limit,
+            naics_codes=params.naics_codes,
+            apply_filter=apply_filter,
+            mock_variant=mock_variant,
+        )
+    except OperationalError as exc:
+        if settings.debug or settings.mock_sam_gov:
+            logger.warning(
+                "Celery dispatch failed; running ingest synchronously",
+                error=str(exc),
+            )
+            return await _run_synchronous_ingest(
+                user_id=resolved_user_id,
+                session=session,
+                params=params,
+                apply_filter=apply_filter,
+                mock_variant=mock_variant,
+            )
+        raise HTTPException(
+            status_code=503,
+            detail="Ingest worker unavailable. Please try again shortly.",
+        ) from exc
 
     return SAMIngestResponse(
         task_id=task.id,

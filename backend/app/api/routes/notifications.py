@@ -340,6 +340,7 @@ slack_service = SlackService()
 # =============================================================================
 
 
+@router.get("", response_model=list[NotificationResponse], include_in_schema=False)
 @router.get("/", response_model=list[NotificationResponse])
 async def list_notifications(
     unread_only: bool = Query(False),

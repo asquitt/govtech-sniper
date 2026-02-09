@@ -158,6 +158,7 @@ export interface SAMSearchParams {
 
 export interface DraftRequest {
   requirement_id: string;
+  rfp_id?: number;
   additional_context?: string;
   max_words?: number;
   tone?: "professional" | "technical" | "executive";

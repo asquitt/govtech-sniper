@@ -55,7 +55,7 @@ async def trigger_rfp_analysis(
     The analysis runs as a background task. Poll the status endpoint
     or check the RFP's status field for completion.
     """
-    if not settings.gemini_api_key:
+    if not settings.gemini_api_key and not settings.mock_ai:
         raise HTTPException(
             status_code=503,
             detail="Gemini API key not configured. Set GEMINI_API_KEY environment variable.",
@@ -262,11 +262,24 @@ async def add_compliance_requirement(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
     )
     matrix = result.scalar_one_or_none()
+    rfp_user_id: int | None = None
     if not matrix:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        rfp_result = await session.execute(select(RFP).where(RFP.id == rfp_id))
+        rfp = rfp_result.scalar_one_or_none()
+        if not rfp:
+            raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+        rfp_user_id = rfp.user_id
+        matrix = ComplianceMatrix(
+            rfp_id=rfp_id,
+            requirements=[],
+            total_requirements=0,
+            mandatory_count=0,
+            addressed_count=0,
         )
+        session.add(matrix)
+        await session.flush()
+    elif matrix.rfp:
+        rfp_user_id = matrix.rfp.user_id
 
     req_dict = requirement.model_dump()
     req_dict = _normalize_requirement_status(req_dict)
@@ -287,7 +300,7 @@ async def add_compliance_requirement(
 
     await log_audit_event(
         session,
-        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        user_id=rfp_user_id,
         entity_type="compliance_matrix",
         entity_id=matrix.id,
         action="compliance.requirement.added",
@@ -295,7 +308,7 @@ async def add_compliance_requirement(
     )
     await dispatch_webhook_event(
         session,
-        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        user_id=rfp_user_id,
         event_type="compliance.requirement.added",
         payload={"rfp_id": rfp_id, "requirement_id": req_dict["id"]},
     )

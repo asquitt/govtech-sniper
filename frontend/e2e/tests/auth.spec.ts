@@ -15,6 +15,7 @@ test.describe("Authentication Flow", () => {
     await page.getByLabel("Confirm Password").fill(PASSWORD);
 
     await expect(page.getByText("At least 8 characters")).toBeVisible();
+    await expect(page.getByText("Contains special character")).toBeVisible();
 
     await page.getByRole("button", { name: "Create account" }).click();
 
