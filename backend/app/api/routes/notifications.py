@@ -137,6 +137,15 @@ class NotificationResponse(BaseModel):
     created_at: datetime
 
 
+class UpcomingDeadlineResponse(BaseModel):
+    """Upcoming deadline response payload."""
+
+    rfp_id: int
+    title: str
+    deadline: datetime
+    days_remaining: int
+
+
 class PreferencesUpdate(BaseModel):
     """Update notification preferences."""
 
@@ -395,6 +404,47 @@ async def get_unread_count(
     count = result.scalar()
 
     return {"unread_count": count or 0}
+
+
+@router.get("/deadlines", response_model=list[UpcomingDeadlineResponse])
+async def get_upcoming_deadlines(
+    days: int = Query(14, ge=1, le=90),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[UpcomingDeadlineResponse]:
+    """
+    List upcoming RFP response deadlines for the current user.
+    """
+    now = datetime.utcnow()
+    end = now + timedelta(days=days)
+
+    result = await session.execute(
+        select(RFP)
+        .where(
+            RFP.user_id == current_user.id,
+            RFP.response_deadline.is_not(None),
+            RFP.response_deadline >= now,
+            RFP.response_deadline <= end,
+        )
+        .order_by(RFP.response_deadline.asc())
+    )
+    rfps = list(result.scalars().all())
+
+    deadlines: list[UpcomingDeadlineResponse] = []
+    for rfp in rfps:
+        if rfp.id is None or rfp.response_deadline is None:
+            continue
+
+        deadlines.append(
+            UpcomingDeadlineResponse(
+                rfp_id=rfp.id,
+                title=rfp.title,
+                deadline=rfp.response_deadline,
+                days_remaining=max(0, (rfp.response_deadline.date() - now.date()).days),
+            )
+        )
+
+    return deadlines
 
 
 @router.post("/{notification_id}/read")

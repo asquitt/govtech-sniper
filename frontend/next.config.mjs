@@ -15,6 +15,14 @@ const nextConfig = {
         destination: `${apiUrl}/api/v1/contracts/`,
       },
       {
+        source: "/api/teams",
+        destination: `${apiUrl}/api/v1/teams/`,
+      },
+      {
+        source: "/api/templates",
+        destination: `${apiUrl}/api/v1/templates/`,
+      },
+      {
         source: "/api/:path*",
         destination: `${apiUrl}/api/v1/:path*`,
       },

@@ -256,7 +256,7 @@ export const templateApi = {
   },
 
   getCategories: async (): Promise<{ value: string; label: string }[]> => {
-    const { data } = await api.get("/templates/categories/list");
+    const { data } = await api.get("/templates/categories");
     return data;
   },
 };

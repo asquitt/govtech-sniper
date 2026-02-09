@@ -35,7 +35,7 @@ Purpose: make hidden/orphaned capabilities visible and track integration status 
 | Signals + Events + Reviews | `/signals`, `/events`, `/reviews` | `/signals`, `/events`, `/reviews` | Partial | Pages exist; nav coverage only | Add CRUD and notification-linked E2E scenarios |
 | Admin + Org | `/admin` | `/admin`, `/audit`, `/teams` | Partial | Fixed `AsyncSession` misuse in admin routes on 2026-02-09; endpoints now return expected auth/role guard status (403 for users without org) instead of 500 | Add first-run org bootstrap flow from admin page and role-based guard E2E |
 | Integrations | `/settings/integrations` + subpages | `/integrations`, `/sharepoint*`, `/salesforce`, `/data-sources`, `/email-ingest`, `/subscription`, `/workflows`, `/unanet` | Partial | Surfaces exist; integration reliability varies by environment | Add contract tests per provider and mock-provider E2E harness |
-| Word Add-in | `/word-addin/*` companion APIs | `/word-addin`, `/graphics`, `/versions` | Hidden | Added `/word-addin` route redirect to `/word-addin/taskpane` on 2026-02-09; live verification confirms no dashboard-level 404 | Add discoverability path from proposal editor and E2E sync tests |
+| Word Add-in | `/word-addin/*` companion APIs | `/word-addin`, `/graphics`, `/versions` | Hidden | `/word-addin` redirect and `/word-addin/taskpane` browser-safe runtime validated on 2026-02-09 (no mount warning, no Office telemetry host failure) | Add discoverability path from proposal editor and E2E sync tests |
 | Template Marketplace | `/templates` page exists | `/templates` (marketplace + base templates) | Hidden | Backend marketplace routes exist; not exposed in main sidebar nav | Decide product placement and add nav entry or deprecate unused routes |
 | SCIM + Webhooks + Secrets | No primary UI surface | `/scim/v2`, `/webhooks`, `/secrets` | Hidden | Backend enterprise endpoints present, minimal UI exposure | Add admin docs/UI entry points and operational runbooks |
 | WebSocket Task Feed | Implicit in client utils | `/ws`, `/ws/task/*` | Hidden | Websocket route active, not explicitly surfaced in diagnostics UI | Add developer diagnostics page for websocket task status |
@@ -47,7 +47,7 @@ Purpose: make hidden/orphaned capabilities visible and track integration status 
 | Word add-in support | API/client paths exist but no direct dashboard discoverability | Add explicit “Word Add-in” surface in proposals/settings |
 | Template marketplace capabilities | Backend routes and API client exist; user path appears weak | Confirm product intent and either wire or remove dead surface |
 | Duplicate analytics surfaces | `analytics.py` and `analytics_reporting.py` both under `/analytics` increase overlap risk | Audit endpoint ownership and consolidate route responsibilities |
-| Word add-in runtime in plain browser | Taskpane emits runtime noise outside Office host (`replaceState`/Office.js context expectations) | Add explicit browser-safe fallback mode and limit Office-only hooks when host APIs are absent |
+| Word add-in runtime in plain browser | Previously emitted runtime noise outside Office host | Resolved on 2026-02-09 by Office-host-gated script loading + lifecycle guards; keep regression checks in Playwright sweep |
 
 ## Latest Live Validation (2026-02-09)
 | Check | Result |
@@ -59,6 +59,9 @@ Purpose: make hidden/orphaned capabilities visible and track integration status 
 | `/api/intelligence/budget` | `200` |
 | `/api/admin/organization` | `403` (expected for user without org membership; no 500) |
 | `/word-addin` route | Redirects to `/word-addin/taskpane` (no 404) |
+| `/word-addin/taskpane` runtime | No React mount warnings after Office host gating update |
+| `/api/templates/categories/list` | `200` (legacy alias retained) |
+| `/api/notifications/deadlines` | `200` (route implemented for frontend contract) |
 
 ## Integration Backlog (Prioritized)
 1. Add capability-level Playwright E2E for Capture, Teaming, Collaboration, Contracts, and Reviews.

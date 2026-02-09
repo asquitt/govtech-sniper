@@ -26,20 +26,33 @@ export function useOffice(): OfficeState {
   });
 
   useEffect(() => {
+    let isMounted = true;
+
+    const safeSetState = (nextState: OfficeState) => {
+      if (isMounted) {
+        setState(nextState);
+      }
+    };
+    const scheduleState = (nextState: OfficeState) => {
+      queueMicrotask(() => safeSetState(nextState));
+    };
+
     // Check if Office.js is loaded from CDN
     if (typeof Office === "undefined" || !Office.onReady) {
-      setState({
+      scheduleState({
         isReady: true,
         isInOffice: false,
         hostType: null,
         isLoading: false,
       });
-      return;
+      return () => {
+        isMounted = false;
+      };
     }
 
     Office.onReady((info) => {
       const isInOffice = !!info.host;
-      setState({
+      scheduleState({
         isReady: true,
         isInOffice,
         hostType: info.host || null,
@@ -47,13 +60,17 @@ export function useOffice(): OfficeState {
       });
     }).catch(() => {
       // Office.onReady failed — running outside Office
-      setState({
+      scheduleState({
         isReady: true,
         isInOffice: false,
         hostType: null,
         isLoading: false,
       });
     });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return state;

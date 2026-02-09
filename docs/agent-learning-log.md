@@ -85,3 +85,24 @@ Format:
 - Root cause: Trailing-slash mismatch between Next rewrite and FastAPI root route produced redirect responses instead of proxied 200 responses.
 - Prevention checklist: For proxied root endpoints, validate both slash and non-slash paths and add explicit rewrite exceptions when backend normalizes paths.
 - Verification added: Added `/api/contracts` explicit rewrite and verified live Playwright/API status 200 without CORS failure.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Initial Playwright run produced a full false-negative failure set because it targeted the wrong base URL (`localhost:3000` instead of active `localhost:3100`).
+- Root cause: Test harness default base URL differed from the live dev server used in this session.
+- Prevention checklist: Before interpreting E2E failures, confirm target base URL and backend pair (`E2E_BASE_URL` + API origin) match active servers.
+- Verification added: Re-ran full Playwright suite with `E2E_BASE_URL=http://localhost:3100` and confirmed 27/27 passing.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Frontend API contracts drifted from backend routes (`/templates/categories/list` and `/notifications/deadlines`), leaving latent 404 paths.
+- Root cause: Client helper methods persisted older endpoint shapes without a contract validation sweep.
+- Prevention checklist: Run method-aware frontend API path scans against live proxy and close every 404 mismatch with route updates or compatibility aliases.
+- Verification added: Updated templates client path, added templates legacy alias route, implemented notifications deadlines route, and added backend regression tests.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Word add-in taskpane loaded Office runtime unconditionally in plain browser mode, causing runtime warnings and failed external telemetry calls.
+- Root cause: No host-awareness gate around Office.js loading for non-Office environments.
+- Prevention checklist: Gate Office runtime script loading to likely Office hosts and keep browser-safe fallback path tested.
+- Verification added: Added Office host detection + gated loader, validated no mount warning/telemetry failures in Playwright taskpane check, and added frontend unit tests.

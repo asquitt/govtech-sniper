@@ -49,21 +49,30 @@ export function SectionList({
   const [sections, setSections] = useState<ProposalSection[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isMounted: () => boolean) => {
     if (!proposalId) return;
     try {
+      if (!isMounted()) return;
       setIsLoading(true);
       const data = await draftApi.listSections(proposalId);
+      if (!isMounted()) return;
       setSections(data);
     } catch {
       console.error("Failed to load sections");
     } finally {
-      setIsLoading(false);
+      if (isMounted()) {
+        setIsLoading(false);
+      }
     }
   }, [proposalId]);
 
   useEffect(() => {
-    load();
+    let mounted = true;
+    const isMounted = () => mounted;
+    void load(isMounted);
+    return () => {
+      mounted = false;
+    };
   }, [load]);
 
   if (!proposalId) {

@@ -1,4 +1,4 @@
-import Script from "next/script";
+import { OfficeScriptLoader } from "./_components/office-script-loader";
 
 export const metadata = {
   title: "RFP Sniper | Word Add-in",
@@ -12,11 +12,8 @@ export default function WordAddinLayout({
 }) {
   return (
     <>
-      {/* Load Office.js from Microsoft CDN before page renders */}
-      <Script
-        src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"
-        strategy="beforeInteractive"
-      />
+      {/* Load Office.js only in likely Office host environments */}
+      <OfficeScriptLoader />
       <div className="min-h-screen bg-background text-foreground">
         {/* Compact header for task pane (300-350px wide) */}
         <header className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card">

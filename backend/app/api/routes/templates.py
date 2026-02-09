@@ -483,6 +483,19 @@ async def list_categories(
     return sorted(categories)
 
 
+@router.get("/categories/list", include_in_schema=False)
+async def list_categories_legacy(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[str]:
+    """
+    Backward-compatible alias for older frontend clients.
+    """
+    result = await session.execute(select(ProposalTemplate.category).distinct())
+    categories = [row[0] for row in result.all()]
+    return sorted(categories)
+
+
 @router.get("/{template_id}", response_model=TemplateResponse)
 async def get_template(
     template_id: int,

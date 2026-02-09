@@ -18,25 +18,36 @@ export function ProposalSelector({
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isMounted: () => boolean) => {
     try {
+      if (!isMounted()) return;
       setIsLoading(true);
       const data = await draftApi.listProposals();
+      if (!isMounted()) return;
       setProposals(data);
-      // Auto-select first if none selected
-      if (!selectedId && data.length > 0) {
-        onSelect(data[0]);
-      }
     } catch {
       console.error("Failed to load proposals");
     } finally {
-      setIsLoading(false);
+      if (isMounted()) {
+        setIsLoading(false);
+      }
     }
   }, [selectedId, onSelect]);
 
   useEffect(() => {
-    load();
+    let mounted = true;
+    const isMounted = () => mounted;
+    void load(isMounted);
+    return () => {
+      mounted = false;
+    };
   }, [load]);
+
+  useEffect(() => {
+    if (!selectedId && proposals.length > 0) {
+      onSelect(proposals[0]);
+    }
+  }, [selectedId, proposals, onSelect]);
 
   if (isLoading) {
     return (

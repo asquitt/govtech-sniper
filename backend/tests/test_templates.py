@@ -217,6 +217,31 @@ class TestTemplateCategories:
         assert "Quality" in categories
 
     @pytest.mark.asyncio
+    async def test_list_categories_legacy_alias(
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
+    ):
+        """Test legacy categories path still works for older clients."""
+        from app.api.routes.templates import ProposalTemplate
+
+        template = ProposalTemplate(
+            name="Legacy Category Template",
+            category="Legacy",
+            description="Test",
+            template_text="Content",
+            is_system=True,
+        )
+        db_session.add(template)
+        await db_session.commit()
+
+        response = await client.get(
+            "/api/v1/templates/categories/list",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        categories = response.json()
+        assert "Legacy" in categories
+
+    @pytest.mark.asyncio
     async def test_filter_by_category(
         self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
