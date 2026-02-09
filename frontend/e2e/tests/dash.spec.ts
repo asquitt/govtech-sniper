@@ -18,13 +18,13 @@ test.describe("Dash (AI Assistant) Page", () => {
     await page.goto("/dash");
 
     await expect(
-      page.getByRole("button", { name: "Summarize solicitation" })
+      page.getByRole("button", { name: "Recent opportunities" })
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Compliance gaps" })
+      page.getByRole("button", { name: "Pipeline overview" })
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Draft capability statement" })
+      page.getByRole("button", { name: "Upload help" })
     ).toBeVisible();
   });
 

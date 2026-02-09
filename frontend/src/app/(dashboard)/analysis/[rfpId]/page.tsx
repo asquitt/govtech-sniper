@@ -85,22 +85,29 @@ export default function AnalysisPage() {
       setIsLoading(true);
       setLoadError(null);
 
-      const [rfpData, matrixData] = await Promise.all([
-        rfpApi.get(rfpId),
-        analysisApi.getComplianceMatrix(rfpId).catch(() => null),
-      ]);
+      const rfpData = await rfpApi.get(rfpId);
 
       setRfp(rfpData);
+      setRequirements([]);
+      setSnapshotDiff(null);
 
-      if (matrixData && matrixData.requirements) {
+      const matrixData = await analysisApi
+        .getComplianceMatrix(rfpId)
+        .catch(() => null);
+      if (matrixData?.requirements) {
         setRequirements(matrixData.requirements);
       }
 
-      try {
-        const diff = await rfpApi.getSnapshotDiff(rfpId);
-        setSnapshotDiff(diff);
-      } catch (diffErr) {
-        setSnapshotDiff(null);
+      const snapshots = await rfpApi
+        .getSnapshots(rfpId, { limit: 2 })
+        .catch(() => []);
+      if (snapshots.length >= 2) {
+        try {
+          const diff = await rfpApi.getSnapshotDiff(rfpId);
+          setSnapshotDiff(diff);
+        } catch {
+          setSnapshotDiff(null);
+        }
       }
     } catch (err) {
       console.error("Failed to load RFP:", err);

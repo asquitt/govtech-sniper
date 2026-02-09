@@ -64,6 +64,9 @@ async def test_compliance_matrix_editing(
     data = response.json()
     assert data["total_requirements"] == 2
 
+    # Clear identity map to ensure route does not rely on lazy relationship loads.
+    db_session.expunge_all()
+
     # Update requirement
     response = await client.patch(
         f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001",
@@ -87,6 +90,8 @@ async def test_compliance_matrix_editing(
     assert response.status_code == 200
     gaps = response.json()
     assert gaps["rfp_id"] == test_rfp.id
+
+    db_session.expunge_all()
 
     # Delete requirement
     response = await client.delete(f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001")
@@ -115,3 +120,17 @@ async def test_add_requirement_creates_matrix_when_missing(
     assert payload["total_requirements"] == 1
     assert payload["mandatory_count"] == 1
     assert payload["requirements"][0]["section"] == "C.1"
+
+
+@pytest.mark.asyncio
+async def test_get_matrix_returns_empty_shape_when_missing(
+    client: AsyncClient,
+    test_rfp: RFP,
+):
+    response = await client.get(f"/api/v1/analyze/{test_rfp.id}/matrix")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["rfp_id"] == test_rfp.id
+    assert payload["id"] == 0
+    assert payload["requirements"] == []
+    assert payload["total_requirements"] == 0

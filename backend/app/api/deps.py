@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.config import settings
 from app.database import get_session
 from app.models.user import User, UserProfile, UserTier
 from app.services.auth_service import UserAuth, decode_token
@@ -202,9 +203,11 @@ async def check_rate_limit(
         key = f"user:{current_user.id}"
         max_requests = tier_limits.get(current_user.tier, 100)
     else:
-        # Rate limit by IP for unauthenticated requests
-        key = f"ip:{request.client.host if request.client else 'unknown'}"
-        max_requests = 50  # Very limited for unauthenticated
+        # Rate limit by IP + path for unauthenticated requests so one high-churn
+        # endpoint (like auth during E2E) doesn't starve other anonymous traffic.
+        client_ip = request.client.host if request.client else "unknown"
+        key = f"ip:{client_ip}:{request.url.path}"
+        max_requests = 200 if settings.debug else 50
 
     is_allowed, remaining = rate_limiter.is_allowed(
         key=key,

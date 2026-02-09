@@ -65,6 +65,11 @@ Every feature must include:
 - Update docs when behavior changes.
 - For non-obvious design choices, add a short rationale in docs/ or ADRs.
 
+## Agent Learning Memory
+- Persistent mistakes log location: `docs/agent-learning-log.md`
+- When a mistake is discovered, append an entry to `docs/agent-learning-log.md` in the same work session.
+- Before starting significant implementation, review the latest entries in `docs/agent-learning-log.md` and apply listed prevention checklists.
+
 ## UX and Product Fit
 - Optimize for enterprise workflows (Word, SharePoint, SSO).
 - Every workflow must reduce time and increase compliance confidence.

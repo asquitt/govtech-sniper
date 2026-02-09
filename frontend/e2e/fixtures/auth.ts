@@ -1,6 +1,8 @@
 import { test as base, type Page, expect } from "@playwright/test";
 import { TEST_USER, STORAGE_KEYS } from "../helpers/constants";
 
+let cachedAuth: { accessToken: string; refreshToken: string | null } | null = null;
+
 async function registerTestUser(page: Page): Promise<boolean> {
   await page.goto("/register");
   await page.getByLabel("Full Name").fill(TEST_USER.fullName);
@@ -32,16 +34,51 @@ async function loginTestUser(page: Page): Promise<void> {
   await page.waitForURL("**/opportunities", { timeout: 15_000 });
 }
 
+async function restoreCachedSession(page: Page): Promise<boolean> {
+  if (!cachedAuth?.accessToken) return false;
+
+  await page.goto("/login");
+  await page.evaluate(
+    ({ keys, accessToken, refreshToken }) => {
+      localStorage.setItem(keys.accessToken, accessToken);
+      if (refreshToken) {
+        localStorage.setItem(keys.refreshToken, refreshToken);
+      }
+    },
+    {
+      keys: STORAGE_KEYS,
+      accessToken: cachedAuth.accessToken,
+      refreshToken: cachedAuth.refreshToken,
+    }
+  );
+
+  await page.goto("/opportunities");
+  return !page.url().includes("/login");
+}
+
 export async function loginAsTestUser(page: Page): Promise<void> {
+  if (await restoreCachedSession(page)) {
+    return;
+  }
+
   const registered = await registerTestUser(page);
   if (!registered) {
     await loginTestUser(page);
   }
-  const token = await page.evaluate(
-    (key) => localStorage.getItem(key),
-    STORAGE_KEYS.accessToken
+
+  const authState = await page.evaluate(
+    (keys) => ({
+      accessToken: localStorage.getItem(keys.accessToken),
+      refreshToken: localStorage.getItem(keys.refreshToken),
+    }),
+    STORAGE_KEYS
   );
-  expect(token).toBeTruthy();
+  expect(authState.accessToken).toBeTruthy();
+
+  cachedAuth = {
+    accessToken: authState.accessToken!,
+    refreshToken: authState.refreshToken,
+  };
 }
 
 export const test = base.extend<{ authenticatedPage: Page }>({

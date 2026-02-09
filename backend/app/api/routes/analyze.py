@@ -38,6 +38,11 @@ class ComplianceGapSummary(BaseModel):
     gaps: list[ComplianceRequirementRead]
 
 
+async def _get_rfp_user_id(session: AsyncSession, rfp_id: int) -> int | None:
+    result = await session.execute(select(RFP.user_id).where(RFP.id == rfp_id))
+    return result.scalar_one_or_none()
+
+
 @router.post("/{rfp_id}", response_model=AnalyzeResponse)
 async def trigger_rfp_analysis(
     rfp_id: int = Path(..., description="RFP ID to analyze"),
@@ -151,6 +156,10 @@ async def get_compliance_matrix(
     Returns all requirements with their importance levels,
     categories, and addressed status.
     """
+    rfp_exists = await session.execute(select(RFP.id).where(RFP.id == rfp_id))
+    if rfp_exists.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
     # Get the compliance matrix
     result = await session.execute(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
@@ -158,9 +167,19 @@ async def get_compliance_matrix(
     matrix = result.scalar_one_or_none()
 
     if not matrix:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
+        # Return an empty matrix shape so first-time analysis pages can load
+        # without generating noisy 404s, while still allowing manual creation.
+        now = datetime.utcnow()
+        return ComplianceMatrixRead(
+            id=0,
+            rfp_id=rfp_id,
+            requirements=[],
+            total_requirements=0,
+            mandatory_count=0,
+            addressed_count=0,
+            extraction_confidence=None,
+            created_at=now,
+            updated_at=now,
         )
 
     # Parse requirements
@@ -262,13 +281,11 @@ async def add_compliance_requirement(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
     )
     matrix = result.scalar_one_or_none()
-    rfp_user_id: int | None = None
+    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
+    if rfp_user_id is None:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
     if not matrix:
-        rfp_result = await session.execute(select(RFP).where(RFP.id == rfp_id))
-        rfp = rfp_result.scalar_one_or_none()
-        if not rfp:
-            raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
-        rfp_user_id = rfp.user_id
         matrix = ComplianceMatrix(
             rfp_id=rfp_id,
             requirements=[],
@@ -278,8 +295,6 @@ async def add_compliance_requirement(
         )
         session.add(matrix)
         await session.flush()
-    elif matrix.rfp:
-        rfp_user_id = matrix.rfp.user_id
 
     req_dict = requirement.model_dump()
     req_dict = _normalize_requirement_status(req_dict)
@@ -349,6 +364,7 @@ async def update_compliance_requirement(
             status_code=404,
             detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
         )
+    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
 
     update_data = update.model_dump(exclude_unset=True)
     update_data = _normalize_requirement_status(update_data)
@@ -369,7 +385,7 @@ async def update_compliance_requirement(
 
     await log_audit_event(
         session,
-        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        user_id=rfp_user_id,
         entity_type="compliance_matrix",
         entity_id=matrix.id,
         action="compliance.requirement.updated",
@@ -377,7 +393,7 @@ async def update_compliance_requirement(
     )
     await dispatch_webhook_event(
         session,
-        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        user_id=rfp_user_id,
         event_type="compliance.requirement.updated",
         payload={"rfp_id": rfp_id, "requirement_id": requirement_id},
     )
@@ -417,6 +433,7 @@ async def delete_compliance_requirement(
             status_code=404,
             detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
         )
+    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
 
     original_len = len(matrix.requirements)
     matrix.requirements = [req for req in matrix.requirements if req.get("id") != requirement_id]
@@ -430,7 +447,7 @@ async def delete_compliance_requirement(
 
     await log_audit_event(
         session,
-        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        user_id=rfp_user_id,
         entity_type="compliance_matrix",
         entity_id=matrix.id,
         action="compliance.requirement.deleted",
@@ -438,7 +455,7 @@ async def delete_compliance_requirement(
     )
     await dispatch_webhook_event(
         session,
-        user_id=matrix.rfp.user_id if matrix.rfp else None,
+        user_id=rfp_user_id,
         event_type="compliance.requirement.deleted",
         payload={"rfp_id": rfp_id, "requirement_id": requirement_id},
     )
