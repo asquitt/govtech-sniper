@@ -70,6 +70,11 @@ Every feature must include:
 - When a mistake is discovered, append an entry to `docs/agent-learning-log.md` in the same work session.
 - Before starting significant implementation, review the latest entries in `docs/agent-learning-log.md` and apply listed prevention checklists.
 
+## Capability Integration Tracker
+- Persistent capability tracker location: `docs/capability-integration-tracker.md`
+- Keep `docs/capability-integration-tracker.md` updated as features are verified, integrated, or found orphaned.
+- When hidden/orphaned capabilities are discovered, add concrete integration tasks and update status in the same work session.
+
 ## UX and Product Fit
 - Optimize for enterprise workflows (Word, SharePoint, SSO).
 - Every workflow must reduce time and increase compliance confidence.
