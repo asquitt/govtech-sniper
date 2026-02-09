@@ -28,6 +28,28 @@ router = APIRouter(prefix="/analytics", tags=["Analytics Reporting"])
 
 
 # =============================================================================
+# SQL Dialect Helpers
+# =============================================================================
+
+
+def _is_sqlite(session: AsyncSession) -> bool:
+    bind = session.get_bind()
+    return bool(bind and bind.dialect.name == "sqlite")
+
+
+def _month_expr(session: AsyncSession, value):
+    if _is_sqlite(session):
+        return func.strftime("%Y-%m", value)
+    return func.to_char(value, "YYYY-MM")
+
+
+def _days_between_expr(session: AsyncSession, end_value, start_value):
+    if _is_sqlite(session):
+        return func.julianday(end_value) - func.julianday(start_value)
+    return func.extract("epoch", end_value - start_value) / 86400
+
+
+# =============================================================================
 # Win Rate
 # =============================================================================
 
@@ -59,9 +81,10 @@ async def get_win_rate(
 
     # Monthly trend (last 12 months)
     twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+    month_expr = _month_expr(session, CapturePlan.updated_at)
     trend_rows = await session.execute(
         select(
-            func.to_char(CapturePlan.updated_at, "YYYY-MM").label("month"),
+            month_expr.label("month"),
             CapturePlan.stage,
             func.count(CapturePlan.id).label("count"),
         )
@@ -71,10 +94,10 @@ async def get_win_rate(
             CapturePlan.updated_at >= twelve_months_ago,
         )
         .group_by(
-            func.to_char(CapturePlan.updated_at, "YYYY-MM"),
+            month_expr,
             CapturePlan.stage,
         )
-        .order_by(func.to_char(CapturePlan.updated_at, "YYYY-MM"))
+        .order_by(month_expr)
     )
     monthly: dict[str, dict[str, int]] = {}
     for row in trend_rows.all():
@@ -220,12 +243,11 @@ async def get_proposal_turnaround(
     """Average days from RFP creation to Proposal creation (submitted+)."""
     user_id = current_user.id
     submitted_statuses = [ProposalStatus.SUBMITTED, ProposalStatus.FINAL]
+    turnaround_days_expr = _days_between_expr(session, Proposal.created_at, RFP.created_at)
 
     overall_result = await session.execute(
         select(
-            func.avg(func.extract("epoch", Proposal.created_at - RFP.created_at) / 86400).label(
-                "avg_days"
-            ),
+            func.avg(turnaround_days_expr).label("avg_days"),
         )
         .join(RFP, RFP.id == Proposal.rfp_id)
         .where(
@@ -236,12 +258,11 @@ async def get_proposal_turnaround(
     overall_avg = overall_result.scalar() or 0.0
 
     twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+    month_expr = _month_expr(session, Proposal.created_at)
     monthly_result = await session.execute(
         select(
-            func.to_char(Proposal.created_at, "YYYY-MM").label("month"),
-            func.avg(func.extract("epoch", Proposal.created_at - RFP.created_at) / 86400).label(
-                "avg_days"
-            ),
+            month_expr.label("month"),
+            func.avg(turnaround_days_expr).label("avg_days"),
             func.count(Proposal.id).label("count"),
         )
         .join(RFP, RFP.id == Proposal.rfp_id)
@@ -250,8 +271,8 @@ async def get_proposal_turnaround(
             Proposal.status.in_(submitted_statuses),
             Proposal.created_at >= twelve_months_ago,
         )
-        .group_by(func.to_char(Proposal.created_at, "YYYY-MM"))
-        .order_by(func.to_char(Proposal.created_at, "YYYY-MM"))
+        .group_by(month_expr)
+        .order_by(month_expr)
     )
 
     trend = [

@@ -41,25 +41,27 @@ async def _require_org_admin(
     session: AsyncSession,
 ) -> tuple[Organization, OrganizationMember]:
     """Verify user is an admin or owner of their organization."""
-    db_user = (await session.exec(select(User).where(User.id == user.id))).first()
+    db_user = (await session.execute(select(User).where(User.id == user.id))).scalar_one_or_none()
     if not db_user or not db_user.organization_id:
         raise HTTPException(status_code=403, detail="No organization membership")
 
     org = (
-        await session.exec(select(Organization).where(Organization.id == db_user.organization_id))
-    ).first()
+        await session.execute(
+            select(Organization).where(Organization.id == db_user.organization_id)
+        )
+    ).scalar_one_or_none()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
     member = (
-        await session.exec(
+        await session.execute(
             select(OrganizationMember).where(
                 OrganizationMember.organization_id == org.id,
                 OrganizationMember.user_id == user.id,
                 OrganizationMember.is_active == True,  # noqa: E712
             )
         )
-    ).first()
+    ).scalar_one_or_none()
     if not member or member.role not in (OrgRole.OWNER, OrgRole.ADMIN):
         raise HTTPException(status_code=403, detail="Admin access required")
 
@@ -115,8 +117,8 @@ async def create_organization(
     """Create a new organization. The creator becomes the owner."""
     # Check slug uniqueness
     existing = (
-        await session.exec(select(Organization).where(Organization.slug == body.slug))
-    ).first()
+        await session.execute(select(Organization).where(Organization.slug == body.slug))
+    ).scalar_one_or_none()
     if existing:
         raise HTTPException(status_code=409, detail="Organization slug already taken")
 
@@ -138,7 +140,9 @@ async def create_organization(
     session.add(member)
 
     # Link user to org
-    user = (await session.exec(select(User).where(User.id == current_user.id))).first()
+    user = (
+        await session.execute(select(User).where(User.id == current_user.id))
+    ).scalar_one_or_none()
     if user:
         user.organization_id = org.id
         session.add(user)
@@ -161,15 +165,15 @@ async def get_organization(
     session: AsyncSession = Depends(get_session),
 ):
     """Get current user's organization details."""
-    org, member = await _require_org_admin(current_user, session)
+    org, _member = await _require_org_admin(current_user, session)
     member_count = (
-        await session.exec(
+        await session.execute(
             select(func.count()).where(
                 OrganizationMember.organization_id == org.id,
                 OrganizationMember.is_active == True,  # noqa: E712
             )
         )
-    ).first() or 0
+    ).scalar_one() or 0
 
     return {
         "id": org.id,
@@ -223,7 +227,7 @@ async def list_members(
     org, _ = await _require_org_admin(current_user, session)
 
     members = (
-        await session.exec(
+        await session.execute(
             select(OrganizationMember, User)
             .join(User, OrganizationMember.user_id == User.id)
             .where(OrganizationMember.organization_id == org.id)
@@ -235,8 +239,8 @@ async def list_members(
     for om, user in members:
         # Check if user has SSO identity
         sso = (
-            await session.exec(select(SSOIdentity).where(SSOIdentity.user_id == user.id))
-        ).first()
+            await session.execute(select(SSOIdentity).where(SSOIdentity.user_id == user.id))
+        ).scalar_one_or_none()
         result.append(
             {
                 "id": om.id,
@@ -270,13 +274,13 @@ async def update_member_role(
         raise HTTPException(status_code=400, detail="Cannot change your own role")
 
     target_member = (
-        await session.exec(
+        await session.execute(
             select(OrganizationMember).where(
                 OrganizationMember.organization_id == org.id,
                 OrganizationMember.user_id == user_id,
             )
         )
-    ).first()
+    ).scalar_one_or_none()
     if not target_member:
         raise HTTPException(status_code=404, detail="Member not found")
 
@@ -308,13 +312,13 @@ async def deactivate_member(
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
 
     target_member = (
-        await session.exec(
+        await session.execute(
             select(OrganizationMember).where(
                 OrganizationMember.organization_id == org.id,
                 OrganizationMember.user_id == user_id,
             )
         )
-    ).first()
+    ).scalar_one_or_none()
     if not target_member:
         raise HTTPException(status_code=404, detail="Member not found")
 
@@ -326,7 +330,7 @@ async def deactivate_member(
     session.add(target_member)
 
     # Also deactivate the user account
-    user = (await session.exec(select(User).where(User.id == user_id))).first()
+    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user:
         user.is_active = False
         session.add(user)
@@ -345,20 +349,20 @@ async def reactivate_member(
     org, _ = await _require_org_admin(current_user, session)
 
     target_member = (
-        await session.exec(
+        await session.execute(
             select(OrganizationMember).where(
                 OrganizationMember.organization_id == org.id,
                 OrganizationMember.user_id == user_id,
             )
         )
-    ).first()
+    ).scalar_one_or_none()
     if not target_member:
         raise HTTPException(status_code=404, detail="Member not found")
 
     target_member.is_active = True
     session.add(target_member)
 
-    user = (await session.exec(select(User).where(User.id == user_id))).first()
+    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user:
         user.is_active = True
         session.add(user)
@@ -383,13 +387,13 @@ async def get_usage_analytics(
     since = datetime.utcnow() - timedelta(days=days)
 
     # Get all org user IDs
-    org_user_ids_result = await session.exec(
+    org_user_ids_result = await session.execute(
         select(OrganizationMember.user_id).where(
             OrganizationMember.organization_id == org.id,
             OrganizationMember.is_active == True,  # noqa: E712
         )
     )
-    org_user_ids = list(org_user_ids_result.all())
+    org_user_ids = list(org_user_ids_result.scalars().all())
 
     if not org_user_ids:
         return {
@@ -403,46 +407,46 @@ async def get_usage_analytics(
 
     # Count proposals created in period
     proposals_count = (
-        await session.exec(
+        await session.execute(
             select(func.count()).where(
                 Proposal.user_id.in_(org_user_ids),  # type: ignore[attr-defined]
                 Proposal.created_at >= since,
             )
         )
-    ).first() or 0
+    ).scalar_one() or 0
 
     # Count RFPs uploaded in period
     rfps_count = (
-        await session.exec(
+        await session.execute(
             select(func.count()).where(
                 RFP.user_id.in_(org_user_ids),  # type: ignore[attr-defined]
                 RFP.created_at >= since,
             )
         )
-    ).first() or 0
+    ).scalar_one() or 0
 
     # Audit events count in period
     audit_count = (
-        await session.exec(
+        await session.execute(
             select(func.count()).where(
                 AuditEvent.user_id.in_(org_user_ids),  # type: ignore[attr-defined]
                 AuditEvent.created_at >= since,
             )
         )
-    ).first() or 0
+    ).scalar_one() or 0
 
     # Active users (users with at least 1 audit event in period)
     active_users = (
-        await session.exec(
+        await session.execute(
             select(func.count(func.distinct(AuditEvent.user_id))).where(
                 AuditEvent.user_id.in_(org_user_ids),  # type: ignore[attr-defined]
                 AuditEvent.created_at >= since,
             )
         )
-    ).first() or 0
+    ).scalar_one() or 0
 
     # Audit events by action type
-    by_action_result = await session.exec(
+    by_action_result = await session.execute(
         select(AuditEvent.action, func.count())
         .where(
             AuditEvent.user_id.in_(org_user_ids),  # type: ignore[attr-defined]
@@ -483,12 +487,12 @@ async def get_org_audit_log(
     org, _ = await _require_org_admin(current_user, session)
 
     # Get org user IDs
-    org_user_ids_result = await session.exec(
+    org_user_ids_result = await session.execute(
         select(OrganizationMember.user_id).where(
             OrganizationMember.organization_id == org.id,
         )
     )
-    org_user_ids = list(org_user_ids_result.all())
+    org_user_ids = list(org_user_ids_result.scalars().all())
 
     query = select(AuditEvent).where(
         AuditEvent.user_id.in_(org_user_ids),  # type: ignore[attr-defined]
@@ -499,14 +503,20 @@ async def get_org_audit_log(
         query = query.where(AuditEvent.entity_type == entity_type)
 
     query = query.order_by(AuditEvent.created_at.desc()).offset(offset).limit(limit)  # type: ignore[union-attr]
-    events = (await session.exec(query)).all()
+    events = (await session.execute(query)).scalars().all()
 
     # Resolve user emails
     user_map: dict[int, str] = {}
     if events:
         user_ids = {e.user_id for e in events if e.user_id}
         if user_ids:
-            users = (await session.exec(select(User).where(User.id.in_(user_ids)))).all()  # type: ignore[attr-defined]
+            users = (
+                (
+                    await session.execute(select(User).where(User.id.in_(user_ids)))  # type: ignore[attr-defined]
+                )
+                .scalars()
+                .all()
+            )
             user_map = {u.id: u.email for u in users}
 
     return {

@@ -35,6 +35,7 @@ Every feature must include:
 - Validate critical paths in a real browser with Playwright before closing work.
 - For local development without external dependencies (Redis, third-party APIs), use deterministic mock data and synchronous fallbacks so ingest -> analyze -> draft -> export can still be exercised end-to-end.
 - Capture and fix live UI/API failures immediately, then add/extend regression tests for each fix.
+- For local backend startup, provide explicit non-default security keys (`SECRET_KEY`, `AUDIT_EXPORT_SIGNING_KEY`); if Postgres is unavailable, run with `DATABASE_URL=sqlite+aiosqlite:///./dev.db` for deterministic local validation.
 
 ## CI / CD Expectations
 - CI runs on every push: lint, type check, unit, integration, and E2E.

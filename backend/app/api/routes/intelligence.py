@@ -31,6 +31,34 @@ router = APIRouter(prefix="/intelligence", tags=["Intelligence"])
 
 
 # =============================================================================
+# SQL Dialect Helpers
+# =============================================================================
+
+
+def _is_sqlite(session: AsyncSession) -> bool:
+    bind = session.get_bind()
+    return bool(bind and bind.dialect.name == "sqlite")
+
+
+def _year_expr(session: AsyncSession, value):
+    if _is_sqlite(session):
+        return func.strftime("%Y", value)
+    return func.to_char(value, "YYYY")
+
+
+def _month_number_expr(session: AsyncSession, value):
+    if _is_sqlite(session):
+        return func.strftime("%m", value)
+    return func.to_char(value, "MM")
+
+
+def _days_between_expr(session: AsyncSession, end_value, start_value):
+    if _is_sqlite(session):
+        return func.julianday(end_value) - func.julianday(start_value)
+    return func.extract("epoch", end_value - start_value) / 86400
+
+
+# =============================================================================
 # Win/Loss Analysis
 # =============================================================================
 
@@ -226,12 +254,14 @@ async def get_budget_intelligence(
 ) -> dict:
     """Agency budget intelligence from award data and RFP patterns."""
     user_id = current_user.id
+    award_year_expr = _year_expr(session, AwardRecord.award_date)
+    posted_month_expr = _month_number_expr(session, RFP.posted_date)
 
     # Agency spending from AwardRecords (market-wide intelligence)
     spending_result = await session.execute(
         select(
             AwardRecord.agency,
-            func.to_char(AwardRecord.award_date, "YYYY").label("year"),
+            award_year_expr.label("year"),
             func.count(AwardRecord.id).label("award_count"),
             func.coalesce(func.sum(AwardRecord.award_amount), 0).label("total_spend"),
             func.coalesce(func.avg(AwardRecord.award_amount), 0).label("avg_award"),
@@ -241,8 +271,8 @@ async def get_budget_intelligence(
             AwardRecord.award_date.isnot(None),
             AwardRecord.agency.isnot(None),
         )
-        .group_by(AwardRecord.agency, func.to_char(AwardRecord.award_date, "YYYY"))
-        .order_by(func.to_char(AwardRecord.award_date, "YYYY").desc())
+        .group_by(AwardRecord.agency, award_year_expr)
+        .order_by(award_year_expr.desc())
     )
     agency_spending: dict[str, list[dict]] = defaultdict(list)
     for row in spending_result.all():
@@ -273,7 +303,7 @@ async def get_budget_intelligence(
     naics_result = await session.execute(
         select(
             AwardRecord.naics_code,
-            func.to_char(AwardRecord.award_date, "YYYY").label("year"),
+            award_year_expr.label("year"),
             func.count(AwardRecord.id).label("count"),
             func.coalesce(func.sum(AwardRecord.award_amount), 0).label("total"),
         )
@@ -282,7 +312,7 @@ async def get_budget_intelligence(
             AwardRecord.naics_code.isnot(None),
             AwardRecord.award_date.isnot(None),
         )
-        .group_by(AwardRecord.naics_code, func.to_char(AwardRecord.award_date, "YYYY"))
+        .group_by(AwardRecord.naics_code, award_year_expr)
         .order_by(func.sum(AwardRecord.award_amount).desc())
     )
     naics_spending: dict[str, list[dict]] = defaultdict(list)
@@ -311,14 +341,14 @@ async def get_budget_intelligence(
     # Budget season detection: which months have the most RFPs posted?
     season_result = await session.execute(
         select(
-            func.to_char(RFP.posted_date, "MM").label("month"),
+            posted_month_expr.label("month"),
             func.count(RFP.id).label("count"),
         )
         .where(
             RFP.user_id == user_id,
             RFP.posted_date.isnot(None),
         )
-        .group_by(func.to_char(RFP.posted_date, "MM"))
+        .group_by(posted_month_expr)
         .order_by(func.count(RFP.id).desc())
     )
     budget_season = [
@@ -499,8 +529,9 @@ async def get_kpis(
 
     # Avg proposal turnaround (last 90 days)
     ninety_days_ago = datetime.utcnow() - timedelta(days=90)
+    turnaround_days_expr = _days_between_expr(session, Proposal.created_at, RFP.created_at)
     turnaround_result = await session.execute(
-        select(func.avg(func.extract("epoch", Proposal.created_at - RFP.created_at) / 86400))
+        select(func.avg(turnaround_days_expr))
         .join(RFP, RFP.id == Proposal.rfp_id)
         .where(
             Proposal.user_id == user_id,

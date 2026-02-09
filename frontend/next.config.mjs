@@ -11,6 +11,10 @@ const nextConfig = {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
     return [
       {
+        source: "/api/contracts",
+        destination: `${apiUrl}/api/v1/contracts/`,
+      },
+      {
         source: "/api/:path*",
         destination: `${apiUrl}/api/v1/:path*`,
       },
@@ -29,4 +33,3 @@ const nextConfig = {
 };
 
 export default nextConfig;
-

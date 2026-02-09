@@ -64,3 +64,24 @@ Format:
 - Root cause: Fallback checks only probed broker reachability, not active worker availability.
 - Prevention checklist: For async task fallbacks, validate both broker and worker health before queuing in debug/mock mode.
 - Verification added: Added ingest + draft regression tests for "worker unavailable" fallback and re-ran Playwright critical path.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Admin and reports endpoints returned 500 because route handlers used `session.exec(...)` with `AsyncSession`.
+- Root cause: Mixed SQLModel session API assumptions with SQLAlchemy `AsyncSession` in runtime dependencies.
+- Prevention checklist: In async API routes, always use `session.execute(...)` and map results with `.scalar*()`/`.scalars()`; add endpoint-level tests for new admin/report routes.
+- Verification added: Added regression coverage in `backend/tests/test_capability_integrations.py` and validated `/api/v1/reports` plus `/api/v1/admin/*` behavior.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Analytics and intelligence pages failed in local SQLite runs because queries used Postgres-only SQL functions (`to_char`, `extract`).
+- Root cause: Dialect-specific expressions were shipped without SQLite compatibility fallback for local/mock environments.
+- Prevention checklist: For date/time aggregation, implement dialect-aware helpers (`strftime`/`julianday` for SQLite, `to_char`/`extract` for Postgres) before wiring UI.
+- Verification added: Added and passed regression tests for `/api/v1/analytics/win-rate`, `/api/v1/analytics/proposal-turnaround`, and `/api/v1/intelligence/budget`.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Contracts page attempted cross-origin fetches after a proxy rewrite chain (`/api/contracts` -> backend 307 redirect) leaked backend URL to browser.
+- Root cause: Trailing-slash mismatch between Next rewrite and FastAPI root route produced redirect responses instead of proxied 200 responses.
+- Prevention checklist: For proxied root endpoints, validate both slash and non-slash paths and add explicit rewrite exceptions when backend normalizes paths.
+- Verification added: Added `/api/contracts` explicit rewrite and verified live Playwright/API status 200 without CORS failure.

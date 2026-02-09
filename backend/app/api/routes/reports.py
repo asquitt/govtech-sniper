@@ -119,7 +119,7 @@ async def create_report(
     session: AsyncSession = Depends(get_session),
 ) -> SavedReport:
     report = SavedReport(
-        user_id=int(current_user.user_id),
+        user_id=int(current_user.id),
         name=body.name,
         report_type=body.report_type,
         config=body.config.model_dump(),
@@ -136,12 +136,12 @@ async def list_reports(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[SavedReport]:
-    result = await session.exec(
+    result = await session.execute(
         select(SavedReport)
-        .where(SavedReport.user_id == int(current_user.user_id))
+        .where(SavedReport.user_id == int(current_user.id))
         .order_by(SavedReport.updated_at.desc())
     )
-    return list(result.all())
+    return list(result.scalars().all())
 
 
 @router.get("/{report_id}", response_model=SavedReportRead)
