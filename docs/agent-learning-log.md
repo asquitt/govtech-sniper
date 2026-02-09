@@ -57,3 +57,10 @@ Format:
 - Root cause: Frontend gated matrix fetch by RFP status instead of data availability.
 - Prevention checklist: Base UI fetch guards on backend data contracts, not inferred status heuristics.
 - Verification added: Backend `GET /analyze/{rfp_id}/matrix` now returns empty matrix shape when missing; live reload verified matrix visibility after manual add.
+
+### 2026-02-09
+- Date: 2026-02-09
+- Mistake: Local mock ingest/draft flows could hang when Redis was reachable but no Celery worker was connected.
+- Root cause: Fallback checks only probed broker reachability, not active worker availability.
+- Prevention checklist: For async task fallbacks, validate both broker and worker health before queuing in debug/mock mode.
+- Verification added: Added ingest + draft regression tests for "worker unavailable" fallback and re-ran Playwright critical path.

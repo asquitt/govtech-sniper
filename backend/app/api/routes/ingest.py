@@ -47,6 +47,20 @@ def _celery_broker_available() -> bool:
         return False
 
 
+def _celery_worker_available() -> bool:
+    """
+    Best-effort worker probe so local/dev environments don't enqueue work
+    that can never be processed when no Celery worker is connected.
+    """
+    try:
+        from app.tasks.celery_app import celery_app
+
+        replies = celery_app.control.inspect(timeout=0.5).ping() or {}
+        return len(replies) > 0
+    except Exception:
+        return False
+
+
 async def _run_synchronous_ingest(
     *,
     user_id: int,
@@ -166,9 +180,13 @@ async def trigger_sam_ingest(
 
     resolved_user_id = resolve_user_id(user_id, current_user)
 
-    # Prefer background task, but fall back to sync mode for local/dev when broker is down.
-    if not _celery_broker_available() and (settings.debug or settings.mock_sam_gov):
-        logger.warning("Celery broker unavailable; running ingest synchronously")
+    # Prefer background task, but fall back to sync mode for local/dev when
+    # broker/worker infrastructure is unavailable.
+    should_fallback_sync = (settings.debug or settings.mock_sam_gov) and (
+        not _celery_broker_available() or not _celery_worker_available()
+    )
+    if should_fallback_sync:
+        logger.warning("Celery broker/worker unavailable; running ingest synchronously")
         return await _run_synchronous_ingest(
             user_id=resolved_user_id,
             session=session,

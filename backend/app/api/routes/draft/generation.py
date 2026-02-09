@@ -53,6 +53,17 @@ def _celery_broker_available() -> bool:
         return False
 
 
+def _celery_worker_available() -> bool:
+    """Best-effort worker probe for local/dev sync fallback behavior."""
+    try:
+        from app.tasks.celery_app import celery_app
+
+        replies = celery_app.control.inspect(timeout=0.5).ping() or {}
+        return len(replies) > 0
+    except Exception:
+        return False
+
+
 async def _run_synchronous_generation(
     *,
     section: ProposalSection,
@@ -388,8 +399,11 @@ async def generate_section_draft(
             detail=f"No section found for requirement {requirement_id}. Create proposal sections first.",
         )
 
-    # Fall back to sync generation in local/dev when broker is unavailable.
-    if not _celery_broker_available() and (settings.debug or settings.mock_ai):
+    # Fall back to sync generation in local/dev when broker or worker is unavailable.
+    should_fallback_sync = (settings.debug or settings.mock_ai) and (
+        not _celery_broker_available() or not _celery_worker_available()
+    )
+    if should_fallback_sync:
         sync_task_id = f"sync-{section.id}-{int(datetime.utcnow().timestamp())}"
         sync_result = await _run_synchronous_generation(
             section=section,
