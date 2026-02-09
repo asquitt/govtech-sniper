@@ -39,6 +39,7 @@ export default function AnalysisPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingId, setGeneratingId] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
+  const [activeProposalId, setActiveProposalId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "shred">("list");
@@ -150,6 +151,7 @@ export default function AnalysisPage() {
       const proposals = await draftApi.listProposals({ rfp_id: rfpId });
       const proposal =
         proposals[0] ?? (await draftApi.createProposal(rfpId, proposalTitle));
+      setActiveProposalId(proposal.id);
       const sections = await draftApi.listSections(proposal.id);
 
       if (!sections.some((section) => section.requirement_id === requirement.id)) {
@@ -350,9 +352,20 @@ export default function AnalysisPage() {
 
     try {
       setIsExporting(true);
+      setActionError(null);
+      let proposalId = activeProposalId;
+      if (!proposalId) {
+        const proposals = await draftApi.listProposals({ rfp_id: rfpId });
+        proposalId = proposals[0]?.id ?? null;
+      }
+      if (!proposalId) {
+        setActionError("Create a proposal draft before exporting.");
+        return;
+      }
+
       const blob = format === "docx"
-        ? await exportApi.exportProposalDocx(rfp.id)
-        : await exportApi.exportProposalPdf(rfp.id);
+        ? await exportApi.exportProposalDocx(proposalId)
+        : await exportApi.exportProposalPdf(proposalId);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
