@@ -1,15 +1,18 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { complianceApi } from "@/lib/api/compliance";
 import type {
   CMMCStatus,
   NISTOverview,
   DataPrivacyInfo,
   ComplianceAuditSummary,
+  ComplianceReadiness,
 } from "@/types/compliance";
 
 function ScoreRing({ score }: { score: number }) {
@@ -55,6 +58,7 @@ export default function CompliancePage() {
   const [nist, setNist] = useState<NISTOverview | null>(null);
   const [privacy, setPrivacy] = useState<DataPrivacyInfo | null>(null);
   const [audit, setAudit] = useState<ComplianceAuditSummary | null>(null);
+  const [readiness, setReadiness] = useState<ComplianceReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,16 +66,18 @@ export default function CompliancePage() {
     setLoading(true);
     setError(null);
     try {
-      const [c, n, p, a] = await Promise.all([
+      const [c, n, p, a, r] = await Promise.all([
         complianceApi.getCMMCStatus(),
         complianceApi.getNISTOverview(),
         complianceApi.getDataPrivacy(),
         complianceApi.getComplianceAuditSummary(),
+        complianceApi.getReadiness(),
       ]);
       setCmmc(c);
       setNist(n);
       setPrivacy(p);
       setAudit(a);
+      setReadiness(r);
     } catch {
       setError("Failed to load compliance data.");
     } finally {
@@ -103,6 +109,14 @@ export default function CompliancePage() {
       <Header title="Compliance Dashboard" description="CMMC, NIST 800-53, and data privacy posture" />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        <div className="flex justify-end">
+          <Link href="/compliance/timeline">
+            <Button variant="outline" size="sm">
+              View Compliance Roadmap &rarr;
+            </Button>
+          </Link>
+        </div>
+
         {error && (
           <div className="bg-destructive/10 text-destructive rounded-lg p-4">
             {error}
@@ -247,6 +261,31 @@ export default function CompliancePage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Certification and Listing Readiness</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {readiness?.programs.map((program) => (
+              <div key={program.id} className="rounded-lg border border-border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{program.name}</p>
+                  <Badge variant="outline">{program.status.replaceAll("_", " ")}</Badge>
+                </div>
+                <div className="h-2 rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${program.percent_complete}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Next: {program.next_milestone}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

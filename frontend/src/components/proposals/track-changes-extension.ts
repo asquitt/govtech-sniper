@@ -1,0 +1,158 @@
+import { Mark, mergeAttributes, type Editor } from "@tiptap/core";
+
+export interface AiSuggestionOptions {
+  HTMLAttributes: Record<string, string>;
+}
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    aiSuggestion: {
+      /** Apply the AI suggestion mark to the current selection */
+      setAiSuggestion: () => ReturnType;
+      /** Remove the AI suggestion mark from the current selection */
+      unsetAiSuggestion: () => ReturnType;
+      /** Accept suggestion: remove mark but keep content */
+      acceptSuggestion: () => ReturnType;
+      /** Reject suggestion: remove both mark and content */
+      rejectSuggestion: () => ReturnType;
+      /** Accept all AI suggestions in the document */
+      acceptAllSuggestions: () => ReturnType;
+      /** Reject all AI suggestions in the document */
+      rejectAllSuggestions: () => ReturnType;
+    };
+  }
+}
+
+export const AiSuggestion = Mark.create<AiSuggestionOptions>({
+  name: "aiSuggestion",
+
+  addOptions() {
+    return {
+      HTMLAttributes: {},
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-ai-suggestion="true"]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "span",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        "data-ai-suggestion": "true",
+        class: "ai-suggestion",
+      }),
+      0,
+    ];
+  },
+
+  addCommands() {
+    return {
+      setAiSuggestion:
+        () =>
+        ({ commands }) =>
+          commands.setMark(this.name),
+
+      unsetAiSuggestion:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+
+      acceptSuggestion:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+
+      rejectSuggestion:
+        () =>
+        ({ state, tr, dispatch }) => {
+          const { from, to } = state.selection;
+          const markType = state.schema.marks[this.name];
+          if (!markType) return false;
+
+          // Check if selection has the AI suggestion mark
+          let hasMark = false;
+          state.doc.nodesBetween(from, to, (node) => {
+            if (markType.isInSet(node.marks)) {
+              hasMark = true;
+            }
+          });
+
+          if (!hasMark) return false;
+
+          if (dispatch) {
+            tr.deleteRange(from, to);
+            dispatch(tr);
+          }
+          return true;
+        },
+
+      acceptAllSuggestions:
+        () =>
+        ({ state, tr, dispatch }) => {
+          const markType = state.schema.marks[this.name];
+          if (!markType) return false;
+
+          if (dispatch) {
+            tr.removeMark(0, state.doc.content.size, markType);
+            dispatch(tr);
+          }
+          return true;
+        },
+
+      rejectAllSuggestions:
+        () =>
+        ({ state, tr, dispatch }) => {
+          const markType = state.schema.marks[this.name];
+          if (!markType) return false;
+
+          if (dispatch) {
+            // Collect ranges in reverse order so deletions don't shift positions
+            const ranges: { from: number; to: number }[] = [];
+
+            state.doc.descendants((node, pos) => {
+              if (markType.isInSet(node.marks)) {
+                const end = pos + node.nodeSize;
+                // Merge with previous range if adjacent
+                const last = ranges[ranges.length - 1];
+                if (last && last.to === pos) {
+                  last.to = end;
+                } else {
+                  ranges.push({ from: pos, to: end });
+                }
+              }
+            });
+
+            // Delete in reverse to preserve positions
+            for (let i = ranges.length - 1; i >= 0; i--) {
+              tr.delete(ranges[i].from, ranges[i].to);
+            }
+            dispatch(tr);
+          }
+          return true;
+        },
+    };
+  },
+});
+
+/**
+ * Count the number of text nodes with the aiSuggestion mark in the document.
+ * Returns the count of distinct marked ranges.
+ */
+export function countAiSuggestions(editor: { state: { doc: { descendants: (cb: (node: { marks: readonly { type: { name: string } }[] }) => void) => void } } }): number {
+  let count = 0;
+  let inSuggestion = false;
+
+  editor.state.doc.descendants((node) => {
+    const hasMark = node.marks.some((m) => m.type.name === "aiSuggestion");
+    if (hasMark && !inSuggestion) {
+      count++;
+      inSuggestion = true;
+    } else if (!hasMark) {
+      inSuggestion = false;
+    }
+  });
+
+  return count;
+}
