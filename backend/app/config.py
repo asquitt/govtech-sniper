@@ -57,11 +57,18 @@ class Settings(BaseSettings):
     sam_max_attachments: int = Field(default=10, ge=1, le=50)
     sam_circuit_breaker_enabled: bool = Field(default=True)
     sam_circuit_breaker_cooldown_seconds: int = Field(default=900, ge=60, le=86400)
-    sam_circuit_breaker_max_seconds: int = Field(default=3600, ge=60, le=86400)
+    sam_circuit_breaker_max_seconds: int = Field(default=86400, ge=60, le=86400)
 
     gemini_api_key: str | None = Field(default=None)
     gemini_model_pro: str = Field(default="gemini-1.5-pro")
     gemini_model_flash: str = Field(default="gemini-1.5-flash")
+    gemini_fallback_models: str = Field(
+        default="gemini-1.5-flash",
+        description="Comma-separated Gemini fallback models attempted after the primary model.",
+    )
+    gemini_rate_limit_cooldown_seconds: int = Field(default=60, ge=1, le=86400)
+    gemini_rate_limit_daily_cooldown_seconds: int = Field(default=1800, ge=1, le=86400)
+    gemini_rate_limit_max_seconds: int = Field(default=86400, ge=1, le=86400)
     mock_ai: bool = Field(default=False)
     mock_sam_gov: bool = Field(default=False)
     mock_sam_gov_variant: str = Field(default="v1")
@@ -81,6 +88,13 @@ class Settings(BaseSettings):
     stripe_enterprise_yearly_price_id: str | None = Field(default=None)
     stripe_free_trial_days: int = Field(default=14)
     app_url: str = Field(default="http://localhost:3000")
+
+    # -------------------------------------------------------------------------
+    # Email (Resend)
+    # -------------------------------------------------------------------------
+    resend_api_key: str | None = Field(default=None)
+    email_from: str = Field(default="Orbitr <notifications@orbitr.io>")
+    email_enabled: bool = Field(default=False)
 
     # -------------------------------------------------------------------------
     # File Storage

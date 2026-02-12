@@ -119,6 +119,21 @@ class NotificationPreferences(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class PushSubscription(SQLModel, table=True):
+    """Browser push subscription registration."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    endpoint: str = Field(max_length=1000)
+    p256dh_key: str = Field(max_length=500)
+    auth_key: str = Field(max_length=500)
+    user_agent: str | None = Field(default=None, max_length=500)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_used_at: datetime | None = None
+
+
 # =============================================================================
 # Request/Response Schemas
 # =============================================================================
@@ -164,16 +179,27 @@ class PreferencesUpdate(BaseModel):
     quiet_hours_end: str | None = None
 
 
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str
+    p256dh_key: str
+    auth_key: str
+    user_agent: str | None = None
+
+
+class PushSubscriptionResponse(BaseModel):
+    id: int
+    endpoint: str
+    user_agent: str | None
+    created_at: datetime
+
+
 # =============================================================================
 # Email Service
 # =============================================================================
 
 
 class EmailService:
-    """
-    Email sending service.
-    In production, integrate with SendGrid, SES, or similar.
-    """
+    """Email sending service via Resend."""
 
     @staticmethod
     async def send_email(
@@ -182,34 +208,41 @@ class EmailService:
         body_html: str,
         body_text: str = None,
     ) -> bool:
-        """
-        Send an email.
+        """Send an email via Resend API."""
+        if not settings.email_enabled:
+            logger.info("Email delivery disabled, skipping", to=to_email, subject=subject)
+            return True
 
-        For now, this logs the email. Replace with actual email service.
-        """
+        api_key = settings.resend_api_key
+        if not api_key:
+            logger.warning("RESEND_API_KEY not configured, email skipped", to=to_email)
+            return False
+
         try:
-            # TODO: Replace with actual email service integration
-            # Example with SendGrid:
-            # import sendgrid
-            # from sendgrid.helpers.mail import Mail
-            # sg = sendgrid.SendGridAPIClient(api_key=settings.sendgrid_api_key)
-            # message = Mail(
-            #     from_email=settings.email_from,
-            #     to_emails=to_email,
-            #     subject=subject,
-            #     html_content=body_html,
-            # )
-            # sg.send(message)
+            import httpx
 
-            logger.info(
-                "Email sent (mock)",
-                to=to_email,
-                subject=subject,
-            )
+            async with httpx.AsyncClient(timeout=10) as client:
+                payload = {
+                    "from": settings.email_from,
+                    "to": [to_email],
+                    "subject": subject,
+                    "html": body_html,
+                }
+                if body_text:
+                    payload["text"] = body_text
+
+                resp = await client.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json=payload,
+                )
+                resp.raise_for_status()
+
+            logger.info("Email sent via Resend", to=to_email, subject=subject)
             return True
 
         except Exception as e:
-            logger.error(f"Email send failed: {e}")
+            logger.error("Email send failed", to=to_email, error=str(e))
             return False
 
     @staticmethod
@@ -566,6 +599,90 @@ async def update_preferences(
     logger.info("Notification preferences updated", user_id=current_user.id)
 
     return {"message": "Preferences updated successfully"}
+
+
+@router.get("/push-subscriptions", response_model=list[PushSubscriptionResponse])
+async def list_push_subscriptions(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[PushSubscriptionResponse]:
+    result = await session.execute(
+        select(PushSubscription)
+        .where(PushSubscription.user_id == current_user.id)
+        .order_by(PushSubscription.created_at.desc())
+    )
+    subscriptions = result.scalars().all()
+    return [
+        PushSubscriptionResponse(
+            id=sub.id,
+            endpoint=sub.endpoint,
+            user_agent=sub.user_agent,
+            created_at=sub.created_at,
+        )
+        for sub in subscriptions
+    ]
+
+
+@router.post("/push-subscriptions", response_model=PushSubscriptionResponse, status_code=201)
+async def create_push_subscription(
+    payload: PushSubscriptionCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PushSubscriptionResponse:
+    existing_result = await session.execute(
+        select(PushSubscription).where(
+            PushSubscription.user_id == current_user.id,
+            PushSubscription.endpoint == payload.endpoint,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+
+    if existing:
+        existing.p256dh_key = payload.p256dh_key
+        existing.auth_key = payload.auth_key
+        existing.user_agent = payload.user_agent
+        existing.last_used_at = datetime.utcnow()
+        subscription = existing
+    else:
+        subscription = PushSubscription(
+            user_id=current_user.id,
+            endpoint=payload.endpoint,
+            p256dh_key=payload.p256dh_key,
+            auth_key=payload.auth_key,
+            user_agent=payload.user_agent,
+        )
+        session.add(subscription)
+
+    await session.commit()
+    await session.refresh(subscription)
+
+    return PushSubscriptionResponse(
+        id=subscription.id,
+        endpoint=subscription.endpoint,
+        user_agent=subscription.user_agent,
+        created_at=subscription.created_at,
+    )
+
+
+@router.delete("/push-subscriptions/{subscription_id}")
+async def delete_push_subscription(
+    subscription_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    result = await session.execute(
+        select(PushSubscription).where(
+            PushSubscription.id == subscription_id,
+            PushSubscription.user_id == current_user.id,
+        )
+    )
+    subscription = result.scalar_one_or_none()
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Push subscription not found")
+
+    await session.delete(subscription)
+    await session.commit()
+    return {"message": "Push subscription deleted"}
 
 
 # =============================================================================
