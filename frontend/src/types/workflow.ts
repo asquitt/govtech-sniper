@@ -8,7 +8,12 @@ export interface WorkflowCondition {
 }
 
 export interface WorkflowAction {
-  action_type: "move_stage" | "assign_user" | "send_notification" | "add_tag";
+  action_type:
+    | "move_stage"
+    | "assign_user"
+    | "send_notification"
+    | "add_tag"
+    | "evaluate_teaming";
   params: Record<string, string | number>;
 }
 

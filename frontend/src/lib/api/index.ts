@@ -13,10 +13,11 @@ export type { TeamRole, Team, TeamMember, Comment } from "./teams";
 export {
   awardApi, contactApi, wordAddinApi, graphicsApi,
   templateApi, analyticsApi, auditApi, notificationApi,
-  versionApi, healthApi,
+  versionApi, healthApi, diagnosticsApi,
 } from "./misc";
 export type {
   ProposalTemplate, DashboardMetrics, Notification, NotificationPreferences,
+  PushSubscriptionRecord,
   ProposalVersion, SectionVersion, VersionDetail,
 } from "./misc";
 export { revenueApi } from "./revenue";
@@ -42,3 +43,6 @@ export { templateMarketplaceApi } from "./template-marketplace";
 export { activityApi } from "./activity";
 export { intelligenceApi } from "./intelligence";
 export { adminApi } from "./admin";
+export { enterpriseApi } from "./enterprise";
+export { agentsApi } from "./agents";
+export { supportApi } from "./support";

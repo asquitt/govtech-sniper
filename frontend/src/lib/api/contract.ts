@@ -3,6 +3,7 @@ import type {
   ContractAward,
   ContractDeliverable,
   ContractStatus,
+  ContractType,
   DeliverableStatus,
   ContractTask,
   CPARSReview,
@@ -26,6 +27,8 @@ export const contractApi = {
     contract_number: string;
     title: string;
     agency?: string | null;
+    parent_contract_id?: number | null;
+    contract_type?: ContractType | null;
     status?: ContractStatus;
     value?: number | null;
   }): Promise<ContractAward> => {
@@ -38,6 +41,8 @@ export const contractApi = {
     payload: Partial<{
       title: string;
       agency: string | null;
+      parent_contract_id: number | null;
+      contract_type: ContractType | null;
       status: ContractStatus;
       value: number | null;
     }>

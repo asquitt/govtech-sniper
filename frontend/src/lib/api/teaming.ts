@@ -1,10 +1,14 @@
 import api from "./client";
 import type {
   CapabilityGapResult,
+  TeamingDigestPreview,
+  TeamingDigestSchedule,
   TeamingNDA,
   TeamingPartnerPublicProfile,
+  TeamingPartnerTrendDrilldownResponse,
   TeamingPerformanceRating,
   TeamingRequest,
+  TeamingRequestTrend,
 } from "@/types";
 
 export const teamingBoardApi = {
@@ -40,6 +44,61 @@ export const teamingBoardApi = {
 
   updateRequest: async (requestId: number, status: "accepted" | "declined"): Promise<TeamingRequest> => {
     const { data } = await api.patch(`/teaming/requests/${requestId}`, { status });
+    return data;
+  },
+
+  getRequestFitTrends: async (days = 30): Promise<TeamingRequestTrend> => {
+    const { data } = await api.get("/teaming/requests/fit-trends", {
+      params: { days },
+    });
+    return data;
+  },
+
+  getPartnerTrends: async (
+    days = 30
+  ): Promise<TeamingPartnerTrendDrilldownResponse> => {
+    const { data } = await api.get("/teaming/requests/partner-trends", {
+      params: { days },
+    });
+    return data;
+  },
+
+  getDigestSchedule: async (): Promise<TeamingDigestSchedule> => {
+    const { data } = await api.get("/teaming/digest-schedule");
+    return data;
+  },
+
+  updateDigestSchedule: async (
+    payload: Partial<{
+      frequency: "daily" | "weekly";
+      day_of_week: number | null;
+      hour_utc: number;
+      minute_utc: number;
+      channel: "in_app" | "email";
+      include_declined_reasons: boolean;
+      is_enabled: boolean;
+    }>
+  ): Promise<TeamingDigestSchedule> => {
+    const { data } = await api.patch("/teaming/digest-schedule", payload);
+    return data;
+  },
+
+  sendDigest: async (days = 30): Promise<TeamingDigestPreview> => {
+    const { data } = await api.post("/teaming/digest-send", null, {
+      params: { days },
+    });
+    return data;
+  },
+
+  exportRequestAuditCsv: async (
+    direction: "sent" | "received" | "all" = "all",
+    days = 30
+  ): Promise<Blob> => {
+    const { data } = await api.get("/teaming/requests/audit-export", {
+      params: { direction, days },
+      responseType: "blob",
+      headers: { Accept: "text/csv" },
+    });
     return data;
   },
 

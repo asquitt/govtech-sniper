@@ -44,3 +44,16 @@ export interface ComplianceAuditSummary {
   by_type: Record<string, number>;
   compliance_score: number;
 }
+
+export interface ComplianceReadinessProgram {
+  id: string;
+  name: string;
+  status: string;
+  percent_complete: number;
+  next_milestone: string;
+}
+
+export interface ComplianceReadiness {
+  programs: ComplianceReadinessProgram[];
+  last_updated: string;
+}

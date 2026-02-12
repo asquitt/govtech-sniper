@@ -29,3 +29,6 @@ export * from "./activity";
 export * from "./intelligence";
 export * from "./admin";
 export * from "./notification";
+export * from "./enterprise";
+export * from "./agent";
+export * from "./support";

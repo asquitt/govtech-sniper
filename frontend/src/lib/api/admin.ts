@@ -1,5 +1,7 @@
 import api from "./client";
 import type {
+  AdminCapabilityHealth,
+  OrgMemberInvitation,
   OrgAuditEvent,
   OrgMember,
   OrgRole,
@@ -52,6 +54,29 @@ export const adminApi = {
     return data;
   },
 
+  inviteMember: async (payload: {
+    email: string;
+    role?: OrgRole;
+    expires_in_days?: number;
+  }): Promise<OrgMemberInvitation> => {
+    const { data } = await api.post("/admin/members/invite", payload);
+    return data;
+  },
+
+  listMemberInvitations: async (): Promise<OrgMemberInvitation[]> => {
+    const { data } = await api.get("/admin/member-invitations");
+    return data;
+  },
+
+  activateMemberInvitation: async (
+    invitationId: number
+  ): Promise<OrgMemberInvitation> => {
+    const { data } = await api.post(
+      `/admin/member-invitations/${invitationId}/activate`
+    );
+    return data;
+  },
+
   updateMemberRole: async (
     userId: number,
     role: OrgRole
@@ -94,6 +119,11 @@ export const adminApi = {
     offset?: number;
   }): Promise<{ events: OrgAuditEvent[]; total: number }> => {
     const { data } = await api.get("/admin/audit", { params });
+    return data;
+  },
+
+  getCapabilityHealth: async (): Promise<AdminCapabilityHealth> => {
+    const { data } = await api.get("/admin/capability-health");
     return data;
   },
 };

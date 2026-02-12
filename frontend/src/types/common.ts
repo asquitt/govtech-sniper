@@ -130,6 +130,18 @@ export interface ProposalGraphicRequest {
   updated_at: string;
 }
 
+export interface GraphicTemplateInfo {
+  type: string;
+  label: string;
+}
+
+export interface GeneratedGraphic {
+  mermaid_code: string;
+  template_type: string;
+  title: string;
+  error?: string | null;
+}
+
 // -----------------------------------------------------------------------------
 // API Response Types
 // -----------------------------------------------------------------------------
@@ -145,6 +157,30 @@ export interface TaskStatus {
   status: "pending" | "processing" | "completed" | "failed";
   result?: unknown;
   error?: string;
+}
+
+export interface WebSocketDiagnosticsSnapshot {
+  timestamp: string;
+  connections: {
+    active_user_channels: number;
+    active_connection_count: number;
+    total_connections: number;
+    total_disconnects: number;
+    reconnect_count: number;
+  };
+  task_watch: {
+    watched_tasks: number;
+    avg_status_latency_ms: number | null;
+    p95_status_latency_ms: number | null;
+  };
+  event_throughput: {
+    inbound_events_total: number;
+    outbound_events_total: number;
+    inbound_events_per_minute: number;
+    outbound_events_per_minute: number;
+    inbound_by_type: Record<string, number>;
+    outbound_by_type: Record<string, number>;
+  };
 }
 
 export interface SAMSearchParams {

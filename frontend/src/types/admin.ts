@@ -36,6 +36,20 @@ export interface OrgMember {
   sso_provider: SSOProviderType | null;
 }
 
+export type OrgInvitationStatus = "pending" | "activated" | "expired" | "revoked";
+
+export interface OrgMemberInvitation {
+  id: number;
+  email: string;
+  role: OrgRole;
+  status: OrgInvitationStatus;
+  expires_at: string;
+  activated_at: string | null;
+  accepted_user_id: number | null;
+  invited_by_user_id: number;
+  activation_ready: boolean;
+}
+
 export interface OrgUsageAnalytics {
   members: number;
   proposals: number;
@@ -55,4 +69,57 @@ export interface OrgAuditEvent {
   action: string;
   metadata: Record<string, unknown>;
   created_at: string;
+}
+
+export interface AdminCapabilityHealthRuntime {
+  debug: boolean;
+  mock_ai: boolean;
+  mock_sam_gov: boolean;
+  database_engine: string;
+  websocket: {
+    endpoint: string;
+    active_connections: number;
+    watched_tasks: number;
+    active_documents: number;
+    presence_users: number;
+    active_section_locks: number;
+    active_cursors: number;
+  };
+}
+
+export interface AdminCapabilityHealthWorkers {
+  broker_reachable: boolean;
+  worker_online: boolean;
+  task_mode: "queued" | "sync_fallback";
+}
+
+export interface AdminCapabilityHealthEnterprise {
+  scim_configured: boolean;
+  scim_default_team_name: string;
+  webhook_subscriptions: number;
+  stored_secrets: number;
+}
+
+export interface AdminCapabilityHealthIntegrationProvider {
+  provider: string;
+  total: number;
+  enabled: number;
+}
+
+export interface AdminCapabilityHealthDiscoverabilityItem {
+  capability: string;
+  frontend_path: string | null;
+  backend_prefix: string;
+  status: "integrated" | "ready" | "configured" | "needs_configuration";
+  note: string;
+}
+
+export interface AdminCapabilityHealth {
+  organization_id: number;
+  timestamp: string;
+  runtime: AdminCapabilityHealthRuntime;
+  workers: AdminCapabilityHealthWorkers;
+  enterprise: AdminCapabilityHealthEnterprise;
+  integrations_by_provider: AdminCapabilityHealthIntegrationProvider[];
+  discoverability: AdminCapabilityHealthDiscoverabilityItem[];
 }

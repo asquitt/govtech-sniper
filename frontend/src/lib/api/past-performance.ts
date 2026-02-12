@@ -12,7 +12,7 @@ export const pastPerformanceApi = {
     api.post<PastPerformanceDocument>(`/documents/${documentId}/past-performance-metadata`, data),
 
   list: () =>
-    api.get<PastPerformanceListResponse>("/documents/past-performances"),
+    api.get<PastPerformanceListResponse>("/documents/past-performances/list"),
 
   match: (rfpId: number) =>
     api.post<MatchResponse>(`/documents/past-performances/match/${rfpId}`),

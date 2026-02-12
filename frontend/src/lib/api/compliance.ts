@@ -4,6 +4,7 @@ import type {
   NISTOverview,
   DataPrivacyInfo,
   ComplianceAuditSummary,
+  ComplianceReadiness,
 } from "@/types/compliance";
 
 export const complianceApi = {
@@ -24,6 +25,11 @@ export const complianceApi = {
 
   getComplianceAuditSummary: async (): Promise<ComplianceAuditSummary> => {
     const { data } = await api.get("/compliance/audit-summary");
+    return data;
+  },
+
+  getReadiness: async (): Promise<ComplianceReadiness> => {
+    const { data } = await api.get("/compliance/readiness");
     return data;
   },
 };

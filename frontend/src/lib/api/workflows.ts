@@ -22,4 +22,14 @@ export const workflowApi = {
 
   listExecutions: (params?: { rule_id?: number; limit?: number; offset?: number }) =>
     api.get<{ items: WorkflowExecution[]; total: number }>("/workflows/executions", { params }).then((r) => r.data),
+
+  execute: (payload: {
+    trigger_type: "rfp_created" | "stage_changed" | "deadline_approaching" | "score_threshold";
+    entity_type: string;
+    entity_id: number;
+    context?: Record<string, unknown>;
+  }) =>
+    api
+      .post<{ executions: WorkflowExecution[]; total: number }>("/workflows/execute", payload)
+      .then((r) => r.data),
 };

@@ -71,6 +71,7 @@ export interface OnboardingProgress {
   completed_count: number;
   total_steps: number;
   is_complete: boolean;
+  is_dismissed?: boolean;
 }
 
 // =============================================================================

@@ -126,6 +126,8 @@ export type TeamingRequestStatus = "pending" | "accepted" | "declined";
 export interface TeamingRequest {
   id: number;
   from_user_id: number;
+  from_user_name?: string | null;
+  from_user_email?: string | null;
   to_partner_id: number;
   rfp_id?: number | null;
   message?: string | null;
@@ -133,6 +135,73 @@ export interface TeamingRequest {
   partner_name?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TeamingRequestTrendPoint {
+  date: string;
+  sent_count: number;
+  accepted_count: number;
+  declined_count: number;
+  fit_score: number;
+}
+
+export interface TeamingRequestTrend {
+  days: number;
+  total_sent: number;
+  accepted_count: number;
+  declined_count: number;
+  pending_count: number;
+  acceptance_rate: number;
+  points: TeamingRequestTrendPoint[];
+}
+
+export interface TeamingPartnerTrendDrilldown {
+  partner_id: number;
+  partner_name: string;
+  sent_count: number;
+  accepted_count: number;
+  declined_count: number;
+  pending_count: number;
+  acceptance_rate: number;
+  avg_response_hours: number | null;
+}
+
+export interface TeamingPartnerTrendDrilldownResponse {
+  days: number;
+  partners: TeamingPartnerTrendDrilldown[];
+}
+
+export interface TeamingDigestSchedule {
+  frequency: "daily" | "weekly";
+  day_of_week: number | null;
+  hour_utc: number;
+  minute_utc: number;
+  channel: "in_app" | "email";
+  include_declined_reasons: boolean;
+  is_enabled: boolean;
+  last_sent_at: string | null;
+}
+
+export interface TeamingDigestPreview {
+  generated_at: string;
+  period_days: number;
+  schedule: TeamingDigestSchedule;
+  summary: {
+    total_sent: number;
+    accepted_count: number;
+    declined_count: number;
+    pending_count: number;
+    acceptance_rate: number;
+  };
+  top_partners: Array<{
+    partner_id: number;
+    partner_name: string;
+    sent_count: number;
+    accepted_count: number;
+    declined_count?: number;
+    acceptance_rate: number;
+    avg_response_hours: number | null;
+  }>;
 }
 
 export interface TeamingPartnerLink {

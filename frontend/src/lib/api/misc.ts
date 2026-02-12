@@ -8,6 +8,8 @@ import type {
   WordAddinSessionStatus,
   WordAddinEvent,
   ProposalGraphicRequest,
+  GraphicTemplateInfo,
+  GeneratedGraphic,
   GraphicsRequestStatus,
   AuditEvent,
   AuditSummary,
@@ -17,6 +19,7 @@ import type {
   ConversionRatesData,
   ProposalTurnaroundData,
   NAICSPerformanceData,
+  WebSocketDiagnosticsSnapshot,
 } from "@/types";
 
 // =============================================================================
@@ -192,6 +195,20 @@ export const graphicsApi = {
   removeRequest: async (requestId: number): Promise<void> => {
     await api.delete(`/graphics/${requestId}`);
   },
+
+  listTemplates: async (): Promise<GraphicTemplateInfo[]> => {
+    const { data } = await api.get("/graphics/templates");
+    return data;
+  },
+
+  generateGraphic: async (payload: {
+    content: string;
+    template_type: string;
+    title?: string;
+  }): Promise<GeneratedGraphic> => {
+    const { data } = await api.post("/graphics/generate", payload);
+    return data;
+  },
 };
 
 // =============================================================================
@@ -201,18 +218,28 @@ export const graphicsApi = {
 export interface ProposalTemplate {
   id: number;
   name: string;
-  description: string;
   category: string;
-  content_template: string;
-  placeholders: string[];
+  subcategory: string | null;
+  description: string;
+  template_text: string;
+  placeholders: Record<string, string>;
+  keywords: string[];
   is_system: boolean;
+  is_public: boolean;
+  rating_sum: number;
+  rating_count: number;
+  forked_from_id: number | null;
+  user_id: number | null;
+  usage_count: number;
   created_at: string;
+  updated_at: string;
 }
 
 export const templateApi = {
   list: async (params?: {
     category?: string;
-    include_system?: boolean;
+    subcategory?: string;
+    search?: string;
   }): Promise<ProposalTemplate[]> => {
     const { data } = await api.get("/templates", { params });
     return data;
@@ -225,9 +252,12 @@ export const templateApi = {
 
   create: async (template: {
     name: string;
-    description?: string;
     category: string;
-    content_template: string;
+    subcategory?: string;
+    description: string;
+    template_text: string;
+    placeholders?: Record<string, string>;
+    keywords?: string[];
   }): Promise<ProposalTemplate> => {
     const { data } = await api.post("/templates", template);
     return data;
@@ -248,14 +278,12 @@ export const templateApi = {
   apply: async (
     templateId: number,
     variables: Record<string, string>
-  ): Promise<{ content: string }> => {
-    const { data } = await api.post(`/templates/${templateId}/apply`, {
-      variables,
-    });
+  ): Promise<{ filled_text: string; unfilled_placeholders: string[] }> => {
+    const { data } = await api.post(`/templates/${templateId}/use`, variables);
     return data;
   },
 
-  getCategories: async (): Promise<{ value: string; label: string }[]> => {
+  getCategories: async (): Promise<string[]> => {
     const { data } = await api.get("/templates/categories");
     return data;
   },
@@ -423,6 +451,13 @@ export interface NotificationPreferences {
   daily_digest: boolean;
 }
 
+export interface PushSubscriptionRecord {
+  id: number;
+  endpoint: string;
+  user_agent?: string | null;
+  created_at: string;
+}
+
 export const notificationApi = {
   list: async (params?: {
     unread_only?: boolean;
@@ -450,6 +485,25 @@ export const notificationApi = {
   ): Promise<NotificationPreferences> => {
     const { data } = await api.put("/notifications/preferences", prefs);
     return data;
+  },
+
+  listPushSubscriptions: async (): Promise<PushSubscriptionRecord[]> => {
+    const { data } = await api.get("/notifications/push-subscriptions");
+    return data;
+  },
+
+  createPushSubscription: async (payload: {
+    endpoint: string;
+    p256dh_key: string;
+    auth_key: string;
+    user_agent?: string;
+  }): Promise<PushSubscriptionRecord> => {
+    const { data } = await api.post("/notifications/push-subscriptions", payload);
+    return data;
+  },
+
+  deletePushSubscription: async (subscriptionId: number): Promise<void> => {
+    await api.delete(`/notifications/push-subscriptions/${subscriptionId}`);
   },
 
   getUpcomingDeadlines: async (days?: number): Promise<
@@ -586,6 +640,17 @@ export const healthApi = {
     checks: Record<string, boolean | string>;
   }> => {
     const { data } = await api.get("/health/ready");
+    return data;
+  },
+};
+
+// =============================================================================
+// Diagnostics Endpoints
+// =============================================================================
+
+export const diagnosticsApi = {
+  getWebsocketTelemetry: async (): Promise<WebSocketDiagnosticsSnapshot> => {
+    const { data } = await api.get("/ws/diagnostics");
     return data;
   },
 };
