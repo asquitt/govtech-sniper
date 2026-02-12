@@ -4,20 +4,27 @@ RFP Sniper - Admin Routes
 Organization admin dashboard: user management, org settings, usage analytics.
 """
 
+import secrets
+import socket
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import UserAuth, get_current_user
+from app.config import settings
 from app.database import get_session
 from app.models.audit import AuditEvent
+from app.models.integration import IntegrationConfig
 from app.models.organization import (
+    InvitationStatus,
     Organization,
+    OrganizationInvitation,
     OrganizationMember,
     OrgRole,
     SSOIdentity,
@@ -25,7 +32,9 @@ from app.models.organization import (
 )
 from app.models.proposal import Proposal
 from app.models.rfp import RFP
+from app.models.secret import SecretRecord
 from app.models.user import User
+from app.models.webhook import WebhookSubscription
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -68,6 +77,82 @@ async def _require_org_admin(
     return org, member
 
 
+def _celery_broker_available() -> bool:
+    """
+    Best-effort broker probe for capability diagnostics.
+    """
+    broker_url = settings.celery_broker_url
+    parsed = urlparse(broker_url)
+    if parsed.scheme not in {"redis", "rediss"}:
+        return True
+
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6379
+    try:
+        with socket.create_connection((host, port), timeout=0.2):
+            return True
+    except OSError:
+        return False
+
+
+def _celery_worker_available() -> bool:
+    """
+    Best-effort worker availability probe for local/dev diagnostics.
+    """
+    try:
+        from app.tasks.celery_app import celery_app
+
+        replies = celery_app.control.inspect(timeout=0.5).ping() or {}
+        return len(replies) > 0
+    except Exception:
+        return False
+
+
+def _database_engine_name(database_url: str) -> str:
+    normalized = database_url.lower()
+    if "sqlite" in normalized:
+        return "sqlite"
+    if "postgres" in normalized:
+        return "postgresql"
+    if "mysql" in normalized:
+        return "mysql"
+    return "unknown"
+
+
+def _websocket_runtime_snapshot() -> dict[str, int]:
+    """
+    Best-effort snapshot of websocket runtime state for diagnostics.
+    """
+    try:
+        from app.api.routes.websocket import manager
+
+        active_connections = sum(
+            len(connections) for connections in manager.active_connections.values()
+        )
+        watched_tasks = len(manager.task_watchers)
+        active_documents = len(manager.document_presence)
+        presence_users = sum(len(users) for users in manager.document_presence.values())
+        active_section_locks = len(manager.section_locks)
+        active_cursors = sum(len(cursors) for cursors in manager.document_cursors.values())
+        return {
+            "active_connections": active_connections,
+            "watched_tasks": watched_tasks,
+            "active_documents": active_documents,
+            "presence_users": presence_users,
+            "active_section_locks": active_section_locks,
+            "active_cursors": active_cursors,
+        }
+    except Exception:
+        return {
+            "active_connections": 0,
+            "watched_tasks": 0,
+            "active_documents": 0,
+            "presence_users": 0,
+            "active_section_locks": 0,
+            "active_cursors": 0,
+        }
+
+
 # =============================================================================
 # Schemas
 # =============================================================================
@@ -99,8 +184,41 @@ class MemberRoleUpdate(BaseModel):
 
 
 class InviteMember(BaseModel):
-    email: str
+    email: EmailStr
     role: OrgRole = OrgRole.MEMBER
+    expires_in_days: int = 7
+
+
+class OrganizationInvitationRead(BaseModel):
+    id: int
+    email: str
+    role: str
+    status: str
+    expires_at: str
+    activated_at: str | None = None
+    accepted_user_id: int | None = None
+    invited_by_user_id: int
+    activation_ready: bool
+
+
+def _serialize_org_invitation(
+    invitation: OrganizationInvitation,
+    *,
+    activation_ready: bool,
+) -> OrganizationInvitationRead:
+    return OrganizationInvitationRead(
+        id=invitation.id,  # type: ignore[arg-type]
+        email=invitation.email,
+        role=invitation.role.value if hasattr(invitation.role, "value") else str(invitation.role),
+        status=invitation.status.value
+        if hasattr(invitation.status, "value")
+        else str(invitation.status),
+        expires_at=invitation.expires_at.isoformat(),
+        activated_at=invitation.activated_at.isoformat() if invitation.activated_at else None,
+        accepted_user_id=invitation.accepted_user_id,
+        invited_by_user_id=invitation.invited_by_user_id,
+        activation_ready=activation_ready,
+    )
 
 
 # =============================================================================
@@ -213,9 +331,340 @@ async def update_organization(
     return {"status": "updated"}
 
 
+@router.get("/capability-health")
+async def get_capability_health(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Summarized capability integration and operational health for admins."""
+    org, _ = await _require_org_admin(current_user, session)
+
+    integrations = (
+        await session.execute(
+            select(IntegrationConfig).where(IntegrationConfig.user_id == current_user.id)
+        )
+    ).scalars()
+    integration_by_provider: dict[str, dict[str, int]] = {}
+    for integration in integrations:
+        provider = (
+            integration.provider.value
+            if hasattr(integration.provider, "value")
+            else str(integration.provider)
+        )
+        bucket = integration_by_provider.setdefault(provider, {"total": 0, "enabled": 0})
+        bucket["total"] += 1
+        if integration.is_enabled:
+            bucket["enabled"] += 1
+
+    secret_count = (
+        await session.execute(select(func.count()).where(SecretRecord.user_id == current_user.id))
+    ).scalar_one() or 0
+    webhook_count = (
+        await session.execute(
+            select(func.count()).where(WebhookSubscription.user_id == current_user.id)
+        )
+    ).scalar_one() or 0
+
+    broker_reachable = _celery_broker_available()
+    worker_online = _celery_worker_available()
+    task_mode = "queued" if broker_reachable and worker_online else "sync_fallback"
+    scim_configured = bool(settings.scim_bearer_token)
+    websocket_runtime = _websocket_runtime_snapshot()
+
+    discoverability = [
+        {
+            "capability": "Template Marketplace",
+            "frontend_path": "/templates",
+            "backend_prefix": "/api/v1/templates",
+            "status": "integrated",
+            "note": "Primary dashboard navigation route enabled.",
+        },
+        {
+            "capability": "Word Add-in",
+            "frontend_path": "/word-addin",
+            "backend_prefix": "/api/v1/word-addin",
+            "status": "integrated",
+            "note": "Primary dashboard navigation route enabled with taskpane redirect.",
+        },
+        {
+            "capability": "SCIM Provisioning",
+            "frontend_path": None,
+            "backend_prefix": "/api/v1/scim/v2",
+            "status": "configured" if scim_configured else "needs_configuration",
+            "note": (
+                "SCIM bearer token configured."
+                if scim_configured
+                else "Set SCIM_BEARER_TOKEN to enable SCIM provisioning."
+            ),
+        },
+        {
+            "capability": "Webhook Subscriptions",
+            "frontend_path": "/settings",
+            "backend_prefix": "/api/v1/webhooks",
+            "status": "configured" if webhook_count > 0 else "ready",
+            "note": (
+                f"{webhook_count} webhook subscriptions configured for current user."
+                if webhook_count > 0
+                else "No webhook subscriptions configured yet."
+            ),
+        },
+        {
+            "capability": "Secrets Vault",
+            "frontend_path": "/settings",
+            "backend_prefix": "/api/v1/secrets",
+            "status": "configured" if secret_count > 0 else "ready",
+            "note": (
+                f"{secret_count} secrets stored for current user."
+                if secret_count > 0
+                else "No secrets stored yet."
+            ),
+        },
+        {
+            "capability": "WebSocket Task Feed",
+            "frontend_path": "/diagnostics",
+            "backend_prefix": "/api/v1/ws",
+            "status": "integrated",
+            "note": (
+                f"{websocket_runtime['active_connections']} active socket connections, "
+                f"{websocket_runtime['watched_tasks']} watched tasks, "
+                f"{websocket_runtime['active_section_locks']} section locks."
+            ),
+        },
+    ]
+
+    return {
+        "organization_id": org.id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "runtime": {
+            "debug": settings.debug,
+            "mock_ai": settings.mock_ai,
+            "mock_sam_gov": settings.mock_sam_gov,
+            "database_engine": _database_engine_name(settings.database_url),
+            "websocket": {
+                "endpoint": "/api/v1/ws?token=<jwt>",
+                "active_connections": websocket_runtime["active_connections"],
+                "watched_tasks": websocket_runtime["watched_tasks"],
+                "active_documents": websocket_runtime["active_documents"],
+                "presence_users": websocket_runtime["presence_users"],
+                "active_section_locks": websocket_runtime["active_section_locks"],
+                "active_cursors": websocket_runtime["active_cursors"],
+            },
+        },
+        "workers": {
+            "broker_reachable": broker_reachable,
+            "worker_online": worker_online,
+            "task_mode": task_mode,
+        },
+        "enterprise": {
+            "scim_configured": scim_configured,
+            "scim_default_team_name": settings.scim_default_team_name,
+            "webhook_subscriptions": webhook_count,
+            "stored_secrets": secret_count,
+        },
+        "integrations_by_provider": [
+            {"provider": provider, **counts}
+            for provider, counts in sorted(integration_by_provider.items(), key=lambda p: p[0])
+        ],
+        "discoverability": discoverability,
+    }
+
+
 # =============================================================================
 # Member Management
 # =============================================================================
+
+
+@router.post("/members/invite", response_model=OrganizationInvitationRead, status_code=201)
+async def invite_member(
+    body: InviteMember,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create an organization invitation for a user email."""
+    org, caller_member = await _require_org_admin(current_user, session)
+
+    normalized_email = body.email.lower().strip()
+    if body.expires_in_days < 1 or body.expires_in_days > 30:
+        raise HTTPException(status_code=400, detail="expires_in_days must be between 1 and 30")
+
+    if body.role in (OrgRole.OWNER, OrgRole.ADMIN) and caller_member.role != OrgRole.OWNER:
+        raise HTTPException(status_code=403, detail="Only owners can invite admins/owners")
+
+    existing_user = (
+        await session.execute(select(User).where(User.email == normalized_email))
+    ).scalar_one_or_none()
+    if existing_user:
+        existing_member = (
+            await session.execute(
+                select(OrganizationMember).where(
+                    OrganizationMember.organization_id == org.id,
+                    OrganizationMember.user_id == existing_user.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_member and existing_member.is_active:
+            raise HTTPException(
+                status_code=409, detail="User is already an active organization member"
+            )
+
+    now = datetime.utcnow()
+    existing_invite = (
+        await session.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.organization_id == org.id,
+                OrganizationInvitation.email == normalized_email,
+                OrganizationInvitation.status == InvitationStatus.PENDING,
+                OrganizationInvitation.expires_at > now,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing_invite:
+        raise HTTPException(
+            status_code=409, detail="An active invitation already exists for this email"
+        )
+
+    invitation = OrganizationInvitation(
+        organization_id=org.id,  # type: ignore[arg-type]
+        invited_by_user_id=current_user.id,
+        email=normalized_email,
+        role=body.role,
+        token=secrets.token_urlsafe(32),
+        status=InvitationStatus.PENDING,
+        expires_at=now + timedelta(days=body.expires_in_days),
+    )
+    session.add(invitation)
+    await session.commit()
+    await session.refresh(invitation)
+
+    return _serialize_org_invitation(invitation, activation_ready=existing_user is not None)
+
+
+@router.get("/member-invitations", response_model=list[OrganizationInvitationRead])
+async def list_member_invitations(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """List organization invitations and activation readiness."""
+    org, _ = await _require_org_admin(current_user, session)
+
+    invitations = (
+        (
+            await session.execute(
+                select(OrganizationInvitation)
+                .where(OrganizationInvitation.organization_id == org.id)
+                .order_by(OrganizationInvitation.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    emails = {invite.email for invite in invitations}
+    users = (
+        (await session.execute(select(User).where(User.email.in_(emails)))).scalars().all()
+        if emails
+        else []
+    )
+    user_by_email = {user.email.lower(): user for user in users}
+
+    now = datetime.utcnow()
+    response: list[OrganizationInvitationRead] = []
+    for invite in invitations:
+        if invite.status == InvitationStatus.PENDING and invite.expires_at <= now:
+            invite.status = InvitationStatus.EXPIRED
+            session.add(invite)
+        response.append(
+            _serialize_org_invitation(
+                invite,
+                activation_ready=invite.email.lower() in user_by_email,
+            )
+        )
+
+    await session.commit()
+    return response
+
+
+@router.post(
+    "/member-invitations/{invitation_id}/activate",
+    response_model=OrganizationInvitationRead,
+)
+async def activate_member_invitation(
+    invitation_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Activate invitation by linking a registered user into organization membership."""
+    org, caller_member = await _require_org_admin(current_user, session)
+
+    invitation = (
+        await session.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.organization_id == org.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if invitation.status == InvitationStatus.ACTIVATED:
+        return _serialize_org_invitation(invitation, activation_ready=True)
+
+    if invitation.expires_at <= datetime.utcnow():
+        invitation.status = InvitationStatus.EXPIRED
+        session.add(invitation)
+        await session.commit()
+        raise HTTPException(status_code=400, detail="Invitation has expired")
+
+    if invitation.role in (OrgRole.OWNER, OrgRole.ADMIN) and caller_member.role != OrgRole.OWNER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only owners can activate admin/owner invitations",
+        )
+
+    user = (
+        await session.execute(select(User).where(User.email == invitation.email.lower()))
+    ).scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=409,
+            detail="Invited user must register before activation",
+        )
+
+    membership = (
+        await session.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == org.id,
+                OrganizationMember.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if membership:
+        membership.role = invitation.role
+        membership.is_active = True
+        session.add(membership)
+    else:
+        session.add(
+            OrganizationMember(
+                organization_id=org.id,  # type: ignore[arg-type]
+                user_id=user.id,  # type: ignore[arg-type]
+                role=invitation.role,
+                is_active=True,
+            )
+        )
+
+    user.organization_id = org.id
+    user.is_active = True
+    session.add(user)
+
+    invitation.status = InvitationStatus.ACTIVATED
+    invitation.accepted_user_id = user.id
+    invitation.activated_at = datetime.utcnow()
+    session.add(invitation)
+
+    await session.commit()
+    await session.refresh(invitation)
+    return _serialize_org_invitation(invitation, activation_ready=True)
 
 
 @router.get("/members")

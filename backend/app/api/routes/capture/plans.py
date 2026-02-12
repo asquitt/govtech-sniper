@@ -12,6 +12,7 @@ from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.capture import CapturePlan
 from app.models.rfp import RFP
+from app.models.workflow import TriggerType
 from app.schemas.capture import (
     CaptureMatchInsight,
     CapturePlanCreate,
@@ -23,6 +24,7 @@ from app.schemas.capture import (
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
+from app.services.workflow_engine import build_capture_context, execute_workflow_rules
 
 router = APIRouter()
 
@@ -73,6 +75,16 @@ async def create_capture_plan(
         payload={"rfp_id": plan.rfp_id, "plan_id": plan.id},
     )
     await session.commit()
+    await session.refresh(plan)
+
+    await execute_workflow_rules(
+        session,
+        user_id=current_user.id,
+        trigger_type=TriggerType.RFP_CREATED,
+        entity_type="capture_plan",
+        entity_id=plan.id,
+        context=build_capture_context(plan, rfp),
+    )
     await session.refresh(plan)
 
     return CapturePlanRead.model_validate(plan)
@@ -201,6 +213,7 @@ async def update_capture_plan(
         raise HTTPException(status_code=404, detail="RFP not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    previous_stage = plan.stage
     for field, value in update_data.items():
         setattr(plan, field, value)
     plan.updated_at = datetime.utcnow()
@@ -220,6 +233,25 @@ async def update_capture_plan(
         payload={"plan_id": plan.id, "updated_fields": list(update_data.keys())},
     )
     await session.commit()
+    await session.refresh(plan)
+
+    trigger = TriggerType.SCORE_THRESHOLD
+    if "stage" in update_data and plan.stage != previous_stage:
+        trigger = TriggerType.STAGE_CHANGED
+
+    rfp_result = await session.execute(
+        select(RFP).where(RFP.id == plan.rfp_id, RFP.user_id == current_user.id)
+    )
+    rfp = rfp_result.scalar_one_or_none()
+
+    await execute_workflow_rules(
+        session,
+        user_id=current_user.id,
+        trigger_type=trigger,
+        entity_type="capture_plan",
+        entity_id=plan.id,
+        context=build_capture_context(plan, rfp),
+    )
     await session.refresh(plan)
 
     return CapturePlanRead.model_validate(plan)

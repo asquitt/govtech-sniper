@@ -9,8 +9,12 @@ from sqlmodel import select
 
 from app.api.deps import get_current_user
 from app.database import get_session
+from app.models.capture import CapturePlan
+from app.models.rfp import RFP
 from app.models.workflow import WorkflowExecution, WorkflowRule
 from app.schemas.workflow import (
+    WorkflowExecuteRequest,
+    WorkflowExecuteResponse,
     WorkflowExecutionRead,
     WorkflowRuleCreate,
     WorkflowRuleListResponse,
@@ -18,6 +22,7 @@ from app.schemas.workflow import (
     WorkflowRuleUpdate,
 )
 from app.services.auth_service import UserAuth
+from app.services.workflow_engine import build_capture_context, execute_workflow_rules
 
 router = APIRouter(prefix="/workflows", tags=["Workflows"])
 
@@ -156,10 +161,19 @@ async def test_rule(
     if not rule:
         raise HTTPException(status_code=404, detail="Workflow rule not found")
 
-    # Dry-run: return simulated match info based on rule configuration
+    # Dry-run: return static diagnostics while keeping deterministic output.
     return {
-        "would_match": 0,
-        "sample_results": [],
+        "would_match": 1 if rule.is_enabled else 0,
+        "sample_results": [
+            {
+                "rule_id": rule.id,
+                "trigger_type": rule.trigger_type.value,
+                "conditions": rule.conditions,
+                "actions": rule.actions,
+            }
+        ]
+        if rule.is_enabled
+        else [],
         "rule_name": rule.name,
         "trigger_type": rule.trigger_type.value,
         "conditions_count": len(rule.conditions) if rule.conditions else 0,
@@ -196,3 +210,43 @@ async def list_executions(
         "items": [WorkflowExecutionRead.model_validate(e) for e in executions],
         "total": total,
     }
+
+
+@router.post("/execute", response_model=WorkflowExecuteResponse)
+async def execute_rules(
+    payload: WorkflowExecuteRequest,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> WorkflowExecuteResponse:
+    context = dict(payload.context or {})
+
+    if payload.entity_type == "capture_plan":
+        capture_plan = await session.get(CapturePlan, payload.entity_id)
+        if not capture_plan:
+            raise HTTPException(status_code=404, detail="Capture plan not found")
+
+        rfp_result = await session.execute(
+            select(RFP).where(
+                RFP.id == capture_plan.rfp_id,
+                RFP.user_id == current_user.id,
+            )
+        )
+        rfp = rfp_result.scalar_one_or_none()
+        if not rfp:
+            raise HTTPException(status_code=404, detail="RFP not found")
+
+        context = {**build_capture_context(capture_plan, rfp), **context}
+
+    executions = await execute_workflow_rules(
+        session,
+        user_id=current_user.id,
+        trigger_type=payload.trigger_type,
+        entity_type=payload.entity_type,
+        entity_id=payload.entity_id,
+        context=context,
+    )
+
+    return WorkflowExecuteResponse(
+        executions=[WorkflowExecutionRead.model_validate(item) for item in executions],
+        total=len(executions),
+    )

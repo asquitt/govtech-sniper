@@ -339,8 +339,11 @@ from app.schemas.past_performance import (
 from app.services.past_performance_matcher import generate_narrative, match_past_performances
 
 
+@router.post("/{document_id}/past-performance-metadata", response_model=PastPerformanceRead)
 @router.post(
-    "/documents/{document_id}/past-performance-metadata", response_model=PastPerformanceRead
+    "/documents/{document_id}/past-performance-metadata",
+    response_model=PastPerformanceRead,
+    include_in_schema=False,
 )
 async def add_past_performance_metadata(
     document_id: int,
@@ -369,7 +372,12 @@ async def add_past_performance_metadata(
     return PastPerformanceRead.model_validate(doc)
 
 
-@router.get("/documents/past-performances", response_model=PastPerformanceListResponse)
+@router.get("/past-performances/list", response_model=PastPerformanceListResponse)
+@router.get(
+    "/documents/past-performances",
+    response_model=PastPerformanceListResponse,
+    include_in_schema=False,
+)
 async def list_past_performances(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -386,7 +394,12 @@ async def list_past_performances(
     return PastPerformanceListResponse(documents=data, total=len(data))
 
 
-@router.post("/documents/past-performances/match/{rfp_id}", response_model=MatchResponse)
+@router.post("/past-performances/match/{rfp_id}", response_model=MatchResponse)
+@router.post(
+    "/documents/past-performances/match/{rfp_id}",
+    response_model=MatchResponse,
+    include_in_schema=False,
+)
 async def match_past_performance(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
@@ -410,8 +423,12 @@ async def match_past_performance(
 
 
 @router.post(
+    "/past-performances/{document_id}/narrative/{rfp_id}", response_model=NarrativeResponse
+)
+@router.post(
     "/documents/past-performances/{document_id}/narrative/{rfp_id}",
     response_model=NarrativeResponse,
+    include_in_schema=False,
 )
 async def generate_past_performance_narrative(
     document_id: int,

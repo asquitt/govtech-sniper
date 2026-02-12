@@ -4,6 +4,7 @@ RFP Sniper - Export Routes
 Export proposals to DOCX and PDF formats.
 """
 
+import html
 import io
 import re
 from datetime import datetime
@@ -31,9 +32,9 @@ router = APIRouter(prefix="/export", tags=["Export"])
 _TAG_RE = re.compile(r"<[^>]+>")
 
 
-def _strip_tags(html: str) -> str:
+def _strip_tags(content: str) -> str:
     """Remove all HTML tags, returning plain text."""
-    return _TAG_RE.sub("", html).strip()
+    return html.unescape(_TAG_RE.sub("", content)).strip()
 
 
 def _has_html(text: str) -> bool:
@@ -66,7 +67,7 @@ def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[na
 
     # Match top-level block elements in order
     block_pattern = re.compile(
-        r"<(h[1-4]|p|blockquote|li)[^>]*>(.*?)</\1>",
+        r"<(h[1-4]|p|blockquote|li|pre)[^>]*>(.*?)</\1>",
         re.DOTALL,
     )
     parts: list[tuple[str, str]] = []
@@ -91,6 +92,11 @@ def _render_html_to_docx(doc: "Document", html: str) -> None:  # type: ignore[na
             doc.add_paragraph(text, style="Quote")
         elif tag == "li":
             doc.add_paragraph(text, style="List Bullet")
+        elif tag == "pre":
+            code_text = text.replace("\\n", "\n")
+            code_para = doc.add_paragraph(code_text)
+            for run in code_para.runs:
+                run.font.name = "Courier New"
         else:
             doc.add_paragraph(text)
 
@@ -328,6 +334,18 @@ def create_pdf_proposal(
             }}
             .section-content {{
                 margin: 0.2in 0;
+            }}
+            pre {{
+                background: #f4f6fb;
+                border: 1px solid #d7deed;
+                border-radius: 6px;
+                padding: 10pt;
+                font-family: 'Courier New', monospace;
+                font-size: 10pt;
+                white-space: pre-wrap;
+            }}
+            code {{
+                font-family: 'Courier New', monospace;
             }}
             .footer {{
                 margin-top: 1in;

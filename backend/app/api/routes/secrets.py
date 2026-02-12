@@ -16,7 +16,7 @@ from app.database import get_session
 from app.models.secret import SecretRecord
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
-from app.services.encryption_service import encrypt_value, redact_value
+from app.services.encryption_service import decrypt_value, encrypt_value, redact_value
 
 router = APIRouter(prefix="/secrets", tags=["Secrets"])
 
@@ -77,6 +77,7 @@ async def create_or_update_secret(
             value_encrypted=encrypt_value(payload.value),
         )
         session.add(record)
+        await session.flush()
         action = "secret.created"
     else:
         record.value_encrypted = encrypt_value(payload.value)
@@ -119,7 +120,7 @@ async def get_secret(
     if not record:
         raise HTTPException(status_code=404, detail="Secret not found")
 
-    value = record.value_encrypted if reveal else redact_value("secret")
+    value = decrypt_value(record.value_encrypted) if reveal else redact_value("secret")
     return SecretResponse(
         id=record.id,
         key=record.key,
@@ -127,3 +128,32 @@ async def get_secret(
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
+
+
+@router.delete("/{secret_key}")
+async def delete_secret(
+    secret_key: str,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    result = await session.execute(
+        select(SecretRecord).where(
+            SecretRecord.user_id == current_user.id,
+            SecretRecord.key == secret_key,
+        )
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=404, detail="Secret not found")
+
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="secret",
+        entity_id=record.id,
+        action="secret.deleted",
+        metadata={"key": secret_key},
+    )
+    await session.delete(record)
+    await session.commit()
+    return {"message": "Secret deleted"}

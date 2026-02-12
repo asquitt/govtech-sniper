@@ -21,11 +21,31 @@ from app.models.rfp import RFP, RFPStatus
 from app.schemas.rfp import SAMIngestResponse, SAMSearchParams
 from app.services.auth_service import UserAuth
 from app.services.cache_service import cache_clear_prefix
-from app.services.ingest_service import SAMGovService
+from app.services.ingest_service import SAMGovAPIError, SAMGovService
 from app.tasks.ingest_tasks import ingest_sam_opportunities
 
 router = APIRouter(prefix="/ingest", tags=["Ingest"])
 logger = structlog.get_logger(__name__)
+
+
+def _raise_http_from_sam_error(exc: SAMGovAPIError) -> None:
+    if exc.is_rate_limited or exc.status_code == 429:
+        detail = "SAM.gov rate limit reached. Please retry shortly."
+        if exc.retry_after_seconds:
+            detail = (
+                f"SAM.gov rate limit reached. Retry in about {exc.retry_after_seconds} seconds."
+            )
+        headers = {"Retry-After": str(exc.retry_after_seconds)} if exc.retry_after_seconds else None
+        raise HTTPException(status_code=429, detail=detail, headers=headers)
+
+    if exc.status_code in {401, 403}:
+        raise HTTPException(
+            status_code=503,
+            detail="SAM.gov authentication failed. Verify SAM_GOV_API_KEY configuration.",
+        )
+
+    status_code = exc.status_code if exc.status_code and 400 <= exc.status_code <= 599 else 502
+    raise HTTPException(status_code=status_code, detail=exc.message or "SAM.gov ingest failed.")
 
 
 def _celery_broker_available() -> bool:
@@ -88,40 +108,11 @@ async def _run_synchronous_ingest(
         if existing_for_user.scalar_one_or_none():
             continue
 
-        solicitation_number = opp.solicitation_number
-        existing_global = await session.execute(
-            select(RFP).where(RFP.solicitation_number == solicitation_number)
-        )
-        global_rfp = existing_global.scalar_one_or_none()
-        if global_rfp and global_rfp.user_id != user_id:
-            # SQLite test/dev schema currently enforces globally unique solicitation
-            # numbers, so namespaced mock IDs keep local ingest deterministic per user.
-            if settings.mock_sam_gov:
-                base = f"{opp.solicitation_number}-U{user_id}"
-                solicitation_number = base[:100]
-                suffix = 1
-                while True:
-                    candidate_check = await session.execute(
-                        select(RFP).where(RFP.solicitation_number == solicitation_number)
-                    )
-                    if candidate_check.scalar_one_or_none() is None:
-                        break
-                    suffix_str = f"-{suffix}"
-                    solicitation_number = f"{base[: 100 - len(suffix_str)]}{suffix_str}"
-                    suffix += 1
-            else:
-                logger.debug(
-                    "Skipping globally duplicate solicitation",
-                    solicitation_number=solicitation_number,
-                    user_id=user_id,
-                )
-                continue
-
         session.add(
             RFP(
                 user_id=user_id,
                 title=opp.title,
-                solicitation_number=solicitation_number,
+                solicitation_number=opp.solicitation_number,
                 agency=opp.agency,
                 sub_agency=opp.sub_agency,
                 naics_code=opp.naics_code,
@@ -187,13 +178,16 @@ async def trigger_sam_ingest(
     )
     if should_fallback_sync:
         logger.warning("Celery broker/worker unavailable; running ingest synchronously")
-        return await _run_synchronous_ingest(
-            user_id=resolved_user_id,
-            session=session,
-            params=params,
-            apply_filter=apply_filter,
-            mock_variant=mock_variant,
-        )
+        try:
+            return await _run_synchronous_ingest(
+                user_id=resolved_user_id,
+                session=session,
+                params=params,
+                apply_filter=apply_filter,
+                mock_variant=mock_variant,
+            )
+        except SAMGovAPIError as exc:
+            _raise_http_from_sam_error(exc)
 
     try:
         task = ingest_sam_opportunities.delay(
@@ -211,13 +205,16 @@ async def trigger_sam_ingest(
                 "Celery dispatch failed; running ingest synchronously",
                 error=str(exc),
             )
-            return await _run_synchronous_ingest(
-                user_id=resolved_user_id,
-                session=session,
-                params=params,
-                apply_filter=apply_filter,
-                mock_variant=mock_variant,
-            )
+            try:
+                return await _run_synchronous_ingest(
+                    user_id=resolved_user_id,
+                    session=session,
+                    params=params,
+                    apply_filter=apply_filter,
+                    mock_variant=mock_variant,
+                )
+            except SAMGovAPIError as sam_exc:
+                _raise_http_from_sam_error(sam_exc)
         raise HTTPException(
             status_code=503,
             detail="Ingest worker unavailable. Please try again shortly.",
@@ -308,5 +305,5 @@ async def quick_search_sam(
             "count": len(opportunities),
             "opportunities": [opp.model_dump() for opp in opportunities],
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except SAMGovAPIError as exc:
+        _raise_http_from_sam_error(exc)

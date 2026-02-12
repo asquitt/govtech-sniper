@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import UserAuth, get_current_user
-from app.api.routes.templates import ProposalTemplate
+from app.api.routes.templates import ProposalTemplate, _ensure_system_templates
 from app.database import get_session
 
 logger = structlog.get_logger(__name__)
@@ -98,10 +98,17 @@ async def browse_marketplace(
     session: AsyncSession = Depends(get_session),
 ) -> MarketplaceBrowseResponse:
     """Browse public templates in the marketplace."""
+    await _ensure_system_templates(session)
+
     query = select(ProposalTemplate).where(ProposalTemplate.is_public == True)
 
     if category:
         query = query.where(ProposalTemplate.category == category)
+    if q:
+        q_like = f"%{q.strip()}%"
+        query = query.where(
+            (ProposalTemplate.name.ilike(q_like)) | (ProposalTemplate.description.ilike(q_like))
+        )
 
     # Get total before pagination
     count_query = select(sa_func.count()).select_from(query.subquery())
@@ -112,17 +119,6 @@ async def browse_marketplace(
     query = query.order_by(ProposalTemplate.usage_count.desc()).offset(offset).limit(limit)
     result = await session.execute(query)
     templates = list(result.scalars().all())
-
-    if q:
-        q_lower = q.lower()
-        templates = [
-            t
-            for t in templates
-            if q_lower in t.name.lower()
-            or q_lower in t.description.lower()
-            or any(q_lower in kw.lower() for kw in t.keywords)
-        ]
-        total = len(templates)
 
     return MarketplaceBrowseResponse(
         items=[_to_marketplace_response(t) for t in templates],
@@ -136,6 +132,8 @@ async def popular_templates(
     session: AsyncSession = Depends(get_session),
 ) -> list[MarketplaceTemplateResponse]:
     """Get top public templates by usage and rating."""
+    await _ensure_system_templates(session)
+
     result = await session.execute(
         select(ProposalTemplate)
         .where(ProposalTemplate.is_public == True)

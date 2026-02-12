@@ -2,6 +2,7 @@
 Draft Routes - Section Generation & Status
 """
 
+import re
 import socket
 from datetime import datetime
 from urllib.parse import urlparse
@@ -33,6 +34,55 @@ from app.tasks.generation_tasks import (
 
 router = APIRouter()
 _SYNC_GENERATION_RESULTS: dict[str, dict] = {}
+_GEMINI_RETRY_PATTERN = re.compile(
+    r"retry in(?:\s+about)?\s+([0-9]+(?:\.[0-9]+)?)(?:\s*seconds|\s*s)?",
+    re.IGNORECASE,
+)
+
+try:
+    from google.api_core.exceptions import ResourceExhausted as GeminiResourceExhausted
+except Exception:  # pragma: no cover - dependency may be absent in some environments
+    GeminiResourceExhausted = None
+
+
+def _raise_http_from_generation_error(exc: Exception) -> None:
+    if isinstance(exc, HTTPException):
+        raise exc
+
+    message = str(exc)
+    lowered = message.lower()
+    is_quota_error = (
+        (GeminiResourceExhausted is not None and isinstance(exc, GeminiResourceExhausted))
+        or "quota exceeded" in lowered
+        or "resourceexhausted" in lowered
+        or "rate limit reached" in lowered
+    )
+    if is_quota_error:
+        retry_after = None
+        retry_match = _GEMINI_RETRY_PATTERN.search(message)
+        if retry_match:
+            retry_after = max(1, int(float(retry_match.group(1))))
+        is_limit_zero = "limit: 0" in lowered
+        if is_limit_zero:
+            detail = (
+                "Gemini quota is unavailable for the configured model. "
+                "Enable billing or configure GEMINI_FALLBACK_MODELS."
+            )
+        else:
+            detail = "Gemini API rate limit reached. Please retry shortly."
+        if retry_after:
+            if is_limit_zero:
+                detail = (
+                    "Gemini quota is unavailable for the configured model. "
+                    "Enable billing or configure GEMINI_FALLBACK_MODELS. "
+                    f"Retry in about {retry_after} seconds."
+                )
+            else:
+                detail = f"Gemini API rate limit reached. Retry in about {retry_after} seconds."
+        headers = {"Retry-After": str(retry_after)} if retry_after else None
+        raise HTTPException(status_code=429, detail=detail, headers=headers)
+
+    raise exc
 
 
 def _celery_broker_available() -> bool:
@@ -85,13 +135,16 @@ async def _run_synchronous_generation(
     if additional_context:
         requirement_text += f"\n\nAdditional Context: {additional_context}"
 
-    generated = await gemini_service.generate_section(
-        requirement_text=requirement_text,
-        section=section.section_number,
-        category=None,
-        max_words=max_words,
-        tone=tone,
-    )
+    try:
+        generated = await gemini_service.generate_section(
+            requirement_text=requirement_text,
+            section=section.section_number,
+            category=None,
+            max_words=max_words,
+            tone=tone,
+        )
+    except Exception as exc:
+        _raise_http_from_generation_error(exc)
     section.set_generated_content(generated)
     section.updated_at = datetime.utcnow()
 
@@ -221,12 +274,15 @@ async def rewrite_section(
     from app.services.gemini_service import GeminiService
 
     gemini = GeminiService()
-    generated = await gemini.rewrite_section(
-        content=content,
-        requirement_text=section.requirement_text or section.title,
-        tone=request.tone,
-        instructions=request.instructions,
-    )
+    try:
+        generated = await gemini.rewrite_section(
+            content=content,
+            requirement_text=section.requirement_text or section.title,
+            tone=request.tone,
+            instructions=request.instructions,
+        )
+    except Exception as exc:
+        _raise_http_from_generation_error(exc)
 
     section.set_generated_content(generated)
     section.updated_at = datetime.utcnow()
@@ -277,12 +333,15 @@ async def expand_section(
     from app.services.gemini_service import GeminiService
 
     gemini = GeminiService()
-    generated = await gemini.expand_section(
-        content=content,
-        requirement_text=section.requirement_text or section.title,
-        target_words=request.target_words,
-        focus_area=request.focus_area,
-    )
+    try:
+        generated = await gemini.expand_section(
+            content=content,
+            requirement_text=section.requirement_text or section.title,
+            target_words=request.target_words,
+            focus_area=request.focus_area,
+        )
+    except Exception as exc:
+        _raise_http_from_generation_error(exc)
 
     section.set_generated_content(generated)
     section.updated_at = datetime.utcnow()
@@ -405,13 +464,16 @@ async def generate_section_draft(
     )
     if should_fallback_sync:
         sync_task_id = f"sync-{section.id}-{int(datetime.utcnow().timestamp())}"
-        sync_result = await _run_synchronous_generation(
-            section=section,
-            session=session,
-            max_words=request.max_words,
-            tone=request.tone,
-            additional_context=request.additional_context,
-        )
+        try:
+            sync_result = await _run_synchronous_generation(
+                section=section,
+                session=session,
+                max_words=request.max_words,
+                tone=request.tone,
+                additional_context=request.additional_context,
+            )
+        except Exception as exc:
+            _raise_http_from_generation_error(exc)
         _SYNC_GENERATION_RESULTS[sync_task_id] = sync_result
         return DraftResponse(
             task_id=sync_task_id,
@@ -433,13 +495,16 @@ async def generate_section_draft(
     except OperationalError as exc:
         if settings.debug or settings.mock_ai:
             sync_task_id = f"sync-{section.id}-{int(datetime.utcnow().timestamp())}"
-            sync_result = await _run_synchronous_generation(
-                section=section,
-                session=session,
-                max_words=request.max_words,
-                tone=request.tone,
-                additional_context=request.additional_context,
-            )
+            try:
+                sync_result = await _run_synchronous_generation(
+                    section=section,
+                    session=session,
+                    max_words=request.max_words,
+                    tone=request.tone,
+                    additional_context=request.additional_context,
+                )
+            except Exception as sync_exc:
+                _raise_http_from_generation_error(sync_exc)
             _SYNC_GENERATION_RESULTS[sync_task_id] = sync_result
             return DraftResponse(
                 task_id=sync_task_id,

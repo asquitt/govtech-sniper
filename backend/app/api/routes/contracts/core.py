@@ -24,6 +24,54 @@ from app.services.webhook_service import dispatch_webhook_event
 router = APIRouter()
 
 
+async def _resolve_parent_contract(
+    session: AsyncSession,
+    user_id: int,
+    parent_contract_id: int | None,
+) -> ContractAward | None:
+    if parent_contract_id is None:
+        return None
+
+    result = await session.execute(
+        select(ContractAward).where(
+            ContractAward.id == parent_contract_id,
+            ContractAward.user_id == user_id,
+        )
+    )
+    parent_contract = result.scalar_one_or_none()
+    if not parent_contract:
+        raise HTTPException(status_code=404, detail="Parent contract not found")
+
+    return parent_contract
+
+
+async def _validate_parent_chain(
+    session: AsyncSession,
+    user_id: int,
+    contract_id: int,
+    parent_contract_id: int | None,
+) -> None:
+    if parent_contract_id is None:
+        return
+    if parent_contract_id == contract_id:
+        raise HTTPException(status_code=400, detail="Contract cannot be its own parent")
+
+    current_parent_id = parent_contract_id
+    hop_count = 0
+    while current_parent_id is not None and hop_count < 100:
+        if current_parent_id == contract_id:
+            raise HTTPException(status_code=400, detail="Circular contract hierarchy")
+
+        result = await session.execute(
+            select(ContractAward.parent_contract_id).where(
+                ContractAward.id == current_parent_id,
+                ContractAward.user_id == user_id,
+            )
+        )
+        current_parent_id = result.scalar_one_or_none()
+        hop_count += 1
+
+
 @router.get("/", response_model=ContractListResponse)
 async def list_contracts(
     current_user: UserAuth = Depends(get_current_user),
@@ -46,15 +94,18 @@ async def create_contract(
     contract = ContractAward(
         user_id=current_user.id,
         rfp_id=payload.rfp_id,
+        parent_contract_id=payload.parent_contract_id,
         contract_number=payload.contract_number,
         title=payload.title,
         agency=payload.agency,
+        contract_type=payload.contract_type,
         start_date=payload.start_date,
         end_date=payload.end_date,
         value=payload.value,
         status=payload.status,
         summary=payload.summary,
     )
+    await _resolve_parent_contract(session, current_user.id, payload.parent_contract_id)
     session.add(contract)
     await session.flush()
 
@@ -115,6 +166,19 @@ async def update_contract(
         raise HTTPException(status_code=404, detail="Contract not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "parent_contract_id" in update_data:
+        await _resolve_parent_contract(
+            session,
+            current_user.id,
+            update_data["parent_contract_id"],
+        )
+        await _validate_parent_chain(
+            session,
+            current_user.id,
+            contract.id,
+            update_data["parent_contract_id"],
+        )
+
     for field, value in update_data.items():
         setattr(contract, field, value)
     contract.updated_at = datetime.utcnow()

@@ -8,6 +8,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -39,6 +40,8 @@ class ContactCreate(BaseModel):
     title: str | None = None
     department: str | None = None
     location: str | None = None
+    source: str | None = "manual"
+    extraction_confidence: float | None = None
 
 
 class ContactUpdate(BaseModel):
@@ -52,6 +55,8 @@ class ContactUpdate(BaseModel):
     title: str | None = None
     department: str | None = None
     location: str | None = None
+    source: str | None = None
+    extraction_confidence: float | None = None
 
 
 class ContactResponse(BaseModel):
@@ -106,6 +111,120 @@ class AgencyResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _normalize_text(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = " ".join(value.split()).strip()
+    return normalized or None
+
+
+def _merge_contact_links(contact: OpportunityContact, rfp_id: int | None) -> None:
+    if not rfp_id:
+        return
+    linked_ids = [link for link in (contact.linked_rfp_ids or []) if isinstance(link, int)]
+    if contact.rfp_id:
+        linked_ids.append(contact.rfp_id)
+    if rfp_id not in linked_ids:
+        linked_ids.append(rfp_id)
+    contact.linked_rfp_ids = sorted(set(linked_ids))
+    if not contact.rfp_id:
+        contact.rfp_id = rfp_id
+
+
+async def _find_existing_contact_for_linking(
+    session: AsyncSession,
+    user_id: int,
+    name: str,
+    email: str | None,
+    agency: str | None,
+) -> OpportunityContact | None:
+    normalized_email = _normalize_text(email)
+    normalized_name = _normalize_text(name)
+    normalized_agency = _normalize_text(agency)
+
+    query = select(OpportunityContact).where(OpportunityContact.user_id == user_id)
+    if normalized_email:
+        query = query.where(func.lower(OpportunityContact.email) == normalized_email.lower())
+    elif normalized_name:
+        query = query.where(func.lower(OpportunityContact.name) == normalized_name.lower())
+        if normalized_agency:
+            query = query.where(
+                func.lower(func.coalesce(OpportunityContact.agency, ""))
+                == normalized_agency.lower()
+            )
+    else:
+        return None
+
+    result = await session.execute(query.order_by(OpportunityContact.updated_at.desc()).limit(1))
+    return result.scalar_one_or_none()
+
+
+async def _upsert_agency_contact_directory(
+    session: AsyncSession,
+    user_id: int,
+    agency_name: str | None,
+    primary_contact_id: int | None,
+) -> None:
+    normalized_agency = _normalize_text(agency_name)
+    if not normalized_agency or not primary_contact_id:
+        return
+
+    result = await session.execute(
+        select(AgencyContactDatabase).where(
+            AgencyContactDatabase.user_id == user_id,
+            func.lower(AgencyContactDatabase.agency_name) == normalized_agency.lower(),
+        )
+    )
+    agency = result.scalar_one_or_none()
+    if agency:
+        if not agency.primary_contact_id:
+            agency.primary_contact_id = primary_contact_id
+        agency.updated_at = datetime.utcnow()
+        return
+
+    session.add(
+        AgencyContactDatabase(
+            user_id=user_id,
+            agency_name=normalized_agency,
+            primary_contact_id=primary_contact_id,
+        )
+    )
+
+
+def _merge_contact_metadata(
+    contact: OpportunityContact,
+    *,
+    role: str | None,
+    organization: str | None,
+    phone: str | None,
+    notes: str | None,
+    title: str | None,
+    department: str | None,
+    location: str | None,
+    source: str | None,
+    extraction_confidence: float | None,
+) -> None:
+    # Preserve existing values and backfill missing metadata from new source payloads.
+    if not contact.role and role:
+        contact.role = role
+    if not contact.organization and organization:
+        contact.organization = organization
+    if not contact.phone and phone:
+        contact.phone = phone
+    if not contact.notes and notes:
+        contact.notes = notes
+    if not contact.title and title:
+        contact.title = title
+    if not contact.department and department:
+        contact.department = department
+    if not contact.location and location:
+        contact.location = location
+    if source and (contact.source in (None, "manual")):
+        contact.source = source
+    if extraction_confidence is not None and contact.extraction_confidence is None:
+        contact.extraction_confidence = extraction_confidence
+
+
 # ---------------------------------------------------------------------------
 # Existing CRUD endpoints
 # ---------------------------------------------------------------------------
@@ -133,19 +252,76 @@ async def create_contact(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ContactResponse:
+    rfp: RFP | None = None
     if payload.rfp_id:
         rfp_result = await session.execute(
             select(RFP).where(RFP.id == payload.rfp_id, RFP.user_id == current_user.id)
         )
-        if not rfp_result.scalar_one_or_none():
+        rfp = rfp_result.scalar_one_or_none()
+        if not rfp:
             raise HTTPException(status_code=404, detail="RFP not found")
+
+    resolved_agency = _normalize_text(payload.agency) or (rfp.agency if rfp else None)
+    existing = await _find_existing_contact_for_linking(
+        session=session,
+        user_id=current_user.id,
+        name=payload.name,
+        email=payload.email,
+        agency=resolved_agency,
+    )
+    if existing:
+        _merge_contact_links(existing, payload.rfp_id)
+        if resolved_agency and not existing.agency:
+            existing.agency = resolved_agency
+        _merge_contact_metadata(
+            existing,
+            role=payload.role,
+            organization=payload.organization,
+            phone=payload.phone,
+            notes=payload.notes,
+            title=payload.title,
+            department=payload.department,
+            location=payload.location,
+            source=payload.source,
+            extraction_confidence=payload.extraction_confidence,
+        )
+        existing.updated_at = datetime.utcnow()
+        await _upsert_agency_contact_directory(
+            session=session,
+            user_id=current_user.id,
+            agency_name=existing.agency,
+            primary_contact_id=existing.id,
+        )
+        await log_audit_event(
+            session,
+            user_id=current_user.id,
+            entity_type="contact",
+            entity_id=existing.id,
+            action="contact.linked",
+            metadata={"rfp_id": payload.rfp_id, "name": existing.name},
+        )
+        await session.commit()
+        await session.refresh(existing)
+        return ContactResponse.model_validate(existing)
+
+    contact_data = payload.model_dump()
+    if resolved_agency:
+        contact_data["agency"] = resolved_agency
+    if payload.rfp_id:
+        contact_data["linked_rfp_ids"] = [payload.rfp_id]
 
     contact = OpportunityContact(
         user_id=current_user.id,
-        **payload.model_dump(),
+        **contact_data,
     )
     session.add(contact)
     await session.flush()
+    await _upsert_agency_contact_directory(
+        session=session,
+        user_id=current_user.id,
+        agency_name=contact.agency,
+        primary_contact_id=contact.id,
+    )
 
     await log_audit_event(
         session,
@@ -235,6 +411,7 @@ async def delete_contact(
 @router.post("/extract/{rfp_id}", response_model=list[ExtractedContactResponse])
 async def extract_contacts(
     rfp_id: int,
+    auto_link: bool = Query(True, description="Persist extracted contacts and link to opportunity"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[ExtractedContactResponse]:
@@ -246,11 +423,86 @@ async def extract_contacts(
     if not rfp:
         raise HTTPException(status_code=404, detail="RFP not found")
 
-    text = rfp.full_text or ""
-    if not text.strip():
+    # Local/manual RFP records may only populate description before full-text extraction runs.
+    text = (rfp.full_text or rfp.description or "").strip()
+    if not text:
         raise HTTPException(status_code=400, detail="RFP has no text content to extract from")
 
     extracted = await extract_contacts_from_text(text)
+    if auto_link and extracted:
+        for item in extracted:
+            existing = await _find_existing_contact_for_linking(
+                session=session,
+                user_id=current_user.id,
+                name=item["name"],
+                email=item.get("email"),
+                agency=item.get("agency") or rfp.agency,
+            )
+            if existing:
+                _merge_contact_links(existing, rfp.id)
+                if not existing.agency:
+                    existing.agency = item.get("agency") or rfp.agency
+                _merge_contact_metadata(
+                    existing,
+                    role=item.get("role"),
+                    organization=None,
+                    phone=item.get("phone"),
+                    notes=None,
+                    title=item.get("title"),
+                    department=None,
+                    location=None,
+                    source="ai_extracted",
+                    extraction_confidence=0.9,
+                )
+                existing.updated_at = datetime.utcnow()
+                await log_audit_event(
+                    session,
+                    user_id=current_user.id,
+                    entity_type="contact",
+                    entity_id=existing.id,
+                    action="contact.linked",
+                    metadata={"rfp_id": rfp.id, "name": existing.name, "source": "ai_extract"},
+                )
+                await _upsert_agency_contact_directory(
+                    session=session,
+                    user_id=current_user.id,
+                    agency_name=existing.agency,
+                    primary_contact_id=existing.id,
+                )
+                continue
+
+            linked_contact = OpportunityContact(
+                user_id=current_user.id,
+                rfp_id=rfp.id,
+                linked_rfp_ids=[rfp.id],
+                name=item["name"],
+                role=item.get("role"),
+                email=item.get("email"),
+                phone=item.get("phone"),
+                agency=item.get("agency") or rfp.agency,
+                title=item.get("title"),
+                source="ai_extracted",
+                extraction_confidence=0.9,
+            )
+            session.add(linked_contact)
+            await session.flush()
+            await log_audit_event(
+                session,
+                user_id=current_user.id,
+                entity_type="contact",
+                entity_id=linked_contact.id,
+                action="contact.created",
+                metadata={"rfp_id": rfp.id, "name": linked_contact.name, "source": "ai_extract"},
+            )
+            await _upsert_agency_contact_directory(
+                session=session,
+                user_id=current_user.id,
+                agency_name=linked_contact.agency,
+                primary_contact_id=linked_contact.id,
+            )
+
+        await session.commit()
+
     return [ExtractedContactResponse(**c) for c in extracted]
 
 

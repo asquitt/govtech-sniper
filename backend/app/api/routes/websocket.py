@@ -5,7 +5,9 @@ Real-time updates for long-running tasks and collaborative editing.
 """
 
 import asyncio
+from collections import deque
 from datetime import datetime
+from time import perf_counter
 
 import structlog
 from celery.result import AsyncResult
@@ -45,12 +47,31 @@ class ConnectionManager:
         self.task_watchers: dict[str, set[int]] = {}
         # Document presence: proposal_id -> set of {user_id, user_name, ...}
         self.document_presence: dict[int, dict[int, dict]] = {}
+        # Cursor telemetry: proposal_id -> user_id -> cursor payload
+        self.document_cursors: dict[int, dict[int, dict]] = {}
         # Section locks: section_id -> {user_id, user_name, locked_at}
         self.section_locks: dict[int, dict] = {}
+        # Diagnostics telemetry
+        self.seen_user_ids: set[int] = set()
+        self.total_connections = 0
+        self.total_disconnects = 0
+        self.reconnect_count = 0
+        self.inbound_event_total = 0
+        self.outbound_event_total = 0
+        self.inbound_event_counts: dict[str, int] = {}
+        self.outbound_event_counts: dict[str, int] = {}
+        self.inbound_event_window: deque[float] = deque()
+        self.outbound_event_window: deque[float] = deque()
+        self.task_watch_latency_ms: deque[float] = deque(maxlen=200)
 
     async def connect(self, websocket: WebSocket, user_id: int):
         """Accept and register a new connection."""
         await websocket.accept()
+        self.total_connections += 1
+        if user_id in self.seen_user_ids:
+            self.reconnect_count += 1
+        else:
+            self.seen_user_ids.add(user_id)
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()
         self.active_connections[user_id].add(websocket)
@@ -62,11 +83,13 @@ class ConnectionManager:
             self.active_connections[user_id].discard(websocket)
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
+        self.total_disconnects += 1
         logger.info("WebSocket disconnected", user_id=user_id)
 
     async def send_to_user(self, user_id: int, message: dict):
         """Send a message to all connections for a user."""
         if user_id in self.active_connections:
+            self.record_outbound_event(str(message.get("type", "unknown")))
             dead_connections = set()
             for connection in self.active_connections[user_id]:
                 try:
@@ -108,6 +131,66 @@ class ConnectionManager:
             for user_id in self.task_watchers[task_id]:
                 await self.send_to_user(user_id, message)
 
+    def _prune_event_window(self, window: deque[float], now_ts: float) -> None:
+        cutoff = now_ts - 60.0
+        while window and window[0] < cutoff:
+            window.popleft()
+
+    def record_inbound_event(self, event_type: str) -> None:
+        now_ts = datetime.utcnow().timestamp()
+        self.inbound_event_total += 1
+        self.inbound_event_counts[event_type] = self.inbound_event_counts.get(event_type, 0) + 1
+        self.inbound_event_window.append(now_ts)
+        self._prune_event_window(self.inbound_event_window, now_ts)
+
+    def record_outbound_event(self, event_type: str) -> None:
+        now_ts = datetime.utcnow().timestamp()
+        self.outbound_event_total += 1
+        self.outbound_event_counts[event_type] = self.outbound_event_counts.get(event_type, 0) + 1
+        self.outbound_event_window.append(now_ts)
+        self._prune_event_window(self.outbound_event_window, now_ts)
+
+    def record_task_watch_latency(self, latency_ms: float) -> None:
+        self.task_watch_latency_ms.append(round(max(latency_ms, 0.0), 2))
+
+    def telemetry_snapshot(self) -> dict:
+        now_ts = datetime.utcnow().timestamp()
+        self._prune_event_window(self.inbound_event_window, now_ts)
+        self._prune_event_window(self.outbound_event_window, now_ts)
+
+        latencies = list(self.task_watch_latency_ms)
+        avg_latency = round(sum(latencies) / len(latencies), 2) if latencies else None
+        p95_latency = None
+        if latencies:
+            sorted_latencies = sorted(latencies)
+            idx = max(int(round(0.95 * len(sorted_latencies))) - 1, 0)
+            p95_latency = sorted_latencies[idx]
+
+        return {
+            "connections": {
+                "active_user_channels": len(self.active_connections),
+                "active_connection_count": sum(
+                    len(channels) for channels in self.active_connections.values()
+                ),
+                "total_connections": self.total_connections,
+                "total_disconnects": self.total_disconnects,
+                "reconnect_count": self.reconnect_count,
+            },
+            "task_watch": {
+                "watched_tasks": len(self.task_watchers),
+                "avg_status_latency_ms": avg_latency,
+                "p95_status_latency_ms": p95_latency,
+            },
+            "event_throughput": {
+                "inbound_events_total": self.inbound_event_total,
+                "outbound_events_total": self.outbound_event_total,
+                "inbound_events_per_minute": len(self.inbound_event_window),
+                "outbound_events_per_minute": len(self.outbound_event_window),
+                "inbound_by_type": dict(sorted(self.inbound_event_counts.items())),
+                "outbound_by_type": dict(sorted(self.outbound_event_counts.items())),
+            },
+        }
+
     # -------------------------------------------------------------------------
     # Document Presence
     # -------------------------------------------------------------------------
@@ -129,10 +212,14 @@ class ConnectionManager:
             self.document_presence[proposal_id].pop(user_id, None)
             if not self.document_presence[proposal_id]:
                 del self.document_presence[proposal_id]
+        if proposal_id in self.document_cursors:
+            self.document_cursors[proposal_id].pop(user_id, None)
+            if not self.document_cursors[proposal_id]:
+                del self.document_cursors[proposal_id]
         # Release any locks held by this user in this proposal
         for section_id in list(self.section_locks.keys()):
             lock = self.section_locks[section_id]
-            if lock["user_id"] == user_id:
+            if lock["user_id"] == user_id and lock.get("proposal_id") in (None, proposal_id):
                 del self.section_locks[section_id]
         await self._broadcast_presence(proposal_id)
 
@@ -146,11 +233,13 @@ class ConnectionManager:
         """Broadcast presence update to all users in a document."""
         users = self.get_presence(proposal_id)
         locks = self.get_locks_for_proposal(proposal_id)
+        cursors = self.get_cursors(proposal_id)
         message = {
             "type": "presence_update",
             "proposal_id": proposal_id,
             "users": users,
             "locks": locks,
+            "cursors": cursors,
             "timestamp": datetime.utcnow().isoformat(),
         }
         # Send to all present users
@@ -161,7 +250,13 @@ class ConnectionManager:
     # Section Locking
     # -------------------------------------------------------------------------
 
-    def lock_section(self, section_id: int, user_id: int, user_name: str) -> dict | None:
+    def lock_section(
+        self,
+        section_id: int,
+        user_id: int,
+        user_name: str,
+        proposal_id: int | None = None,
+    ) -> dict | None:
         """
         Attempt to lock a section. Returns the lock if successful, None if already locked.
         """
@@ -172,6 +267,7 @@ class ConnectionManager:
             "section_id": section_id,
             "user_id": user_id,
             "user_name": user_name,
+            "proposal_id": proposal_id,
             "locked_at": datetime.utcnow().isoformat(),
         }
         self.section_locks[section_id] = lock
@@ -192,8 +288,39 @@ class ConnectionManager:
         return self.section_locks.get(section_id)
 
     def get_locks_for_proposal(self, proposal_id: int) -> list:
-        """Get all section locks (returned as flat list)."""
-        return list(self.section_locks.values())
+        """Get section locks for a proposal."""
+        return [
+            lock
+            for lock in self.section_locks.values()
+            if lock.get("proposal_id") in (None, proposal_id)
+        ]
+
+    def update_cursor(
+        self,
+        proposal_id: int,
+        user_id: int,
+        user_name: str,
+        section_id: int | None,
+        position: int | None,
+    ) -> dict:
+        """Store last known cursor position for a user in a proposal."""
+        if proposal_id not in self.document_cursors:
+            self.document_cursors[proposal_id] = {}
+        cursor = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "section_id": section_id,
+            "position": position,
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        self.document_cursors[proposal_id][user_id] = cursor
+        return cursor
+
+    def get_cursors(self, proposal_id: int) -> list:
+        """Get cursor telemetry for a proposal."""
+        if proposal_id not in self.document_cursors:
+            return []
+        return list(self.document_cursors[proposal_id].values())
 
 
 # Global connection manager
@@ -242,6 +369,7 @@ async def websocket_endpoint(
 
     try:
         # Send initial connection confirmation
+        manager.record_outbound_event("connected")
         await websocket.send_json(
             {
                 "type": "connected",
@@ -259,13 +387,16 @@ async def websocket_endpoint(
                 )
 
                 msg_type = data.get("type")
+                manager.record_inbound_event(str(msg_type or "unknown"))
 
                 if msg_type == "ping":
+                    manager.record_outbound_event("pong")
                     await websocket.send_json({"type": "pong"})
 
                 elif msg_type == "watch_task":
                     task_id = data.get("task_id")
                     if task_id:
+                        watch_started = perf_counter()
                         manager.watch_task(task_id, user_id)
                         # Send current task status
                         result = AsyncResult(task_id, app=celery_app)
@@ -276,6 +407,8 @@ async def websocket_endpoint(
                                 "status": normalize_status(result),
                             }
                         )
+                        manager.record_outbound_event("task_status")
+                        manager.record_task_watch_latency((perf_counter() - watch_started) * 1000)
 
                 elif msg_type == "unwatch_task":
                     task_id = data.get("task_id")
@@ -298,13 +431,15 @@ async def websocket_endpoint(
                     user_name = data.get("user_name", f"User {user_id}")
                     proposal_id = data.get("proposal_id")
                     if section_id:
-                        lock = manager.lock_section(section_id, user_id, user_name)
+                        lock = manager.lock_section(section_id, user_id, user_name, proposal_id)
                         if lock:
+                            manager.record_outbound_event("lock_acquired")
                             await websocket.send_json({"type": "lock_acquired", **lock})
                             if proposal_id:
                                 await manager._broadcast_presence(proposal_id)
                         else:
                             existing = manager.get_lock(section_id)
+                            manager.record_outbound_event("lock_denied")
                             await websocket.send_json(
                                 {
                                     "type": "lock_denied",
@@ -318,6 +453,7 @@ async def websocket_endpoint(
                     proposal_id = data.get("proposal_id")
                     if section_id:
                         manager.unlock_section(section_id, user_id)
+                        manager.record_outbound_event("lock_released")
                         await websocket.send_json(
                             {
                                 "type": "lock_released",
@@ -331,20 +467,28 @@ async def websocket_endpoint(
                     # Broadcast cursor position to other users in the document
                     proposal_id = data.get("proposal_id")
                     if proposal_id and proposal_id in manager.document_presence:
+                        user_name = data.get("user_name", f"User {user_id}")
+                        cursor = manager.update_cursor(
+                            proposal_id=proposal_id,
+                            user_id=user_id,
+                            user_name=user_name,
+                            section_id=data.get("section_id"),
+                            position=data.get("position"),
+                        )
                         cursor_msg = {
                             "type": "cursor_update",
-                            "user_id": user_id,
-                            "section_id": data.get("section_id"),
-                            "position": data.get("position"),
+                            **cursor,
                             "timestamp": datetime.utcnow().isoformat(),
                         }
                         for uid in manager.document_presence[proposal_id]:
                             if uid != user_id:
                                 await manager.send_to_user(uid, cursor_msg)
+                        await manager._broadcast_presence(proposal_id)
 
             except TimeoutError:
                 # Send ping to keep connection alive
                 try:
+                    manager.record_outbound_event("ping")
                     await websocket.send_json({"type": "ping"})
                 except Exception:
                     break
@@ -366,6 +510,16 @@ async def websocket_endpoint(
 # =============================================================================
 # Task Status Endpoint (Fallback HTTP)
 # =============================================================================
+
+
+@router.get("/ws/diagnostics")
+async def get_websocket_diagnostics() -> dict:
+    """
+    Runtime diagnostics telemetry for websocket task feed health.
+    """
+    snapshot = manager.telemetry_snapshot()
+    snapshot["timestamp"] = datetime.utcnow().isoformat()
+    return snapshot
 
 
 @router.get("/ws/task/{task_id}/status")

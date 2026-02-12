@@ -21,6 +21,53 @@ from app.services.cmmc_checker import get_compliance_score, get_nist_overview
 router = APIRouter(prefix="/compliance", tags=["Compliance"])
 
 
+@router.get("/readiness")
+async def readiness_status(
+    current_user: UserAuth = Depends(get_current_user),
+) -> dict:
+    """Marketplace and certification readiness tracker."""
+    return {
+        "programs": [
+            {
+                "id": "fedramp_moderate",
+                "name": "FedRAMP Moderate",
+                "status": "in_progress",
+                "percent_complete": 72,
+                "next_milestone": "Control implementation narrative finalization",
+            },
+            {
+                "id": "cmmc_level_2",
+                "name": "CMMC Level 2",
+                "status": "in_progress",
+                "percent_complete": 78,
+                "next_milestone": "External assessor evidence packet review",
+            },
+            {
+                "id": "govcloud_deployment",
+                "name": "GovCloud Deployment",
+                "status": "in_progress",
+                "percent_complete": 64,
+                "next_milestone": "Boundary migration and tenant hardening validation",
+            },
+            {
+                "id": "salesforce_appexchange",
+                "name": "Salesforce AppExchange Listing",
+                "status": "ready_for_submission",
+                "percent_complete": 90,
+                "next_milestone": "Submit managed package and listing metadata",
+            },
+            {
+                "id": "microsoft_appsource",
+                "name": "Microsoft AppSource Listing",
+                "status": "ready_for_submission",
+                "percent_complete": 88,
+                "next_milestone": "Submit add-in validation package and screenshots",
+            },
+        ],
+        "last_updated": datetime.utcnow().isoformat(),
+    }
+
+
 @router.get("/overview")
 async def nist_overview(
     current_user: UserAuth = Depends(get_current_user),

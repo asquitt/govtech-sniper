@@ -9,6 +9,7 @@ from datetime import datetime
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import JSON, Column, Field, SQLModel, Text, select
 
@@ -107,8 +108,14 @@ class TemplateResponse(BaseModel):
     placeholders: dict
     keywords: list[str]
     is_system: bool
+    is_public: bool
+    rating_sum: int
+    rating_count: int
+    forked_from_id: int | None
+    user_id: int | None
     usage_count: int
     created_at: datetime
+    updated_at: datetime
 
 
 # =============================================================================
@@ -413,7 +420,252 @@ All employees complete annual security awareness training covering:
         },
         "keywords": ["security", "clearance", "NIST", "CMMC", "compliance", "classified"],
     },
+    {
+        "name": "Proposal Structure - IT Services",
+        "category": "Proposal Structure",
+        "subcategory": "IT Services",
+        "description": "End-to-end proposal structure tuned for IT modernization and software delivery contracts.",
+        "template_text": """# Volume I - Technical Proposal
+
+## 1. Executive Summary
+- Mission alignment with {agency_name}
+- Business outcomes and value statement
+
+## 2. Technical Understanding
+- Current-state assessment
+- Target architecture for {service_scope}
+- Risk and dependency map
+
+## 3. Technical Approach
+- Agile delivery model and sprint cadence
+- DevSecOps pipeline and release governance
+- Data migration and interoperability plan
+
+## 4. Cybersecurity & Compliance
+- Zero trust controls and incident response
+- CMMC/NIST mappings
+
+## 5. Staffing and Key Personnel
+- Program leadership
+- Surge and continuity plan
+
+## 6. Transition and Management
+- Transition-in timeline (30/60/90 days)
+- Quality management and KPI reporting
+
+## 7. Past Performance
+- Relevant contracts for {service_scope}
+
+## 8. Pricing Narrative
+- Basis of estimate and labor mix rationale""",
+        "placeholders": {
+            "agency_name": "Client agency",
+            "service_scope": "Service scope",
+        },
+        "keywords": ["proposal structure", "it services", "devsecops", "agile", "modernization"],
+        "is_public": True,
+    },
+    {
+        "name": "Proposal Structure - Construction",
+        "category": "Proposal Structure",
+        "subcategory": "Construction",
+        "description": "Structured proposal outline for design-build and federal construction programs.",
+        "template_text": """# Volume I - Technical Proposal
+
+## 1. Executive Summary
+- Delivery approach for {project_type}
+- Safety-first commitment
+
+## 2. Project Understanding
+- Site constraints and phasing
+- Stakeholder and permitting dependencies
+
+## 3. Construction Execution Plan
+- Work breakdown and sequencing
+- Trade partner management
+- QA/QC checkpoints
+
+## 4. Safety & Environmental Plan
+- EM 385-1-1 safety controls
+- Environmental compliance and reporting
+
+## 5. Schedule Management
+- Baseline schedule and critical path controls
+- Weather and contingency strategy
+
+## 6. Staffing and Subcontracting
+- Superintendent and QC manager roles
+- Small-business subcontracting plan
+
+## 7. Past Performance
+- Similar federal facility delivery records
+
+## 8. Cost Narrative
+- Cost realism assumptions and escalation factors""",
+        "placeholders": {
+            "project_type": "Project type",
+        },
+        "keywords": ["proposal structure", "construction", "design-build", "safety", "schedule"],
+        "is_public": True,
+    },
+    {
+        "name": "Proposal Structure - Professional Services",
+        "category": "Proposal Structure",
+        "subcategory": "Professional Services",
+        "description": "Reusable proposal structure for advisory, PMO, and program support engagements.",
+        "template_text": """# Volume I - Technical Proposal
+
+## 1. Executive Summary
+- Client challenge statement
+- Outcomes and confidence plan
+
+## 2. Approach to Performance Work Statement
+- Task-by-task execution model
+- Governance and decision cadence
+
+## 3. Management Plan
+- Program controls and escalation paths
+- Staffing continuity and backfill strategy
+
+## 4. Quality Assurance
+- Deliverable quality gates
+- Corrective-action workflow
+
+## 5. Knowledge Transfer
+- Onboarding playbook
+- Transition-out and documentation controls
+
+## 6. Key Personnel
+- Leadership bios and role alignment
+
+## 7. Past Performance
+- Comparable advisory/program wins
+
+## 8. Pricing Narrative
+- Labor category rationale and assumptions""",
+        "placeholders": {},
+        "keywords": [
+            "proposal structure",
+            "professional services",
+            "pmo",
+            "advisory",
+            "management",
+        ],
+        "is_public": True,
+    },
+    {
+        "name": "Compliance Matrix - GSA MAS Task Order",
+        "category": "Compliance Matrix",
+        "subcategory": "GSA MAS",
+        "description": "Pre-built compliance matrix format for MAS task orders with traceability fields.",
+        "template_text": """| Solicitation Requirement | Reference | Response Owner | Status | Evidence Source |
+| --- | --- | --- | --- | --- |
+| Scope alignment to SIN and labor categories | Section L/M | Capture Lead | Not Started | Labor mapping workbook |
+| Corporate experience relevance | PWS 3.0 | Proposal Manager | Not Started | Past performance library |
+| Security and data handling controls | CUI clause package | Security Lead | Not Started | SSP and policies |
+| Price narrative and basis of estimate | Pricing instructions | Pricing Lead | Not Started | BOE model |""",
+        "placeholders": {},
+        "keywords": ["compliance matrix", "gsa mas", "task order", "traceability"],
+        "is_public": True,
+    },
+    {
+        "name": "Compliance Matrix - OASIS+",
+        "category": "Compliance Matrix",
+        "subcategory": "OASIS+",
+        "description": "Pre-built matrix template for OASIS+ service-order proposal compliance tracking.",
+        "template_text": """| Requirement | RFP Reference | Assigned Team | Status | Validation Artifact |
+| --- | --- | --- | --- | --- |
+| Domain qualification and scope fit | Scope matrix | Capture Lead | Not Started | Domain qualification sheet |
+| Staffing and labor qualifications | L.5 Personnel | HR Lead | Not Started | Resume package |
+| Performance metrics and SLAs | PWS KPI section | Delivery Lead | Not Started | KPI plan |
+| Risk management and mitigation | L.7 Risk | Program Manager | Not Started | Risk register |""",
+        "placeholders": {},
+        "keywords": ["compliance matrix", "oasis+", "services", "sla", "risk"],
+        "is_public": True,
+    },
+    {
+        "name": "Compliance Matrix - 8(a) STARS III",
+        "category": "Compliance Matrix",
+        "subcategory": "8(a) STARS III",
+        "description": "Compliance matrix baseline for 8(a) STARS III task-order submissions.",
+        "template_text": """| Requirement | Clause/Section | Owner | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| 8(a) eligibility and socioeconomic attestation | Solicitation reps/certs | Contracts Lead | Not Started | SBA profile |
+| Technical factor response mapping | Section M factors | Technical Lead | Not Started | Annotated outline |
+| Past performance references | L.8 Experience | Past Performance Lead | Not Started | CPARS references |
+| Pricing and discount narrative | Pricing volume instructions | Pricing Lead | Not Started | Pricing model |""",
+        "placeholders": {},
+        "keywords": ["compliance matrix", "8(a)", "stars iii", "task order", "socioeconomic"],
+        "is_public": True,
+    },
 ]
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+
+def _to_template_response(template: ProposalTemplate) -> TemplateResponse:
+    return TemplateResponse(
+        id=template.id,
+        name=template.name,
+        category=template.category,
+        subcategory=template.subcategory,
+        description=template.description,
+        template_text=template.template_text,
+        placeholders=template.placeholders,
+        keywords=template.keywords,
+        is_system=template.is_system,
+        is_public=template.is_public,
+        rating_sum=template.rating_sum,
+        rating_count=template.rating_count,
+        forked_from_id=template.forked_from_id,
+        user_id=template.user_id,
+        usage_count=template.usage_count,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+    )
+
+
+async def _ensure_system_templates(session: AsyncSession) -> None:
+    created = 0
+    updated = 0
+
+    for template_data in SYSTEM_TEMPLATES:
+        result = await session.execute(
+            select(ProposalTemplate).where(
+                ProposalTemplate.name == template_data["name"],
+                ProposalTemplate.is_system == True,
+            )
+        )
+        existing = result.scalars().first()
+        desired_public = bool(template_data.get("is_public", False))
+        if existing:
+            if existing.is_public != desired_public:
+                existing.is_public = desired_public
+                existing.updated_at = datetime.utcnow()
+                session.add(existing)
+                updated += 1
+            continue
+
+        template = ProposalTemplate(
+            name=template_data["name"],
+            category=template_data["category"],
+            subcategory=template_data.get("subcategory"),
+            description=template_data["description"],
+            template_text=template_data["template_text"],
+            placeholders=template_data["placeholders"],
+            keywords=template_data["keywords"],
+            is_system=True,
+            is_public=desired_public,
+        )
+        session.add(template)
+        created += 1
+
+    if created or updated:
+        await session.commit()
+        logger.info("System templates synchronized", created=created, updated=updated)
 
 
 # =============================================================================
@@ -424,6 +676,7 @@ All employees complete annual security awareness training covering:
 @router.get("/", response_model=list[TemplateResponse])
 async def list_templates(
     category: str | None = Query(None, description="Filter by category"),
+    subcategory: str | None = Query(None, description="Filter by subcategory"),
     search: str | None = Query(None, description="Search in name and keywords"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -432,12 +685,16 @@ async def list_templates(
     List all available templates.
     Includes system templates and user's custom templates.
     """
+    await _ensure_system_templates(session)
+
     query = select(ProposalTemplate).where(
         (ProposalTemplate.is_system == True) | (ProposalTemplate.user_id == current_user.id)
     )
 
     if category:
         query = query.where(ProposalTemplate.category == category)
+    if subcategory:
+        query = query.where(ProposalTemplate.subcategory == subcategory)
 
     result = await session.execute(query.order_by(ProposalTemplate.category, ProposalTemplate.name))
     templates = list(result.scalars().all())
@@ -452,22 +709,7 @@ async def list_templates(
             or any(search_lower in kw.lower() for kw in t.keywords)
         ]
 
-    return [
-        TemplateResponse(
-            id=t.id,
-            name=t.name,
-            category=t.category,
-            subcategory=t.subcategory,
-            description=t.description,
-            template_text=t.template_text,
-            placeholders=t.placeholders,
-            keywords=t.keywords,
-            is_system=t.is_system,
-            usage_count=t.usage_count,
-            created_at=t.created_at,
-        )
-        for t in templates
-    ]
+    return [_to_template_response(t) for t in templates]
 
 
 @router.get("/categories")
@@ -478,6 +720,7 @@ async def list_categories(
     """
     List all template categories.
     """
+    await _ensure_system_templates(session)
     result = await session.execute(select(ProposalTemplate.category).distinct())
     categories = [row[0] for row in result.all()]
     return sorted(categories)
@@ -491,6 +734,7 @@ async def list_categories_legacy(
     """
     Backward-compatible alias for older frontend clients.
     """
+    await _ensure_system_templates(session)
     result = await session.execute(select(ProposalTemplate.category).distinct())
     categories = [row[0] for row in result.all()]
     return sorted(categories)
@@ -505,6 +749,8 @@ async def get_template(
     """
     Get a specific template by ID.
     """
+    await _ensure_system_templates(session)
+
     result = await session.execute(
         select(ProposalTemplate).where(ProposalTemplate.id == template_id)
     )
@@ -517,19 +763,7 @@ async def get_template(
     if not template.is_system and template.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    return TemplateResponse(
-        id=template.id,
-        name=template.name,
-        category=template.category,
-        subcategory=template.subcategory,
-        description=template.description,
-        template_text=template.template_text,
-        placeholders=template.placeholders,
-        keywords=template.keywords,
-        is_system=template.is_system,
-        usage_count=template.usage_count,
-        created_at=template.created_at,
-    )
+    return _to_template_response(template)
 
 
 @router.post("/", response_model=TemplateResponse)
@@ -559,19 +793,7 @@ async def create_template(
 
     logger.info("Template created", template_id=template.id, user_id=current_user.id)
 
-    return TemplateResponse(
-        id=template.id,
-        name=template.name,
-        category=template.category,
-        subcategory=template.subcategory,
-        description=template.description,
-        template_text=template.template_text,
-        placeholders=template.placeholders,
-        keywords=template.keywords,
-        is_system=template.is_system,
-        usage_count=template.usage_count,
-        created_at=template.created_at,
-    )
+    return _to_template_response(template)
 
 
 @router.post("/{template_id}/use")
@@ -585,6 +807,8 @@ async def use_template(
     Use a template with provided placeholder values.
     Returns the filled-in template text.
     """
+    await _ensure_system_templates(session)
+
     result = await session.execute(
         select(ProposalTemplate).where(ProposalTemplate.id == template_id)
     )
@@ -592,6 +816,8 @@ async def use_template(
 
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+    if not template.is_system and template.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     # Fill in placeholders
     filled_text = template.template_text
@@ -621,37 +847,22 @@ async def seed_system_templates(
     Seed the database with system templates.
     This endpoint should be called during initial setup.
     """
-    created = 0
+    before_result = await session.execute(
+        select(sa_func.count()).where(ProposalTemplate.is_system == True)
+    )
+    before_count = before_result.scalar() or 0
 
-    for template_data in SYSTEM_TEMPLATES:
-        # Check if already exists
-        result = await session.execute(
-            select(ProposalTemplate).where(
-                ProposalTemplate.name == template_data["name"],
-                ProposalTemplate.is_system == True,
-            )
-        )
-        if result.scalar_one_or_none():
-            continue
+    await _ensure_system_templates(session)
 
-        template = ProposalTemplate(
-            name=template_data["name"],
-            category=template_data["category"],
-            subcategory=template_data.get("subcategory"),
-            description=template_data["description"],
-            template_text=template_data["template_text"],
-            placeholders=template_data["placeholders"],
-            keywords=template_data["keywords"],
-            is_system=True,
-        )
-        session.add(template)
-        created += 1
+    after_result = await session.execute(
+        select(sa_func.count()).where(ProposalTemplate.is_system == True)
+    )
+    after_count = after_result.scalar() or 0
+    created = max(0, after_count - before_count)
 
-    await session.commit()
-
-    logger.info(f"Seeded {created} system templates")
+    logger.info("Seeded system templates", created=created, total=after_count)
 
     return {
         "message": f"Created {created} system templates",
-        "total_system_templates": len(SYSTEM_TEMPLATES),
+        "total_system_templates": after_count,
     }

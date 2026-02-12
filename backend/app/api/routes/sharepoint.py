@@ -13,6 +13,8 @@ from sqlmodel import select
 from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.integration import IntegrationConfig, IntegrationProvider
+from app.models.proposal import Proposal, ProposalSection
+from app.models.rfp import RFP
 from app.services.auth_service import UserAuth
 from app.services.sharepoint_service import create_sharepoint_service
 
@@ -129,34 +131,41 @@ async def export_to_sharepoint(
 ) -> UploadResult:
     """Export a proposal (DOCX/PDF) directly to SharePoint.
 
-    Internally calls the export service to generate bytes, then uploads.
+    Generates export bytes using the same internal export helpers, then uploads.
     """
-    from app.models.proposal import Proposal
-
-    # Verify ownership
-    result = await session.execute(
+    proposal_result = await session.execute(
         select(Proposal).where(
             Proposal.id == proposal_id,
             Proposal.user_id == current_user.id,
         )
     )
-    proposal = result.scalar_one_or_none()
+    proposal = proposal_result.scalar_one_or_none()
     if not proposal:
-        raise HTTPException(404, "Proposal not found")
+        raise HTTPException(status_code=404, detail="Proposal not found")
 
-    # Generate export bytes via internal API call
-    # Uses httpx to call the existing export endpoint on this same server
-    import httpx
+    sections_result = await session.execute(
+        select(ProposalSection)
+        .where(ProposalSection.proposal_id == proposal_id)
+        .order_by(ProposalSection.display_order)
+    )
+    sections = list(sections_result.scalars().all())
 
-    base = "http://localhost:8000/api/v1"
-    export_url = f"{base}/export/proposals/{proposal_id}/{format}"
+    rfp_result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
+    rfp = rfp_result.scalar_one_or_none()
+    if not rfp:
+        raise HTTPException(status_code=404, detail="Associated RFP not found")
+
+    from app.api.routes.export import create_docx_proposal, create_pdf_proposal
+
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(export_url, timeout=60.0)
-            resp.raise_for_status()
-            content_bytes = resp.content
+        if format == "docx":
+            content_bytes = create_docx_proposal(proposal, sections, rfp)
+        else:
+            content_bytes = create_pdf_proposal(proposal, sections, rfp)
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(500, f"Export generation failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Export generation failed: {e}")
 
     # Upload to SharePoint
     sp = await _get_sp_service(current_user.id, session)

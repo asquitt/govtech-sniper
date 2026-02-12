@@ -200,9 +200,14 @@ async def create_rfp(
 
     Use this for RFPs not found via SAM.gov or imported from other sources.
     """
-    # Check for duplicate solicitation number
+    resolved_user_id = resolve_user_id(user_id, current_user)
+
+    # Check for duplicate solicitation number within the same user scope.
     existing = await session.execute(
-        select(RFP).where(RFP.solicitation_number == rfp_data.solicitation_number)
+        select(RFP).where(
+            RFP.user_id == resolved_user_id,
+            RFP.solicitation_number == rfp_data.solicitation_number,
+        )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(
@@ -210,7 +215,6 @@ async def create_rfp(
             detail=f"RFP with solicitation number {rfp_data.solicitation_number} already exists",
         )
 
-    resolved_user_id = resolve_user_id(user_id, current_user)
     rfp = RFP(
         user_id=resolved_user_id,
         **rfp_data.model_dump(),
