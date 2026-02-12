@@ -12,7 +12,7 @@ from app.models.rfp import RFP
 from app.models.user import User
 
 
-async def _setup_proposal(session: AsyncSession, user_id: int, classification: str) -> int:
+async def _setup_proposal(db_session: AsyncSession, user_id: int, classification: str) -> int:
     """Create an RFP + proposal with the given classification for testing."""
     rfp = RFP(
         title="Test RFP",
@@ -20,8 +20,8 @@ async def _setup_proposal(session: AsyncSession, user_id: int, classification: s
         user_id=user_id,
         status="analyzed",
     )
-    session.add(rfp)
-    await session.flush()
+    db_session.add(rfp)
+    await db_session.flush()
 
     proposal = Proposal(
         title="Test Proposal",
@@ -29,36 +29,34 @@ async def _setup_proposal(session: AsyncSession, user_id: int, classification: s
         user_id=user_id,
         classification=classification,
     )
-    session.add(proposal)
-    await session.flush()
-    await session.commit()
+    db_session.add(proposal)
+    await db_session.flush()
+    await db_session.commit()
     return proposal.id
 
 
-async def _set_org_role(session: AsyncSession, user_id: int, role: OrgRole):
+async def _set_org_role(db_session: AsyncSession, user_id: int, role: OrgRole):
     """Assign user to an org with the given role."""
-    # Check if org exists
-    result = await session.execute(select(Organization).limit(1))
+    result = await db_session.execute(select(Organization).limit(1))
     org = result.scalar_one_or_none()
     if not org:
         org = Organization(name="Test Org", slug="test-org", owner_id=user_id)
-        session.add(org)
-        await session.flush()
+        db_session.add(org)
+        await db_session.flush()
 
-    # Remove existing membership
-    existing = await session.execute(
+    existing = await db_session.execute(
         select(OrganizationMember).where(OrganizationMember.user_id == user_id)
     )
     for m in existing.scalars().all():
-        await session.delete(m)
+        await db_session.delete(m)
 
     member = OrganizationMember(
         organization_id=org.id,
         user_id=user_id,
         role=role,
     )
-    session.add(member)
-    await session.commit()
+    db_session.add(member)
+    await db_session.commit()
 
 
 class TestPolicyEnforcement:
@@ -66,11 +64,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_public_allowed_for_viewer(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.VIEWER)
-        proposal_id = await _setup_proposal(session, user.id, "public")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.VIEWER)
+        proposal_id = await _setup_proposal(db_session, user.id, "public")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -80,11 +78,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_internal_allowed_for_viewer(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.VIEWER)
-        proposal_id = await _setup_proposal(session, user.id, "internal")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.VIEWER)
+        proposal_id = await _setup_proposal(db_session, user.id, "internal")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -94,11 +92,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_fci_denied_for_viewer(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.VIEWER)
-        proposal_id = await _setup_proposal(session, user.id, "fci")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.VIEWER)
+        proposal_id = await _setup_proposal(db_session, user.id, "fci")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -108,11 +106,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_fci_allowed_for_member(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.MEMBER)
-        proposal_id = await _setup_proposal(session, user.id, "fci")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.MEMBER)
+        proposal_id = await _setup_proposal(db_session, user.id, "fci")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -122,11 +120,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_cui_step_up_for_admin(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.ADMIN)
-        proposal_id = await _setup_proposal(session, user.id, "cui")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.ADMIN)
+        proposal_id = await _setup_proposal(db_session, user.id, "cui")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -137,11 +135,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_cui_denied_for_viewer(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.VIEWER)
-        proposal_id = await _setup_proposal(session, user.id, "cui")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.VIEWER)
+        proposal_id = await _setup_proposal(db_session, user.id, "cui")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -151,11 +149,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_export_creates_audit_event(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.MEMBER)
-        proposal_id = await _setup_proposal(session, user.id, "internal")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.MEMBER)
+        proposal_id = await _setup_proposal(db_session, user.id, "internal")
 
         await client.get(
             f"/api/v1/export/proposals/{proposal_id}/docx",
@@ -164,7 +162,7 @@ class TestPolicyEnforcement:
 
         events = (
             (
-                await session.execute(
+                await db_session.execute(
                     select(AuditEvent).where(
                         AuditEvent.entity_type == "proposal",
                         AuditEvent.entity_id == proposal_id,
@@ -180,11 +178,11 @@ class TestPolicyEnforcement:
 
     @pytest.mark.asyncio
     async def test_pdf_export_policy_enforced(
-        self, client: AsyncClient, auth_headers: dict, session: AsyncSession
+        self, client: AsyncClient, auth_headers: dict, db_session: AsyncSession
     ):
-        user = (await session.execute(select(User).limit(1))).scalar_one()
-        await _set_org_role(session, user.id, OrgRole.VIEWER)
-        proposal_id = await _setup_proposal(session, user.id, "fci")
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(db_session, user.id, OrgRole.VIEWER)
+        proposal_id = await _setup_proposal(db_session, user.id, "fci")
 
         response = await client.get(
             f"/api/v1/export/proposals/{proposal_id}/pdf",

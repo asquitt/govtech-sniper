@@ -4,7 +4,7 @@ from sqlmodel import select
 
 from app.database import get_session
 from app.main import app
-from app.models.user import User
+from app.models.user import User, UserTier
 
 
 class TestOnboarding:
@@ -69,7 +69,7 @@ class TestOnboardingTimestamps:
         # First create some onboarding data
         await client.get("/api/v1/onboarding/progress", headers=auth_headers)
 
-        # Metrics endpoint requires admin tier — default test user is 'professional'
+        # Metrics endpoint requires enterprise tier — default test user is 'professional'
         response = await client.get("/api/v1/onboarding/activation-metrics", headers=auth_headers)
         assert response.status_code == 403
 
@@ -78,7 +78,7 @@ class TestOnboardingTimestamps:
     ):
         """Verify response shape by temporarily upgrading user to admin tier."""
         user = (await db_session.execute(select(User).where(User.id == test_user.id))).scalar_one()
-        user.tier = "admin"
+        user.tier = UserTier.ENTERPRISE
         db_session.add(user)
         await db_session.commit()
 

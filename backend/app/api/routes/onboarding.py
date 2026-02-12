@@ -255,7 +255,7 @@ async def get_activation_metrics(
     session: AsyncSession = Depends(get_session),
 ):
     """Activation telemetry for admin dashboards."""
-    if current_user.tier not in ("admin", "enterprise"):
+    if current_user.tier != "enterprise":
         raise HTTPException(status_code=403, detail="Admin access required")
 
     all_progress = (await session.execute(select(OnboardingProgress))).scalars().all()
