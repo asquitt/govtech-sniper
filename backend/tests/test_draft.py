@@ -280,3 +280,102 @@ class TestDraftProposals:
         generate_data = generate.json()
         assert generate_data["status"] == "completed"
         assert generate_data["task_id"].startswith("sync-")
+
+    @pytest.mark.asyncio
+    async def test_generate_section_returns_429_when_gemini_quota_is_exhausted(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        test_rfp: RFP,
+        monkeypatch,
+    ):
+        from app.api.routes.draft import generation
+
+        monkeypatch.setattr(generation, "_celery_broker_available", lambda: False)
+        monkeypatch.setattr(generation.settings, "debug", True)
+        monkeypatch.setattr(generation.settings, "mock_ai", False)
+        monkeypatch.setattr(generation.settings, "gemini_api_key", "test-key")
+
+        async def fake_sync_generation(**kwargs):
+            raise RuntimeError("Quota exceeded for Gemini model. Please retry in 42.4s.")
+
+        monkeypatch.setattr(generation, "_run_synchronous_generation", fake_sync_generation)
+
+        create_proposal = await client.post(
+            "/api/v1/draft/proposals",
+            params={"user_id": test_user.id},
+            json={"rfp_id": test_rfp.id, "title": "Quota Draft Proposal"},
+        )
+        assert create_proposal.status_code == 200
+        proposal_id = create_proposal.json()["id"]
+
+        create_section = await client.post(
+            f"/api/v1/draft/proposals/{proposal_id}/sections",
+            json={
+                "title": "Technical Approach",
+                "section_number": "1.1",
+                "requirement_id": "REQ-QUOTA-001",
+                "requirement_text": "Describe technical approach.",
+                "display_order": 0,
+            },
+        )
+        assert create_section.status_code == 200
+
+        generate = await client.post(
+            "/api/v1/draft/REQ-QUOTA-001",
+            params={"user_id": test_user.id},
+            json={"requirement_id": "REQ-QUOTA-001", "rfp_id": test_rfp.id},
+        )
+        assert generate.status_code == 429
+        assert "Retry in about 42 seconds" in generate.json()["detail"]
+        assert generate.headers.get("retry-after") == "42"
+
+    @pytest.mark.asyncio
+    async def test_generate_section_returns_billing_hint_when_quota_limit_is_zero(
+        self,
+        client: AsyncClient,
+        test_user: User,
+        test_rfp: RFP,
+        monkeypatch,
+    ):
+        from app.api.routes.draft import generation
+
+        monkeypatch.setattr(generation, "_celery_broker_available", lambda: False)
+        monkeypatch.setattr(generation.settings, "debug", True)
+        monkeypatch.setattr(generation.settings, "mock_ai", False)
+        monkeypatch.setattr(generation.settings, "gemini_api_key", "test-key")
+
+        async def fake_sync_generation(**kwargs):
+            raise RuntimeError("Quota exceeded for metric. limit: 0. Please retry in 30s.")
+
+        monkeypatch.setattr(generation, "_run_synchronous_generation", fake_sync_generation)
+
+        create_proposal = await client.post(
+            "/api/v1/draft/proposals",
+            params={"user_id": test_user.id},
+            json={"rfp_id": test_rfp.id, "title": "Quota Draft Proposal"},
+        )
+        assert create_proposal.status_code == 200
+        proposal_id = create_proposal.json()["id"]
+
+        create_section = await client.post(
+            f"/api/v1/draft/proposals/{proposal_id}/sections",
+            json={
+                "title": "Technical Approach",
+                "section_number": "1.1",
+                "requirement_id": "REQ-QUOTA-002",
+                "requirement_text": "Describe technical approach.",
+                "display_order": 0,
+            },
+        )
+        assert create_section.status_code == 200
+
+        generate = await client.post(
+            "/api/v1/draft/REQ-QUOTA-002",
+            params={"user_id": test_user.id},
+            json={"requirement_id": "REQ-QUOTA-002", "rfp_id": test_rfp.id},
+        )
+        assert generate.status_code == 429
+        detail = generate.json()["detail"]
+        assert "Enable billing" in detail
+        assert "GEMINI_FALLBACK_MODELS" in detail

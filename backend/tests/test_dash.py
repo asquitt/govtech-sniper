@@ -7,6 +7,7 @@ Tests for Dash session and ask endpoints.
 import pytest
 from httpx import AsyncClient
 
+from app.config import settings
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.rfp import RFP
 from app.models.user import User
@@ -67,36 +68,41 @@ class TestDash:
         test_rfp: RFP,
         test_document: KnowledgeBaseDocument,
     ):
-        response = await client.post(
-            "/api/v1/dash/ask",
-            headers=auth_headers,
-            json={"question": "What is the deadline?", "rfp_id": test_rfp.id},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        # Mock response includes the question text
-        assert "What is the deadline?" in data["answer"]
-        assert isinstance(data["citations"], list)
-        assert any(citation.get("type") == "document" for citation in data["citations"])
+        previous_mock_ai = settings.mock_ai
+        settings.mock_ai = True
+        try:
+            response = await client.post(
+                "/api/v1/dash/ask",
+                headers=auth_headers,
+                json={"question": "What is the deadline?", "rfp_id": test_rfp.id},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            # Mock response includes the question text
+            assert "What is the deadline?" in data["answer"]
+            assert isinstance(data["citations"], list)
+            assert any(citation.get("type") == "document" for citation in data["citations"])
 
-        # Competitive intel intent
-        response = await client.post(
-            "/api/v1/awards",
-            headers=auth_headers,
-            json={
-                "rfp_id": test_rfp.id,
-                "awardee_name": "Test Winner",
-                "award_amount": 100000,
-            },
-        )
-        assert response.status_code == 200
+            # Competitive intel intent
+            response = await client.post(
+                "/api/v1/awards",
+                headers=auth_headers,
+                json={
+                    "rfp_id": test_rfp.id,
+                    "awardee_name": "Test Winner",
+                    "award_amount": 100000,
+                },
+            )
+            assert response.status_code == 200
 
-        response = await client.post(
-            "/api/v1/dash/ask",
-            headers=auth_headers,
-            json={"question": "Who are the competitors?", "rfp_id": test_rfp.id},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        # Mock response includes the question text
-        assert "Who are the competitors?" in data["answer"]
+            response = await client.post(
+                "/api/v1/dash/ask",
+                headers=auth_headers,
+                json={"question": "Who are the competitors?", "rfp_id": test_rfp.id},
+            )
+            assert response.status_code == 200
+            data = response.json()
+            # Mock response includes the question text
+            assert "Who are the competitors?" in data["answer"]
+        finally:
+            settings.mock_ai = previous_mock_ai

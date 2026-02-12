@@ -174,3 +174,73 @@ class TestDocumentStats:
         assert "total_documents" in data
         assert "by_type" in data
         assert data["total_documents"] == 1
+
+
+class TestPastPerformanceFlows:
+    """Tests for past performance tagging, matching, and narrative generation."""
+
+    @pytest.mark.asyncio
+    async def test_past_performance_metadata_match_and_narrative(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_document: KnowledgeBaseDocument,
+    ):
+        # Create an RFP target for matching.
+        create_rfp = await client.post(
+            "/api/v1/rfps",
+            headers=auth_headers,
+            json={
+                "title": "Cybersecurity Modernization Support",
+                "solicitation_number": "PP-001",
+                "agency": "Department of Defense",
+                "naics_code": "541512",
+                "estimated_value": 1000000,
+                "description": "Support cloud cybersecurity modernization and compliance operations.",
+            },
+        )
+        assert create_rfp.status_code == 200
+        rfp_id = create_rfp.json()["id"]
+
+        # Convert the document into a past-performance record.
+        to_past_performance = await client.patch(
+            f"/api/v1/documents/{test_document.id}",
+            headers=auth_headers,
+            json={"document_type": "past_performance"},
+        )
+        assert to_past_performance.status_code == 200
+
+        metadata = await client.post(
+            f"/api/v1/documents/{test_document.id}/past-performance-metadata",
+            headers=auth_headers,
+            json={
+                "contract_number": "W91-TEST-42",
+                "performing_agency": "Department of Defense",
+                "contract_value": 1200000,
+                "naics_code": "541512",
+                "relevance_tags": ["cybersecurity", "cloud"],
+            },
+        )
+        assert metadata.status_code == 200
+        assert metadata.json()["contract_number"] == "W91-TEST-42"
+
+        list_past_performance = await client.get(
+            "/api/v1/documents/past-performances/list",
+            headers=auth_headers,
+        )
+        assert list_past_performance.status_code == 200
+        assert list_past_performance.json()["total"] == 1
+
+        match = await client.post(
+            f"/api/v1/documents/past-performances/match/{rfp_id}",
+            headers=auth_headers,
+        )
+        assert match.status_code == 200
+        assert match.json()["total"] >= 1
+
+        narrative = await client.post(
+            f"/api/v1/documents/past-performances/{test_document.id}/narrative/{rfp_id}",
+            headers=auth_headers,
+        )
+        assert narrative.status_code == 200
+        assert "Past Performance" in narrative.json()["narrative"]

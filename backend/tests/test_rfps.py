@@ -161,6 +161,43 @@ class TestRFPCreate:
         assert response.status_code == 409
         assert "already exists" in response.json()["detail"]
 
+    @pytest.mark.asyncio
+    async def test_create_rfp_allows_duplicate_solicitation_for_different_user(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        test_rfp: RFP,
+    ):
+        second_user = User(
+            email="rfp-second-user@example.com",
+            hashed_password="hashed",
+            full_name="Second User",
+            company_name="Second Company",
+            tier="professional",
+            is_active=True,
+            is_verified=True,
+        )
+        db_session.add(second_user)
+        await db_session.commit()
+        await db_session.refresh(second_user)
+
+        response = await client.post(
+            "/api/v1/rfps",
+            params={"user_id": second_user.id},
+            json={
+                "title": "Second User Same Solicitation",
+                "solicitation_number": test_rfp.solicitation_number,
+                "agency": "Department of Energy",
+                "rfp_type": "solicitation",
+                "posted_date": datetime.utcnow().isoformat(),
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_id"] == second_user.id
+        assert data["solicitation_number"] == test_rfp.solicitation_number
+
 
 class TestRFPUpdate:
     """Tests for RFP updates."""

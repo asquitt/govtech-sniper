@@ -65,3 +65,30 @@ class TestProposalGraphics:
             headers=auth_headers,
         )
         assert response.status_code == 204
+
+    @pytest.mark.asyncio
+    async def test_graphic_templates_and_generation(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        templates = await client.get("/api/v1/graphics/templates", headers=auth_headers)
+        assert templates.status_code == 200
+        payload = templates.json()
+        template_types = {item["type"] for item in payload}
+        assert {"timeline", "org_chart", "process_flow"}.issubset(template_types)
+
+        generated = await client.post(
+            "/api/v1/graphics/generate",
+            headers=auth_headers,
+            json={
+                "content": "Phase 1 planning, phase 2 execution, phase 3 transition.",
+                "template_type": "timeline",
+                "title": "Delivery Timeline",
+            },
+        )
+        assert generated.status_code == 200
+        body = generated.json()
+        assert body["template_type"] == "timeline"
+        assert "mermaid_code" in body
+        assert len(body["mermaid_code"]) > 0
