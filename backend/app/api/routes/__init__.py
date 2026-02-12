@@ -19,6 +19,7 @@ from app.api.routes.capture import router as capture_router
 from app.api.routes.capture_timeline import router as capture_timeline_router
 from app.api.routes.collaboration import router as collaboration_router
 from app.api.routes.compliance_dashboard import router as compliance_router
+from app.api.routes.compliance_registry import router as compliance_registry_router
 from app.api.routes.contacts import router as contacts_router
 from app.api.routes.contracts import router as contracts_router
 from app.api.routes.dash import router as dash_router
@@ -112,6 +113,7 @@ __all__ = [
     "email_ingest_router",
     "workflows_router",
     "compliance_router",
+    "compliance_registry_router",
     "unanet_router",
     "reports_router",
     "activity_router",

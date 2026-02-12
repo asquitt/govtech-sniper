@@ -27,6 +27,7 @@ from app.api.routes import (
     capture_router,
     capture_timeline_router,
     collaboration_router,
+    compliance_registry_router,
     compliance_router,
     contacts_router,
     contracts_router,
@@ -357,6 +358,7 @@ app.include_router(signals_router, prefix=api_prefix)
 app.include_router(email_ingest_router, prefix=api_prefix)
 app.include_router(workflows_router, prefix=api_prefix)
 app.include_router(compliance_router, prefix=api_prefix)
+app.include_router(compliance_registry_router, prefix=api_prefix)
 app.include_router(unanet_router, prefix=api_prefix)
 app.include_router(reports_router, prefix=api_prefix)
 app.include_router(activity_router, prefix=api_prefix)

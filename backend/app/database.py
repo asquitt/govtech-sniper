@@ -57,6 +57,7 @@ async def init_db() -> None:
             budget_intel,
             capture,
             collaboration,
+            compliance_registry,
             contact,
             contract,
             dash,
