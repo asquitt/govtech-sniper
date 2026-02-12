@@ -15,12 +15,14 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from app.api.routes import (
     activity_router,
     admin_router,
+    agents_router,
     analytics_reporting_router,
     analytics_router,
     analyze_router,
     audit_router,
     auth_router,
     awards_router,
+    benchmark_router,
     budget_intel_router,
     capture_router,
     capture_timeline_router,
@@ -38,6 +40,7 @@ from app.api.routes import (
     forecasts_router,
     graphics_router,
     health_router,
+    inbox_router,
     ingest_router,
     integrations_router,
     intelligence_router,
@@ -57,6 +60,7 @@ from app.api.routes import (
     sharepoint_sync_router,
     signals_router,
     subscription_router,
+    support_router,
     teaming_board_router,
     teams_router,
     templates_marketplace_router,
@@ -304,6 +308,9 @@ app.include_router(health_router, prefix=api_prefix)
 # Authentication (no auth required for login/register)
 app.include_router(auth_router, prefix=api_prefix)
 
+# WebSocket HTTP helpers under API prefix for frontend proxy consistency
+app.include_router(websocket_router, prefix=api_prefix)
+
 # Protected routes
 app.include_router(ingest_router, prefix=api_prefix)
 app.include_router(analyze_router, prefix=api_prefix)
@@ -343,6 +350,7 @@ app.include_router(data_sources_router, prefix=api_prefix)
 app.include_router(analytics_reporting_router, prefix=api_prefix)
 app.include_router(reviews_router, prefix=api_prefix)
 app.include_router(subscription_router, prefix=api_prefix)
+app.include_router(support_router, prefix=api_prefix)
 app.include_router(search_router, prefix=api_prefix)
 app.include_router(events_router, prefix=api_prefix)
 app.include_router(signals_router, prefix=api_prefix)
@@ -356,6 +364,9 @@ app.include_router(intelligence_router, prefix=api_prefix)
 app.include_router(admin_router, prefix=api_prefix)
 app.include_router(kb_intelligence_router, prefix=api_prefix)
 app.include_router(onboarding_router, prefix=api_prefix)
+app.include_router(agents_router, prefix=api_prefix)
+app.include_router(inbox_router, prefix=api_prefix)
+app.include_router(benchmark_router, prefix=api_prefix)
 
 
 # =============================================================================

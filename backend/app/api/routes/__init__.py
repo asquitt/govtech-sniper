@@ -6,12 +6,14 @@ Route module exports.
 
 from app.api.routes.activity import router as activity_router
 from app.api.routes.admin import router as admin_router
+from app.api.routes.agents import router as agents_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.analytics_reporting import router as analytics_reporting_router
 from app.api.routes.analyze import router as analyze_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.awards import router as awards_router
+from app.api.routes.benchmark import router as benchmark_router
 from app.api.routes.budget_intel import router as budget_intel_router
 from app.api.routes.capture import router as capture_router
 from app.api.routes.capture_timeline import router as capture_timeline_router
@@ -29,6 +31,7 @@ from app.api.routes.export import router as export_router
 from app.api.routes.forecasts import router as forecasts_router
 from app.api.routes.graphics import router as graphics_router
 from app.api.routes.health import router as health_router
+from app.api.routes.inbox import router as inbox_router
 from app.api.routes.ingest import router as ingest_router
 from app.api.routes.integrations import router as integrations_router
 from app.api.routes.intelligence import router as intelligence_router
@@ -48,6 +51,7 @@ from app.api.routes.sharepoint import router as sharepoint_router
 from app.api.routes.sharepoint_sync import router as sharepoint_sync_router
 from app.api.routes.signals import router as signals_router
 from app.api.routes.subscription import router as subscription_router
+from app.api.routes.support import router as support_router
 from app.api.routes.teaming_board import router as teaming_board_router
 from app.api.routes.teams import router as teams_router
 from app.api.routes.templates import router as templates_router
@@ -101,6 +105,7 @@ __all__ = [
     "analytics_reporting_router",
     "reviews_router",
     "subscription_router",
+    "support_router",
     "search_router",
     "events_router",
     "signals_router",
@@ -114,4 +119,7 @@ __all__ = [
     "admin_router",
     "kb_intelligence_router",
     "onboarding_router",
+    "agents_router",
+    "inbox_router",
+    "benchmark_router",
 ]
