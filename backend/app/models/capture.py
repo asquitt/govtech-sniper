@@ -314,6 +314,36 @@ class TeamingPerformanceRating(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class TeamingDigestFrequency(str, Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
+class TeamingDigestChannel(str, Enum):
+    IN_APP = "in_app"
+    EMAIL = "email"
+
+
+class TeamingDigestSchedule(SQLModel, table=True):
+    """User delivery preferences for teaming performance digests."""
+
+    __tablename__ = "teaming_digest_schedules"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    frequency: TeamingDigestFrequency = Field(default=TeamingDigestFrequency.WEEKLY)
+    day_of_week: int | None = Field(default=1, ge=0, le=6)
+    hour_utc: int = Field(default=14, ge=0, le=23)
+    minute_utc: int = Field(default=0, ge=0, le=59)
+    channel: TeamingDigestChannel = Field(default=TeamingDigestChannel.IN_APP)
+    include_declined_reasons: bool = Field(default=True)
+    is_enabled: bool = Field(default=True)
+    last_sent_at: datetime | None = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 # =============================================================================
 # Win/Loss Debrief
 # =============================================================================

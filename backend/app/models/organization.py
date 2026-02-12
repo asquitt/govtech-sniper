@@ -31,6 +31,14 @@ class SSOProvider(str, Enum):
     GOOGLE = "google"
 
 
+class InvitationStatus(str, Enum):
+    """Organization invitation lifecycle state."""
+
+    PENDING = "pending"
+    ACTIVATED = "activated"
+    EXPIRED = "expired"
+
+
 class Organization(SQLModel, table=True):
     """
     Top-level organization entity for multi-tenant enterprise support.
@@ -86,6 +94,25 @@ class OrganizationMember(SQLModel, table=True):
     role: OrgRole = Field(default=OrgRole.MEMBER)
     is_active: bool = Field(default=True)
     joined_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class OrganizationInvitation(SQLModel, table=True):
+    """Email invitation to join an organization."""
+
+    __tablename__ = "organization_invitations"
+
+    id: int | None = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organizations.id", index=True)
+    invited_by_user_id: int = Field(foreign_key="users.id", index=True)
+    email: str = Field(max_length=255, index=True)
+    role: OrgRole = Field(default=OrgRole.MEMBER)
+    token: str = Field(max_length=255, unique=True, index=True)
+    status: InvitationStatus = Field(default=InvitationStatus.PENDING)
+    expires_at: datetime
+    accepted_user_id: int | None = Field(default=None, foreign_key="users.id")
+    activated_at: datetime | None = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 # =============================================================================

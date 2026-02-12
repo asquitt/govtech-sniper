@@ -14,7 +14,7 @@ class WorkflowCondition(BaseModel):
 
 
 class WorkflowAction(BaseModel):
-    action_type: str  # move_stage, assign_user, send_notification, add_tag
+    action_type: str  # move_stage, assign_user, send_notification, add_tag, evaluate_teaming
     params: dict
 
 
@@ -65,4 +65,16 @@ class WorkflowExecutionRead(BaseModel):
 
 class WorkflowRuleListResponse(BaseModel):
     items: list[WorkflowRuleRead]
+    total: int
+
+
+class WorkflowExecuteRequest(BaseModel):
+    trigger_type: TriggerType
+    entity_type: str
+    entity_id: int
+    context: dict = {}
+
+
+class WorkflowExecuteResponse(BaseModel):
+    executions: list[WorkflowExecutionRead]
     total: int

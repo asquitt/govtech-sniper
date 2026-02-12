@@ -63,6 +63,8 @@ class TeamingRequestCreate(BaseModel):
 class TeamingRequestRead(BaseModel):
     id: int
     from_user_id: int
+    from_user_name: str | None = None
+    from_user_email: str | None = None
     to_partner_id: int
     rfp_id: int | None = None
     message: str | None = None
@@ -76,6 +78,61 @@ class TeamingRequestRead(BaseModel):
 
 class TeamingRequestUpdate(BaseModel):
     status: str  # "accepted" or "declined"
+
+
+class TeamingRequestTrendPointRead(BaseModel):
+    date: str
+    sent_count: int
+    accepted_count: int
+    declined_count: int
+    fit_score: float
+
+
+class TeamingRequestTrendRead(BaseModel):
+    days: int
+    total_sent: int
+    accepted_count: int
+    declined_count: int
+    pending_count: int
+    acceptance_rate: float
+    points: list[TeamingRequestTrendPointRead]
+
+
+class PartnerTrendDrilldownRead(BaseModel):
+    partner_id: int
+    partner_name: str
+    sent_count: int
+    accepted_count: int
+    declined_count: int
+    pending_count: int
+    acceptance_rate: float
+    avg_response_hours: float | None = None
+
+
+class TeamingPartnerTrendDrilldownResponse(BaseModel):
+    days: int
+    partners: list[PartnerTrendDrilldownRead]
+
+
+class TeamingDigestScheduleRead(BaseModel):
+    frequency: str
+    day_of_week: int | None = None
+    hour_utc: int
+    minute_utc: int
+    channel: str
+    include_declined_reasons: bool
+    is_enabled: bool
+    last_sent_at: datetime | None = None
+
+
+class TeamingDigestScheduleUpdate(BaseModel):
+    frequency: str = "weekly"
+    day_of_week: int | None = 1
+    hour_utc: int = 14
+    minute_utc: int = 0
+    channel: str = "in_app"
+    include_declined_reasons: bool = True
+    is_enabled: bool = True
 
 
 # ---------------------------------------------------------------------------

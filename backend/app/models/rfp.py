@@ -9,6 +9,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from pydantic import BaseModel
+from sqlalchemy import UniqueConstraint
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel, Text
 
 if TYPE_CHECKING:
@@ -93,7 +94,7 @@ class RFPBase(SQLModel):
     """Base RFP fields."""
 
     title: str = Field(max_length=500, index=True)
-    solicitation_number: str = Field(max_length=100, unique=True, index=True)
+    solicitation_number: str = Field(max_length=100, index=True)
     agency: str = Field(max_length=255)
     sub_agency: str | None = Field(default=None, max_length=255)
 
@@ -135,6 +136,13 @@ class RFP(RFPBase, table=True):
     """
 
     __tablename__ = "rfps"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "solicitation_number",
+            name="uq_rfps_user_solicitation_number",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)

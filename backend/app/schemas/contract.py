@@ -8,7 +8,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.models.contract import ContractStatus, DeliverableStatus
+from app.models.contract import ContractStatus, ContractType, DeliverableStatus
 
 
 class ContractCreate(BaseModel):
@@ -16,6 +16,8 @@ class ContractCreate(BaseModel):
     title: str = Field(max_length=500)
     agency: str | None = None
     rfp_id: int | None = None
+    parent_contract_id: int | None = None
+    contract_type: ContractType | None = None
     start_date: date | None = None
     end_date: date | None = None
     value: float | None = None
@@ -26,6 +28,8 @@ class ContractCreate(BaseModel):
 class ContractUpdate(BaseModel):
     title: str | None = None
     agency: str | None = None
+    parent_contract_id: int | None = None
+    contract_type: ContractType | None = None
     start_date: date | None = None
     end_date: date | None = None
     value: float | None = None
@@ -37,9 +41,11 @@ class ContractRead(BaseModel):
     id: int
     user_id: int
     rfp_id: int | None
+    parent_contract_id: int | None
     contract_number: str
     title: str
     agency: str | None
+    contract_type: ContractType | None
     start_date: date | None
     end_date: date | None
     value: float | None

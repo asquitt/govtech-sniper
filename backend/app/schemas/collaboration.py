@@ -43,6 +43,7 @@ class InvitationRead(BaseModel):
     workspace_id: int
     email: str
     role: str
+    accept_token: str | None = None
     is_accepted: bool
     expires_at: datetime
     created_at: datetime
@@ -62,9 +63,16 @@ class MemberRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MemberRoleUpdate(BaseModel):
+    role: str
+
+
 class ShareDataCreate(BaseModel):
     data_type: str  # rfp_summary, compliance_matrix, proposal_section, forecast, contract_feed
     entity_id: int
+    requires_approval: bool = False
+    expires_at: datetime | None = None
+    partner_user_id: int | None = None
 
 
 class SharedDataRead(BaseModel):
@@ -72,9 +80,112 @@ class SharedDataRead(BaseModel):
     workspace_id: int
     data_type: str
     entity_id: int
+    label: str | None = None
+    requires_approval: bool
+    approval_status: str
+    approved_by_user_id: int | None = None
+    approved_at: datetime | None = None
+    expires_at: datetime | None = None
+    partner_user_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ContractFeedCatalogItem(BaseModel):
+    id: int
+    name: str
+    source: str
+    description: str
+
+
+class ContractFeedPresetItem(BaseModel):
+    key: str
+    name: str
+    description: str
+    feed_ids: list[int]
+
+
+class SharePresetCreate(BaseModel):
+    preset_key: str
+
+
+class SharePresetApplyResponse(BaseModel):
+    preset_key: str
+    applied_count: int
+    shared_items: list[SharedDataRead]
+
+
+class ShareGovernanceSummaryRead(BaseModel):
+    workspace_id: int
+    total_shared_items: int
+    pending_approval_count: int
+    approved_count: int
+    revoked_count: int
+    expired_count: int
+    expiring_7d_count: int
+    scoped_share_count: int
+    global_share_count: int
+
+
+class ShareGovernanceTrendPointRead(BaseModel):
+    date: str
+    shared_count: int
+    approvals_completed_count: int
+    approved_within_sla_count: int
+    approved_after_sla_count: int
+    average_approval_hours: float | None = None
+
+
+class ShareGovernanceTrendRead(BaseModel):
+    workspace_id: int
+    days: int
+    sla_hours: int
+    overdue_pending_count: int
+    sla_approval_rate: float
+    points: list[ShareGovernanceTrendPointRead]
+
+
+class GovernanceAnomalyRead(BaseModel):
+    code: str
+    severity: str
+    title: str
+    description: str
+    metric_value: float
+    threshold: float
+    recommendation: str
+
+
+class ComplianceDigestScheduleRead(BaseModel):
+    workspace_id: int
+    user_id: int
+    frequency: str
+    day_of_week: int | None = None
+    hour_utc: int
+    minute_utc: int
+    channel: str
+    anomalies_only: bool
+    is_enabled: bool
+    last_sent_at: datetime | None = None
+
+
+class ComplianceDigestScheduleUpdate(BaseModel):
+    frequency: str = "weekly"
+    day_of_week: int | None = 1
+    hour_utc: int = 13
+    minute_utc: int = 0
+    channel: str = "in_app"
+    anomalies_only: bool = False
+    is_enabled: bool = True
+
+
+class ComplianceDigestPreviewRead(BaseModel):
+    workspace_id: int
+    generated_at: datetime
+    summary: ShareGovernanceSummaryRead
+    trends: ShareGovernanceTrendRead
+    anomalies: list[GovernanceAnomalyRead]
+    schedule: ComplianceDigestScheduleRead
 
 
 class PortalView(BaseModel):

@@ -25,6 +25,28 @@ class SharedDataType(str, Enum):
     CONTRACT_FEED = "contract_feed"
 
 
+class ShareApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REVOKED = "revoked"
+
+
+class GovernanceAnomalySeverity(str, Enum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+class ComplianceDigestFrequency(str, Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
+class ComplianceDigestChannel(str, Enum):
+    IN_APP = "in_app"
+    EMAIL = "email"
+
+
 class SharedWorkspace(SQLModel, table=True):
     """A collaboration workspace owned by a user, optionally tied to an RFP."""
 
@@ -79,5 +101,32 @@ class SharedDataPermission(SQLModel, table=True):
     workspace_id: int = Field(foreign_key="shared_workspaces.id", index=True)
     data_type: SharedDataType
     entity_id: int  # ID of the shared entity (rfp_id, proposal_id, etc.)
+    requires_approval: bool = Field(default=False)
+    approval_status: ShareApprovalStatus = Field(default=ShareApprovalStatus.APPROVED)
+    approved_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    approved_at: datetime | None = Field(default=None)
+    expires_at: datetime | None = Field(default=None, index=True)
+    partner_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkspaceComplianceDigestSchedule(SQLModel, table=True):
+    """Delivery preferences for workspace governance compliance digests."""
+
+    __tablename__ = "workspace_compliance_digest_schedules"
+
+    id: int | None = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="shared_workspaces.id", index=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    frequency: ComplianceDigestFrequency = Field(default=ComplianceDigestFrequency.WEEKLY)
+    day_of_week: int | None = Field(default=1, ge=0, le=6)
+    hour_utc: int = Field(default=13, ge=0, le=23)
+    minute_utc: int = Field(default=0, ge=0, le=59)
+    channel: ComplianceDigestChannel = Field(default=ComplianceDigestChannel.IN_APP)
+    anomalies_only: bool = Field(default=False)
+    is_enabled: bool = Field(default=True)
+    last_sent_at: datetime | None = None
+
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
