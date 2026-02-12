@@ -5,9 +5,10 @@ Track user onboarding progress through the first-proposal wizard.
 """
 
 from datetime import datetime
+from statistics import median
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import JSON, Column, Field, SQLModel, select
@@ -35,6 +36,7 @@ class OnboardingProgress(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", unique=True, index=True)
     completed_steps: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    step_timestamps: dict = Field(default_factory=dict, sa_column=Column(JSON))
     is_dismissed: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -103,12 +105,21 @@ async def get_progress(
     ).scalar_one_or_none()
 
     if not progress:
-        progress = OnboardingProgress(user_id=uid, completed_steps=["create_account"])
+        now_iso = datetime.utcnow().isoformat()
+        progress = OnboardingProgress(
+            user_id=uid,
+            completed_steps=["create_account"],
+            step_timestamps={"create_account": now_iso},
+        )
         session.add(progress)
         await session.flush()
 
     # Auto-detect completed steps from actual data
     completed = set(progress.completed_steps)
+    timestamps = dict(progress.step_timestamps or {})
+    now_iso = datetime.utcnow().isoformat()
+    if "create_account" not in timestamps:
+        timestamps["create_account"] = now_iso
     completed.add("create_account")  # Always true if they're calling this
 
     rfp_count = (
@@ -116,6 +127,8 @@ async def get_progress(
     ).scalar() or 0
     if rfp_count > 0:
         completed.add("upload_rfp")
+        if "upload_rfp" not in timestamps:
+            timestamps["upload_rfp"] = now_iso
 
     analyzed_count = (
         await session.execute(
@@ -124,21 +137,28 @@ async def get_progress(
     ).scalar() or 0
     if analyzed_count > 0:
         completed.add("analyze_rfp")
+        if "analyze_rfp" not in timestamps:
+            timestamps["analyze_rfp"] = now_iso
 
     doc_count = (
         await session.execute(select(func.count()).where(KnowledgeBaseDocument.user_id == uid))
     ).scalar() or 0
     if doc_count > 0:
         completed.add("upload_documents")
+        if "upload_documents" not in timestamps:
+            timestamps["upload_documents"] = now_iso
 
     proposal_count = (
         await session.execute(select(func.count()).where(Proposal.user_id == uid))
     ).scalar() or 0
     if proposal_count > 0:
         completed.add("create_proposal")
+        if "create_proposal" not in timestamps:
+            timestamps["create_proposal"] = now_iso
 
     # Update stored progress
     progress.completed_steps = sorted(completed)
+    progress.step_timestamps = timestamps
     progress.updated_at = datetime.utcnow()
     session.add(progress)
     await session.commit()
@@ -164,6 +184,7 @@ async def get_progress(
         "total_steps": len(ONBOARDING_STEPS),
         "is_complete": len(completed) >= len(ONBOARDING_STEPS),
         "is_dismissed": progress.is_dismissed,
+        "step_timestamps": progress.step_timestamps,
     }
 
 
@@ -186,12 +207,17 @@ async def mark_step_complete(
     ).scalar_one_or_none()
 
     if not progress:
-        progress = OnboardingProgress(user_id=uid, completed_steps=[])
+        progress = OnboardingProgress(user_id=uid, completed_steps=[], step_timestamps={})
         session.add(progress)
 
     completed = set(progress.completed_steps)
     completed.add(step_id)
     progress.completed_steps = sorted(completed)
+
+    timestamps = dict(progress.step_timestamps or {})
+    if step_id not in timestamps:
+        timestamps[step_id] = datetime.utcnow().isoformat()
+    progress.step_timestamps = timestamps
     progress.updated_at = datetime.utcnow()
     session.add(progress)
     await session.commit()
@@ -221,3 +247,51 @@ async def dismiss_onboarding(
     await session.commit()
 
     return {"status": "dismissed"}
+
+
+@router.get("/activation-metrics")
+async def get_activation_metrics(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Activation telemetry for admin dashboards."""
+    if current_user.tier not in ("admin", "enterprise"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    all_progress = (await session.execute(select(OnboardingProgress))).scalars().all()
+    total_users = len(all_progress)
+    step_ids = [s["id"] for s in ONBOARDING_STEPS]
+    fully_activated = sum(
+        1 for p in all_progress if len(set(p.completed_steps) & set(step_ids)) >= len(step_ids)
+    )
+
+    step_completion_counts: dict[str, int] = {sid: 0 for sid in step_ids}
+    time_deltas: list[float] = []
+    for p in all_progress:
+        completed = set(p.completed_steps)
+        for sid in step_ids:
+            if sid in completed:
+                step_completion_counts[sid] += 1
+        ts = p.step_timestamps or {}
+        if "create_account" in ts and "create_proposal" in ts:
+            try:
+                t0 = datetime.fromisoformat(ts["create_account"])
+                t1 = datetime.fromisoformat(ts["create_proposal"])
+                delta_hours = (t1 - t0).total_seconds() / 3600
+                if delta_hours >= 0:
+                    time_deltas.append(delta_hours)
+            except (ValueError, TypeError):
+                pass
+
+    step_completion_rates = {
+        sid: round(count / total_users * 100, 1) if total_users else 0.0
+        for sid, count in step_completion_counts.items()
+    }
+    median_time = round(median(time_deltas), 2) if time_deltas else None
+
+    return {
+        "total_users": total_users,
+        "fully_activated": fully_activated,
+        "step_completion_rates": step_completion_rates,
+        "median_time_to_first_proposal_hours": median_time,
+    }

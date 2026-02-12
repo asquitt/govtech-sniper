@@ -15,6 +15,7 @@ import { GraphicsPanel } from "./_components/graphics-panel";
 import { SubmissionPanel } from "./_components/submission-panel";
 import { CompliancePanel } from "./_components/compliance-panel";
 import { CollaborationContextPanel } from "./_components/collaboration-context-panel";
+import { QualityScorecard } from "./_components/quality-scorecard";
 import { SharePointExportDialog } from "@/components/integrations/sharepoint-export-dialog";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import type {
@@ -571,6 +572,8 @@ export default function ProposalWorkspacePage() {
               isGenerating={isGeneratingGraphic}
               onInsertGeneratedGraphic={handleInsertGeneratedGraphic}
             />
+
+            <QualityScorecard proposalId={proposalId} />
 
             <CollaborationContextPanel
               proposalId={proposalId}

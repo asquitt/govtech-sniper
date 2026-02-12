@@ -34,6 +34,9 @@ class ProviderInfo(BaseModel):
     description: str
     is_active: bool
     healthy: bool | None = None
+    maturity: str
+    last_live_sync: str | None = None
+    record_count_estimate: int
 
 
 class SearchResponse(BaseModel):
@@ -64,6 +67,9 @@ async def list_data_sources(
             display_name=p.display_name,
             description=p.description,
             is_active=p.is_active,
+            maturity=p.maturity.value,
+            last_live_sync=p.last_live_sync,
+            record_count_estimate=p.record_count_estimate,
         )
         for p in providers
     ]

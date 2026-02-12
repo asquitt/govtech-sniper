@@ -9,6 +9,7 @@ import structlog
 
 from app.services.data_providers.base import (
     DataSourceProvider,
+    ProviderMaturity,
     RawOpportunity,
     SearchParams,
 )
@@ -25,6 +26,7 @@ class USAspendingProvider(DataSourceProvider):
     display_name = "USAspending"
     description = "Federal award spending data from USAspending.gov"
     is_active = True
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         from datetime import datetime, timedelta

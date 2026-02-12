@@ -15,6 +15,7 @@ from sqlmodel import select
 
 from app.config import settings
 from app.database import get_session
+from app.models.organization import OrganizationMember, OrgRole
 from app.models.user import User, UserProfile, UserTier
 from app.services.auth_service import UserAuth, decode_token
 
@@ -251,6 +252,34 @@ def resolve_user_id(
         )
 
     return user_id if user_id is not None else current_user.id
+
+
+# =============================================================================
+# Organization Role Lookup (for Policy Engine)
+# =============================================================================
+
+# Maps OrgRole → policy engine role string
+_ORG_ROLE_TO_POLICY: dict[str, str] = {
+    OrgRole.OWNER.value: "owner",
+    OrgRole.ADMIN.value: "admin",
+    OrgRole.MEMBER.value: "editor",
+    OrgRole.VIEWER.value: "viewer",
+}
+
+
+async def get_user_policy_role(user_id: int, session: AsyncSession) -> str:
+    """
+    Resolve user's organization role to a policy engine role string.
+
+    Returns "editor" as default if user has no org membership (solo users).
+    """
+    result = await session.execute(
+        select(OrganizationMember).where(OrganizationMember.user_id == user_id)
+    )
+    member = result.scalar_one_or_none()
+    if not member:
+        return "editor"  # Solo users default to editor-level access
+    return _ORG_ROLE_TO_POLICY.get(member.role.value, "viewer")
 
 
 # =============================================================================

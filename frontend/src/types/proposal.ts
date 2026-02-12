@@ -201,3 +201,27 @@ export interface Proposal {
   submitted_at?: string;
   completion_percentage: number;
 }
+
+// -----------------------------------------------------------------------------
+// Quality Scorecard Types
+// -----------------------------------------------------------------------------
+
+export interface SectionScoreRead {
+  section_id: number;
+  section_number: string;
+  title: string;
+  quality_score: number | null;
+  quality_breakdown: Record<string, number> | null;
+  word_count: number | null;
+  has_content: boolean;
+}
+
+export interface ProposalScorecard {
+  proposal_id: number;
+  proposal_title: string;
+  overall_score: number | null;
+  sections_scored: number;
+  sections_total: number;
+  pink_team_ready: boolean;
+  section_scores: SectionScoreRead[];
+}

@@ -12,6 +12,7 @@ import structlog
 
 from app.services.data_providers.base import (
     DataSourceProvider,
+    ProviderMaturity,
     RawOpportunity,
     SearchParams,
 )
@@ -34,6 +35,7 @@ class FPDSProvider(DataSourceProvider):
     display_name = "FPDS"
     description = "Federal Procurement Data System — awarded contract records"
     is_active = True
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_parts: list[str] = []

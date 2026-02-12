@@ -10,6 +10,7 @@ import type {
   TaskResponse,
   TaskStatus,
   DraftRequest,
+  ProposalScorecard,
 } from "@/types";
 
 // =============================================================================
@@ -252,6 +253,13 @@ export const draftApi = {
   }> => {
     const { data } = await api.get(
       `/draft/proposals/${proposalId}/generation-progress`
+    );
+    return data;
+  },
+
+  getScorecard: async (proposalId: number): Promise<ProposalScorecard> => {
+    const { data } = await api.get(
+      `/draft/proposals/${proposalId}/scorecard`
     );
     return data;
   },

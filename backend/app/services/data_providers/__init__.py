@@ -6,6 +6,7 @@ Central registry for all procurement data source providers.
 
 from app.services.data_providers.base import (
     DataSourceProvider,
+    ProviderMaturity,
     RawOpportunity,
     SearchParams,
 )
@@ -52,6 +53,7 @@ def list_providers() -> list[DataSourceProvider]:
 
 __all__ = [
     "DataSourceProvider",
+    "ProviderMaturity",
     "RawOpportunity",
     "SearchParams",
     "get_provider",

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 import structlog
@@ -114,6 +115,37 @@ class SLOMetricCollector:
 
     def get_all_summaries(self) -> list[dict]:
         return [self.get_summary(f) for f in CriticalFlow]
+
+    def get_error_budget(self, flow: CriticalFlow) -> dict:
+        target = SLO_TARGETS[flow]
+        entries = self._metrics[flow]
+        total = len(entries)
+        successes = sum(1 for e in entries if e["success"])
+        actual = successes / total if total else 1.0
+        budget = target.success_rate_target - actual
+        error_allowance = 1 - target.success_rate_target
+        budget_remaining_pct = (budget / error_allowance) * 100 if error_allowance > 0 else 100.0
+        return {
+            "flow": flow.value,
+            "target": target.success_rate_target,
+            "actual": round(actual, 4),
+            "budget": round(budget, 4),
+            "budget_remaining_pct": round(budget_remaining_pct, 2),
+            "is_healthy": actual >= target.success_rate_target,
+            "total_requests": total,
+            "allowed_failures": int(error_allowance * total),
+            "actual_failures": total - successes,
+        }
+
+    def get_release_gate(self) -> dict:
+        budgets = [self.get_error_budget(f) for f in CriticalFlow]
+        breaches = [b for b in budgets if not b["is_healthy"]]
+        return {
+            "can_release": all(b["is_healthy"] for b in budgets),
+            "evaluated_at": datetime.utcnow().isoformat(),
+            "flows": budgets,
+            "breaches": breaches,
+        }
 
 
 # Global singleton

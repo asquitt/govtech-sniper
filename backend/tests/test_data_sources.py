@@ -180,6 +180,21 @@ class TestDataSources:
         assert dibbs_payload["results"][0]["source_type"] == "dibbs"
 
     @pytest.mark.asyncio
+    async def test_provider_list_includes_maturity(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        response = await client.get("/api/v1/data-sources", headers=auth_headers)
+        assert response.status_code == 200
+        providers = response.json()
+        for provider in providers:
+            assert "maturity" in provider, f"Missing maturity on {provider['provider_name']}"
+            assert provider["maturity"] in ("LIVE", "HYBRID", "SAMPLE")
+            assert "last_live_sync" in provider
+            assert "record_count_estimate" in provider
+
+    @pytest.mark.asyncio
     async def test_contract_vehicle_feed_ingest(
         self,
         client: AsyncClient,

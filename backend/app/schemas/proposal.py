@@ -281,3 +281,32 @@ class DraftResult(BaseModel):
     tokens_used: int
     generation_time_seconds: float
     status: str = "completed"
+
+
+# =============================================================================
+# Quality Scorecard Schemas
+# =============================================================================
+
+
+class SectionScoreRead(BaseModel):
+    """Quality score for a single proposal section."""
+
+    section_id: int
+    section_number: str
+    title: str
+    quality_score: float | None
+    quality_breakdown: dict | None
+    word_count: int | None
+    has_content: bool
+
+
+class ProposalScorecard(BaseModel):
+    """Aggregated quality scorecard for a full proposal."""
+
+    proposal_id: int
+    proposal_title: str
+    overall_score: float | None
+    sections_scored: int
+    sections_total: int
+    pink_team_ready: bool
+    section_scores: list[SectionScoreRead]

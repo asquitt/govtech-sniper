@@ -7,7 +7,12 @@ Fetches state/local/education opportunities from BidNet Direct's public search.
 import httpx
 import structlog
 
-from app.services.data_providers.base import DataSourceProvider, RawOpportunity, SearchParams
+from app.services.data_providers.base import (
+    DataSourceProvider,
+    ProviderMaturity,
+    RawOpportunity,
+    SearchParams,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -21,6 +26,7 @@ class SLEDBidNetProvider(DataSourceProvider):
     display_name = "SLED (BidNet)"
     description = "State, local, and education solicitations from BidNet Direct"
     is_active = True
+    maturity = ProviderMaturity.SAMPLE
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {

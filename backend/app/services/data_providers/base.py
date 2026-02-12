@@ -5,8 +5,17 @@ Abstract base class and shared data models for all procurement data providers.
 """
 
 from abc import ABC, abstractmethod
+from enum import Enum
 
 from pydantic import BaseModel
+
+
+class ProviderMaturity(str, Enum):
+    """Data readiness level for a provider."""
+
+    LIVE = "LIVE"
+    HYBRID = "HYBRID"
+    SAMPLE = "SAMPLE"
 
 
 class SearchParams(BaseModel):
@@ -42,6 +51,9 @@ class DataSourceProvider(ABC):
     display_name: str
     description: str
     is_active: bool = True
+    maturity: ProviderMaturity = ProviderMaturity.SAMPLE
+    last_live_sync: str | None = None
+    record_count_estimate: int = 0
 
     @abstractmethod
     async def search(self, params: SearchParams) -> list[RawOpportunity]:

@@ -35,6 +35,7 @@ from app.models.rfp import RFP
 from app.models.secret import SecretRecord
 from app.models.user import User
 from app.models.webhook import WebhookSubscription
+from app.services.slo_service import slo_collector
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -986,3 +987,51 @@ async def get_org_audit_log(
         "offset": offset,
         "limit": limit,
     }
+
+
+# =============================================================================
+# Provider Maturity Matrix
+# =============================================================================
+
+
+@router.get("/provider-maturity")
+async def get_provider_maturity(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Return the maturity matrix for all registered data providers."""
+    from app.services.data_providers import list_providers
+
+    await _require_org_admin(current_user, session)
+
+    providers = list_providers()
+    return {
+        "providers": [
+            {
+                "provider_name": p.provider_name,
+                "display_name": p.display_name,
+                "maturity": p.maturity.value,
+                "last_live_sync": p.last_live_sync,
+                "record_count_estimate": p.record_count_estimate,
+                "is_active": p.is_active,
+            }
+            for p in providers
+        ],
+        "total": len(providers),
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+# =============================================================================
+# Release Gate (SLO Error Budget)
+# =============================================================================
+
+
+@router.get("/release-gate")
+async def get_release_gate(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Release gate based on SLO error budgets across all critical flows."""
+    await _require_org_admin(current_user, session)
+    return slo_collector.get_release_gate()

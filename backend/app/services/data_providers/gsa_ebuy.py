@@ -11,6 +11,7 @@ import structlog
 from app.config import settings
 from app.services.data_providers.base import (
     DataSourceProvider,
+    ProviderMaturity,
     RawOpportunity,
     SearchParams,
 )
@@ -27,6 +28,7 @@ class GSAEbuyProvider(DataSourceProvider):
     display_name = "GSA eBuy"
     description = "GSA eBuy quotes and RFQs for Schedule holders"
     is_active = True
+    maturity = ProviderMaturity.SAMPLE
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         api_key = getattr(settings, "sam_gov_api_key", None)

@@ -9,6 +9,7 @@ import structlog
 
 from app.services.data_providers.base import (
     DataSourceProvider,
+    ProviderMaturity,
     RawOpportunity,
     SearchParams,
 )
@@ -26,6 +27,7 @@ class GrantsGovProvider(DataSourceProvider):
     display_name = "Grants.gov"
     description = "Federal grants and cooperative agreements"
     is_active = True
+    maturity = ProviderMaturity.SAMPLE
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         payload: dict = {

@@ -22,8 +22,10 @@ from app.schemas.proposal import (
     DraftRequest,
     DraftResponse,
     ExpandRequest,
+    ProposalScorecard,
     ProposalSectionRead,
     RewriteRequest,
+    SectionScoreRead,
 )
 from app.services.auth_service import UserAuth
 from app.tasks.generation_tasks import (
@@ -640,3 +642,64 @@ async def get_generation_status(task_id: str) -> dict:
             "task_id": task_id,
             "status": normalize_status(result),
         }
+
+
+# =============================================================================
+# Quality Scorecard
+# =============================================================================
+
+
+@router.get("/proposals/{proposal_id}/scorecard", response_model=ProposalScorecard)
+async def get_proposal_scorecard(
+    proposal_id: int = Path(...),
+    user_id: int | None = Query(default=None),
+    current_user: UserAuth | None = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+):
+    """Aggregated quality scorecard for all sections in a proposal."""
+    uid = resolve_user_id(user_id, current_user)
+
+    result = await session.execute(
+        select(Proposal).where(Proposal.id == proposal_id, Proposal.user_id == uid)
+    )
+    proposal = result.scalar_one_or_none()
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    sections_result = await session.execute(
+        select(ProposalSection)
+        .where(ProposalSection.proposal_id == proposal_id)
+        .order_by(ProposalSection.display_order)
+    )
+    sections = list(sections_result.scalars().all())
+
+    section_scores = []
+    scored_values = []
+    for s in sections:
+        has_content = bool(s.final_content or s.generated_content)
+        section_scores.append(
+            SectionScoreRead(
+                section_id=s.id,
+                section_number=s.section_number,
+                title=s.title,
+                quality_score=s.quality_score,
+                quality_breakdown=s.quality_breakdown,
+                word_count=s.word_count,
+                has_content=has_content,
+            )
+        )
+        if s.quality_score is not None:
+            scored_values.append(s.quality_score)
+
+    overall = round(sum(scored_values) / len(scored_values), 1) if scored_values else None
+    pink_team_ready = overall is not None and overall >= 70 and all(v >= 50 for v in scored_values)
+
+    return ProposalScorecard(
+        proposal_id=proposal_id,
+        proposal_title=proposal.title,
+        overall_score=overall,
+        sections_scored=len(scored_values),
+        sections_total=len(sections),
+        pink_team_ready=pink_team_ready,
+        section_scores=section_scores,
+    )

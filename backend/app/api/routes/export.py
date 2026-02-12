@@ -15,10 +15,12 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import UserAuth, get_current_user
+from app.api.deps import UserAuth, get_current_user, get_user_policy_role
 from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection
 from app.models.rfp import RFP
+from app.services.audit_service import log_audit_event
+from app.services.policy_engine import PolicyAction, PolicyDecision, evaluate
 
 logger = structlog.get_logger(__name__)
 
@@ -225,6 +227,28 @@ async def export_proposal_docx(
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
 
+    # Policy check
+    user_role = await get_user_policy_role(current_user.id, session)
+    policy = evaluate(PolicyAction.EXPORT, proposal.classification, user_role)
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="proposal",
+        entity_id=proposal_id,
+        action="export_docx",
+        metadata=policy.to_audit_dict(),
+    )
+    if policy.decision == PolicyDecision.DENY:
+        await session.commit()
+        raise HTTPException(status_code=403, detail=policy.reason)
+    if policy.decision == PolicyDecision.STEP_UP:
+        await session.commit()
+        raise HTTPException(
+            status_code=403,
+            detail=policy.reason,
+            headers={"X-Step-Up-Required": "true"},
+        )
+
     # Get sections
     sections_result = await session.execute(
         select(ProposalSection)
@@ -246,6 +270,8 @@ async def export_proposal_docx(
     except Exception as e:
         logger.error(f"DOCX generation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+    await session.commit()
 
     # Create filename
     safe_title = "".join(c for c in proposal.title[:50] if c.isalnum() or c in " -_")
@@ -441,6 +467,28 @@ async def export_proposal_pdf(
     if not proposal:
         raise HTTPException(status_code=404, detail="Proposal not found")
 
+    # Policy check
+    user_role = await get_user_policy_role(current_user.id, session)
+    policy = evaluate(PolicyAction.EXPORT, proposal.classification, user_role)
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="proposal",
+        entity_id=proposal_id,
+        action="export_pdf",
+        metadata=policy.to_audit_dict(),
+    )
+    if policy.decision == PolicyDecision.DENY:
+        await session.commit()
+        raise HTTPException(status_code=403, detail=policy.reason)
+    if policy.decision == PolicyDecision.STEP_UP:
+        await session.commit()
+        raise HTTPException(
+            status_code=403,
+            detail=policy.reason,
+            headers={"X-Step-Up-Required": "true"},
+        )
+
     # Get sections
     sections_result = await session.execute(
         select(ProposalSection)
@@ -462,6 +510,8 @@ async def export_proposal_pdf(
     except Exception as e:
         logger.error(f"PDF generation failed: {e}")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+    await session.commit()
 
     # Create filename
     safe_title = "".join(c for c in proposal.title[:50] if c.isalnum() or c in " -_")

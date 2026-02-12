@@ -7,7 +7,12 @@ Fetches procurement opportunities from Canada's buyandsell.gc.ca open data API.
 import httpx
 import structlog
 
-from app.services.data_providers.base import DataSourceProvider, RawOpportunity, SearchParams
+from app.services.data_providers.base import (
+    DataSourceProvider,
+    ProviderMaturity,
+    RawOpportunity,
+    SearchParams,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -21,6 +26,7 @@ class CanadaBuyAndSellProvider(DataSourceProvider):
     display_name = "Canada Buy & Sell"
     description = "Canadian federal procurement opportunities from buyandsell.gc.ca"
     is_active = True
+    maturity = ProviderMaturity.SAMPLE
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {

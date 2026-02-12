@@ -11,7 +11,12 @@ import httpx
 import structlog
 
 from app.config import settings
-from app.services.data_providers.base import DataSourceProvider, RawOpportunity, SearchParams
+from app.services.data_providers.base import (
+    DataSourceProvider,
+    ProviderMaturity,
+    RawOpportunity,
+    SearchParams,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +52,7 @@ class _SAMVehicleProvider(DataSourceProvider):
 
     organization_id: str = ""
     vehicle_keyword: str = ""
+    maturity = ProviderMaturity.SAMPLE
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         api_key = getattr(settings, "sam_gov_api_key", None)

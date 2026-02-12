@@ -8,7 +8,12 @@ Uses the DLA's public bid board search API.
 import httpx
 import structlog
 
-from app.services.data_providers.base import DataSourceProvider, RawOpportunity, SearchParams
+from app.services.data_providers.base import (
+    DataSourceProvider,
+    ProviderMaturity,
+    RawOpportunity,
+    SearchParams,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -23,6 +28,7 @@ class DIBBSProvider(DataSourceProvider):
     display_name = "DIBBS"
     description = "Defense Logistics Agency procurement opportunities"
     is_active = True
+    maturity = ProviderMaturity.SAMPLE
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {
