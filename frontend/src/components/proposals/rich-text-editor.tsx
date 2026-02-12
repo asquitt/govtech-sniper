@@ -5,6 +5,8 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { EditorToolbar } from "./editor-toolbar";
+import { AiSuggestion } from "./track-changes-extension";
+import { SuggestionToolbar } from "./suggestion-toolbar";
 
 interface RichTextEditorProps {
   content: string;
@@ -24,11 +26,13 @@ export function RichTextEditor({
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4] },
       }),
       Placeholder.configure({ placeholder }),
+      AiSuggestion,
     ],
     content: wrapPlainText(content),
     editable: !disabled,
@@ -81,9 +85,21 @@ export function RichTextEditor({
   return (
     <div className="flex-1 flex flex-col border border-border rounded-md overflow-hidden bg-background">
       <EditorToolbar editor={editor} />
+      <SuggestionToolbar editor={editor} />
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
+      <style>{`
+        .ai-suggestion {
+          background-color: rgba(250, 204, 21, 0.15);
+          border-bottom: 1px dashed rgba(202, 138, 4, 0.5);
+          padding: 1px 0;
+        }
+        .dark .ai-suggestion {
+          background-color: rgba(250, 204, 21, 0.1);
+          border-bottom-color: rgba(250, 204, 21, 0.3);
+        }
+      `}</style>
     </div>
   );
 }

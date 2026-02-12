@@ -140,7 +140,7 @@ export const AiSuggestion = Mark.create<AiSuggestionOptions>({
  * Count the number of text nodes with the aiSuggestion mark in the document.
  * Returns the count of distinct marked ranges.
  */
-export function countAiSuggestions(editor: { state: { doc: { descendants: (cb: (node: { marks: readonly { type: { name: string } }[] }) => void) => void } } }): number {
+export function countAiSuggestions(editor: Editor): number {
   let count = 0;
   let inSuggestion = false;
 
