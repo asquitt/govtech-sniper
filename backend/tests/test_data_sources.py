@@ -113,7 +113,30 @@ class TestDataSources:
         self,
         client: AsyncClient,
         auth_headers: dict,
+        monkeypatch,
     ):
+        sled_provider = get_provider("sled_bidnet")
+        assert sled_provider is not None
+
+        async def fake_sled_search(_params):
+            return [
+                RawOpportunity(
+                    external_id="SLED-TEST-001",
+                    title="State Cybersecurity Modernization",
+                    agency="State of Virginia",
+                    description="SLED cybersecurity services.",
+                    posted_date="2026-02-01",
+                    response_deadline=None,
+                    estimated_value=500000,
+                    naics_code="541512",
+                    source_url="https://www.bidnetdirect.com/fake",
+                    source_type="sled",
+                    raw_data={"test": True},
+                )
+            ]
+
+        monkeypatch.setattr(sled_provider, "search", fake_sled_search)
+
         sled_response = await client.post(
             "/api/v1/data-sources/sled_bidnet/search",
             headers=auth_headers,
@@ -123,6 +146,28 @@ class TestDataSources:
         sled_payload = sled_response.json()
         assert sled_payload["count"] >= 1
         assert sled_payload["results"][0]["source_type"] == "sled"
+
+        dibbs_provider = get_provider("dibbs")
+        assert dibbs_provider is not None
+
+        async def fake_dibbs_search(_params):
+            return [
+                RawOpportunity(
+                    external_id="DIBBS-TEST-001",
+                    title="Network Router Procurement",
+                    agency="DLA",
+                    description="DIBBS router procurement.",
+                    posted_date="2026-02-01",
+                    response_deadline=None,
+                    estimated_value=75000,
+                    naics_code="334210",
+                    source_url="https://www.dibbs.bsm.dla.mil/fake",
+                    source_type="dibbs",
+                    raw_data={"test": True},
+                )
+            ]
+
+        monkeypatch.setattr(dibbs_provider, "search", fake_dibbs_search)
 
         dibbs_response = await client.post(
             "/api/v1/data-sources/dibbs/search",
@@ -139,7 +184,30 @@ class TestDataSources:
         self,
         client: AsyncClient,
         auth_headers: dict,
+        monkeypatch,
     ):
+        oasis_provider = get_provider("oasis")
+        assert oasis_provider is not None
+
+        async def fake_oasis_search(_params):
+            return [
+                RawOpportunity(
+                    external_id="OASIS-TEST-001",
+                    title="OASIS Mission Support Services",
+                    agency="GSA",
+                    description="OASIS contract vehicle task order.",
+                    posted_date="2026-02-01",
+                    response_deadline=None,
+                    estimated_value=2000000,
+                    naics_code="541611",
+                    source_url="https://sam.gov/opp/fake",
+                    source_type="oasis",
+                    raw_data={"test": True},
+                )
+            ]
+
+        monkeypatch.setattr(oasis_provider, "search", fake_oasis_search)
+
         response = await client.post(
             "/api/v1/data-sources/oasis/ingest",
             headers=auth_headers,
