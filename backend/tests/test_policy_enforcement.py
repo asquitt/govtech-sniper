@@ -17,6 +17,7 @@ async def _setup_proposal(db_session: AsyncSession, user_id: int, classification
     rfp = RFP(
         title="Test RFP",
         solicitation_number=f"TEST-POL-{classification}",
+        agency="Test Agency",
         user_id=user_id,
         status="analyzed",
     )
