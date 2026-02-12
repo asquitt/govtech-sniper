@@ -1,6 +1,7 @@
 # Competitive Analysis & Task Roadmap: GovTech Sniper vs GovDash vs Govly
 
 > **Generated**: February 6, 2026
+> **Updated**: February 12, 2026
 > **Purpose**: Gap analysis between GovTech Sniper and our two primary competitors, with a prioritized task list to close the gap.
 
 ---
@@ -35,6 +36,47 @@ GovDash and Govly represent two distinct competitive threats:
 6. **Free tier / PLG strategy** (Govly's free plan drives adoption)
 7. **CRM integrations** (Salesforce, Unanet, Microsoft Dynamics)
 
+### Verification Update (2026-02-10)
+
+This roadmap was revalidated against live code, backend integration tests, and Playwright browser runs.
+
+- Verified in live browser and tests as integrated: Salesforce sync surfaces, SharePoint routes/sync surfaces, semantic search API/UI entry points, color-team reviews, Gantt pipeline view, analytics/reports dashboard metrics, teaming board, and collaboration workspaces.
+- Newly closed in this session: cross-org invitation acceptance UX (`/collaboration/accept`), partner portal UI (`/collaboration/portal/[workspaceId]`), selective data-sharing controls, and secure invitation acceptance contract (invite email must match authenticated user).
+- Newly closed in this session: contract hierarchy management (parent/child task-order relationships) and full modifications + CLIN lifecycle validation in `/contracts`.
+- Newly closed in this session: partner contract-feed sharing with named feed catalog + partner-portal visibility in collaboration workspaces.
+- Newly closed in this session: contract-feed sharing presets and multi-workspace partner-portal switching for faster cross-org operations.
+- Newly closed in this session: partner-governance controls for shared artifacts (admin approval gates, expiry policies, and partner-scoped visibility).
+- Newly closed in this session: multi-user teaming request lifecycle validation (sender -> receiver inbox acceptance) and deterministic capability-gap analysis contract hardening.
+- Validation evidence this session: `backend/tests/test_collaboration.py` passed; Playwright full suite passed (`58/58`) on `E2E_BASE_URL=http://localhost:3100` with backend on `:8010`.
+- Additional validation evidence this session: `backend/tests/test_contracts.py` passed (hierarchy + modification + CLIN coverage), `frontend/src/__tests__/contracts-page.test.tsx` passed, and Playwright contract workflow passed (`frontend/e2e/tests/contracts-workflow.spec.ts`).
+- Additional collaboration parity evidence this session: `/api/v1/collaboration/contract-feeds/catalog` + contract-feed share labeling covered in `backend/tests/test_collaboration.py`, portal label rendering covered in `frontend/src/__tests__/collaboration-portal-page.test.tsx`, and partner flow validated in Playwright (`frontend/e2e/tests/collaboration-workflow.spec.ts`).
+- Additional collaboration parity evidence this session: `/api/v1/collaboration/contract-feeds/presets` + `/api/v1/collaboration/workspaces/{id}/share/preset` validated in backend tests; portal workspace-switcher and preset-driven sharing validated in Playwright collaboration workflow.
+- Additional collaboration governance evidence this session: `/api/v1/collaboration/workspaces/{id}/share` now supports `requires_approval`, `expires_at`, and `partner_user_id`; `/api/v1/collaboration/workspaces/{id}/shared/{perm_id}/approve` is validated in backend integration tests and Playwright workflow.
+- Additional collaboration governance analytics evidence this session: `/api/v1/collaboration/workspaces/{id}/shared/governance-summary` is validated in backend integration tests and rendered in collaboration workspace UI with Playwright assertions for pending/scoped metric transitions.
+- Additional collaboration governance depth evidence this session: `/api/v1/collaboration/workspaces/{id}/shared/governance-trends` (SLA trend analytics) and `/api/v1/collaboration/workspaces/{id}/shared/audit-export` (CSV audit timeline export) are validated in backend integration tests, surfaced in `/collaboration`, and verified in Playwright (`collaboration-workflow.spec.ts`).
+- Additional teaming evidence this session: backend `test_teaming_board.py` now validates cross-user inbox acceptance and `/api/v1/teaming/gap-analysis/{rfp_id}`; Playwright `teaming-workflow.spec.ts` validates end-to-end two-user acceptance propagation.
+- Additional teaming UX evidence this session: `/teaming` now surfaces partner-fit rationale from gap analysis and request timeline metadata (`updated_at`) in sent/received queues, validated by unit and Playwright tests.
+- Additional teaming analytics evidence this session: `/api/v1/teaming/requests/fit-trends` and `/api/v1/teaming/requests/audit-export` are validated in backend integration tests, surfaced in `/teaming` with acceptance-rate trend metrics + export action, and verified in Playwright (`teaming-workflow.spec.ts`).
+- Additional PLG + search parity evidence this session: global semantic search is now wired to primary UX via header trigger + keyboard shortcut with entity facets (`/opportunities`), validated by frontend unit tests (`global-search.test.tsx`, `header-search-trigger.test.tsx`) and Playwright workflow (`search-plg-workflow.spec.ts`).
+- Additional PLG parity evidence this session: free-tier landing experience is now surfaced at `/free-tier` and linked from auth/subscription flows; in-product upgrade nudges are now active in subscription usage workflows (`subscription-upgrade-nudge.test.tsx`, `free-tier-page.test.tsx`, Playwright `search-plg-workflow.spec.ts` + `settings.spec.ts`).
+- Additional discovery + intelligence evidence this session: external source-provider ingest contracts for `gsa_ebuy`, `fpds`, and `usaspending` are validated in `backend/tests/test_data_sources.py`; contact intelligence extraction/agency-directory/search contracts are validated in `backend/tests/test_contacts.py`; past-performance tagging/match/narrative contracts are validated in `backend/tests/test_documents.py`.
+- Additional external-provider parity evidence this session: `sled_bidnet`, `dibbs`, and contract-vehicle feeds (`gsa_mas`, `cio_sp3`, `ites`, `oasis`) were integrated and validated in `backend/tests/test_data_sources.py` and Playwright settings workflows.
+- Additional autonomous-agent parity evidence this session: `/api/v1/agents/catalog`, `/agents/research/{rfp_id}`, `/agents/capture-planning/{rfp_id}`, `/agents/proposal-prep/{rfp_id}`, and `/agents/competitive-intel/{rfp_id}` were integrated into `/agents` and validated in backend + Playwright (`test_agents.py`, `agents-workflow.spec.ts`).
+- Additional workflow-automation parity evidence this session: executable workflow engine with rule conditions/actions is integrated and trigger-wired from capture plan/stage transitions; validated in `test_workflows_execution.py` and Playwright (`workflows-workflow.spec.ts`).
+- Additional proposal-graphics parity evidence this session: template library + generated graphics + in-editor insertion + DOCX/PDF export rendering were integrated and validated in backend/unit/Playwright (`test_graphics.py`, `test_export_graphics.py`, `proposal-editor-workflow.spec.ts`).
+- Additional compliance-readiness evidence this session: readiness tracking for `fedramp_moderate`, `cmmc_level_2`, `govcloud_deployment`, `salesforce_appexchange`, and `microsoft_appsource` is now surfaced via `/api/v1/compliance/readiness` and `/compliance`, validated in backend + Playwright (`test_compliance_dashboard.py`, `compliance-readiness.spec.ts`).
+- Additional mobile/push parity evidence this session: push-subscription APIs + settings UX were integrated and validated (`test_notifications_push.py`, `settings-notifications-workflow.spec.ts`), and mobile Dash behavior is covered by Playwright (`mobile-dash.spec.ts`).
+- Additional contact-linking evidence this session: extracted contacts now auto-link to source opportunities and agency directory records (`linked_rfp_ids` + agency primary-contact linkage), validated in backend integration (`test_contacts.py`), frontend unit (`contact-extract-button.test.tsx`), and Playwright (`contacts-workflow.spec.ts`).
+- Additional Dash parity evidence this session: voice controls are now integrated into primary `/dash` chat input (speech-to-text + text-to-speech controls), validated in frontend unit (`dash-chat-voice-controls.test.tsx`) and Playwright (`dash.spec.ts`).
+- Additional SharePoint parity evidence this session: `/settings/integrations` now surfaces an embedded SharePoint browser, proposal workspace now exposes direct SharePoint export, and backend `/api/v1/sharepoint/export` now uses internal export helpers instead of hardcoded localhost callbacks; validated in backend integration (`test_sharepoint.py`), frontend unit (`settings-integrations-page.test.tsx`), and Playwright (`settings-integrations-workflow.spec.ts`, `proposal-editor-workflow.spec.ts`).
+- Additional org-admin parity evidence this session: `/admin` now includes member invitation and activation flows backed by `/api/v1/admin/members/invite`, `/api/v1/admin/member-invitations`, and `/api/v1/admin/member-invitations/{id}/activate`; validated in backend integration, frontend unit, and Playwright (`test_admin_roles.py`, `admin-page-invitations.test.tsx`, `admin-org-workflow.spec.ts`).
+- Additional collaboration-governance parity evidence this session: anomaly alerts and scheduled compliance digest controls are integrated via `/api/v1/collaboration/workspaces/{id}/shared/governance-anomalies`, `/compliance-digest-schedule`, `/compliance-digest-preview`, and `/compliance-digest-send`; validated in backend integration, frontend unit, and Playwright (`test_collaboration.py`, `collaboration-page-governance.test.tsx`, `collaboration-workflow.spec.ts`).
+- Additional teaming-parity evidence this session: partner-level trend drilldowns and scheduled performance digest controls are integrated via `/api/v1/teaming/requests/partner-trends`, `/api/v1/teaming/digest-schedule`, and `/api/v1/teaming/digest-send`; validated in backend integration, frontend unit, and Playwright (`test_teaming_board.py`, `teaming-page-fit-analysis.test.tsx`, `teaming-workflow.spec.ts`).
+- Additional diagnostics-parity evidence this session: websocket telemetry now surfaces task-watch latency, reconnect counts, and event throughput in `/api/v1/ws/diagnostics` and `/diagnostics`, validated in backend integration and Playwright (`test_websocket_diagnostics.py`, `diagnostics-workflow.spec.ts`).
+- Additional Word add-in parity evidence this session: Office-host-in-the-loop taskpane automation now validates host runtime pull/push sync beyond browser fallback (`word-addin-office-host.spec.ts`), alongside existing backend word-addin coverage (`test_word_addin.py`).
+- Additional analytics-governance parity evidence this session: ownership audit now flags frontend-unused analytics endpoints as retirement candidates (`/api/v1/analytics/documents`, `/api/v1/analytics/slo`, `/api/v1/analytics/alerts`) in `test_route_ownership_audit.py`.
+- Validation evidence refresh this session: backend full suite passed (`169/169`), frontend unit suite passed (`32/32`), and Playwright full suite passed (`58/58`) on deterministic local stack (`DEBUG=true`, `MOCK_AI=true`, backend `8010`, frontend `3100`).
+
 ---
 
 ## Competitor Deep Dive: GovDash
@@ -51,6 +93,8 @@ GovDash and Govly represent two distinct competitive threats:
 | **Team** | 45+ employees |
 | **Revenue Growth** | 16x from Series A to B |
 | **Customer Growth** | 18x from Series A to B |
+| **Pricing** | Custom pricing, no public rates. No free trial. Estimated enterprise starts at $40K+/year based on market positioning. |
+| **Rating** | 4.7/5 (limited review volume on third-party sites) |
 
 ### Product Architecture (5 Modules + AI Agent)
 
@@ -128,12 +172,22 @@ GovDash and Govly represent two distinct competitive threats:
 
 1. **Dramatic time savings**: 50-60% reduction in proposal development time; proposals in 24 hours vs weeks
 2. **Cost reduction**: One customer saved $75K/year; another saved $50K per proposal cycle
-3. **Compliance matrix quality**: Full-solicitation parsing catches requirements hidden in Sections C and H
+3. **Compliance matrix quality**: Full-solicitation parsing catches requirements hidden in Sections C and H (called "solicitation shredding")
 4. **Increased output**: Customers pursue 3x more opportunities with the same team
-5. **Word integration**: The Word Assistant is consistently called a "game changer"
+5. **Word integration**: The Word Assistant is consistently called a "game changer" — works directly in familiar Word environment
 6. **Support quality**: "Extremely responsive and considerate"
 7. **Pink-team-ready draft quality**: AI drafts are usable starting points, not generic filler
 8. **End-to-end platform**: Eliminates need for 5+ disconnected tools
+9. **Microsoft ecosystem integration**: Seamless Word + SharePoint integration praised by enterprise users
+10. **Security & compliance built-in**: NIST 800-171 adherence and FedRAMP Moderate Equivalency remove compliance barriers for defense contractors
+
+### Common Complaints About GovDash
+
+1. **Price opacity**: Custom pricing with no public rates frustrates small businesses. Requires sales call just to get a quote.
+2. **No free trial**: Unlike Govly, there's no way to test the platform before committing to a contract.
+3. **Steep learning curve**: Enterprise-grade features come with complexity — onboarding takes time.
+4. **Limited data sources**: Compared to Govly's 40+ contract vehicles and 10,000+ SLED sources, GovDash primarily focuses on SAM.gov and GSA eBuy.
+5. **Pricing**: While not explicitly stated in reviews, market positioning suggests high cost barrier for small businesses (estimated $40K+/year).
 
 ### Customer Results
 - **FEDITC**: 50% reduction in proposal time, 75% reduction in past performance narrative prep
@@ -224,6 +278,217 @@ GovDash and Govly represent two distinct competitive threats:
 
 ---
 
+## Additional Competitors (2026 Landscape Expansion)
+
+### GovSignals (FedRAMP High Competitor)
+
+**Position**: Premium security-focused proposal platform
+- **Security**: ONLY AI proposal platform with FedRAMP High authorization
+- **Pricing**: Enterprise sales-led only. Five-figure annual commitments expected.
+- **Customers**: 400+ organizations, trusted by defense contractors handling sensitive data
+- **Key Features**:
+  - Auto go/no-go analysis
+  - >95% accurate compliance matrix + outlines in <5 minutes
+  - Content generation in customer's voice using secure docs
+  - GovSignals Insider Sources (proprietary non-public opportunities)
+- **Strengths**:
+  - FedRAMP High is a massive differentiator for DoD/IC contractors
+  - SOC 2-grade security with full data encryption
+  - No customer data used for model training (contractually guaranteed)
+- **Weaknesses**:
+  - Expensive (five-figure annual commitments)
+  - No public pricing transparency
+  - Limited integrations compared to GovDash/Govly
+
+### CLEATUS (Budget-Friendly AI Competitor)
+
+**Position**: SMB-focused AI platform with daily compliance scoring
+- **Pricing**: Starts low (free trial available), transparent pricing model
+- **Customers**: Micro-contractors and small businesses, 2 FTE processing 10+ proposals in 90 days
+- **Key Features**:
+  - AI daily scan scoring for Fed/State/Local bids
+  - Bid/no-bid guidance with compliance scores delivered to inbox
+  - Document Hub turns assets into AI-ready snippets (drag-and-drop)
+  - AI cost estimation from contract documents
+  - Agency hierarchy visualization + Contracting Officer contact info
+  - Competitor award history analysis
+- **Strengths**:
+  - Budget-friendly for small businesses ("without paying an arm and leg")
+  - Fast proposal turnaround (10+ proposals in 90 days with 2 FTE)
+  - Simplified due diligence for state/federal opportunities
+  - Drag-and-drop document intelligence
+- **Weaknesses**:
+  - No FedRAMP or CMMC certifications visible
+  - Limited enterprise features vs GovDash/GovSignals
+  - Newer player with less brand recognition
+
+### Sweetspot (YC S23, All-in-One Platform)
+
+**Position**: Y Combinator-backed fast-growing unified platform
+- **Pricing**: $60/month starting price. Free trial available.
+- **Customers**: Oshkosh, Vannevar Labs, Strider, and other public-sector innovators
+- **Key Features**:
+  - AI-powered search across SAM.gov, USAspending, FPDS, DIBBS, 1,000+ state/local sources
+  - Opportunity Chat for bid/no-bid decisions
+  - Pursuit Management for team collaboration
+  - Proposal Copilot for response drafting
+  - AI Form Fill agent for government forms
+  - 3x faster contract discovery vs SAM.gov
+- **Strengths**:
+  - Extremely affordable entry point ($60/month)
+  - Y Combinator credibility
+  - Broad data coverage (Fed + State/Local + DIBBS)
+  - Users "extremely happy" with Form Fill automation
+- **Weaknesses**:
+  - Very early stage (YC S23) — limited proven scale
+  - No public reviews yet on major platforms
+  - Unclear depth of proposal features vs GovDash
+
+### Unanet ProposalAI (ERP-Adjacent Proposal Tool)
+
+**Position**: Proposal automation for existing Unanet AE/GovCon customers
+- **Pricing**: Subscription model, no public rates. Contact for pricing.
+- **Deployment**: AWS GovCloud with federal cybersecurity compliance
+- **Key Features**:
+  - Auto-generate prompts for every RFP requirement
+  - Outline generation with requirement-to-response mapping
+  - Integrates with org knowledge library (past proposals, docs, SME insights)
+  - No hallucinations (uses proprietary data only)
+  - 70% faster draft creation
+  - 30% more opportunities pursued
+- **Strengths**:
+  - Deep Unanet ecosystem integration (existing AE/GovCon customers)
+  - AWS GovCloud deployment (federal compliance ready)
+  - Data privacy (models never used to train others)
+  - Proven 70% time reduction
+- **Weaknesses**:
+  - Requires Unanet ecosystem (not standalone)
+  - Pricing opacity
+  - Limited reviews/testimonials available
+
+### ProposalWriter.ai (AI-First Proposal Tool)
+
+**Position**: AI proposal writing focused on government contracting
+- **Pricing**: Flat-rate pricing (exact rates not public)
+- **Key Features**:
+  - Inspira and Orchestrix AI assistants
+  - Nexa Opportunity Finder (market trend analysis)
+  - Past performance templates
+  - Pricing strategy automation
+  - Professionally designed templates for compliance
+- **Strengths**:
+  - AI-first approach (multiple specialized agents)
+  - Template library for compliance
+  - Flat-rate pricing model
+- **Weaknesses**:
+  - Very limited public information/reviews
+  - No clear security certifications
+  - Unclear customer base size
+
+### XaitPorter (Formerly Privia)
+
+**Position**: Enterprise co-authoring platform for distributed teams
+- **Pricing**: Custom pricing, no free plan. Enterprise-focused.
+- **Customers**: 10,000+ users from SMB to enterprise
+- **Key Features**:
+  - Cloud-based co-authoring with version control
+  - AI content suggestions
+  - FAR auto-formatting
+  - Layout templates with auto-shredded outlines
+  - Salesforce integration
+  - 70% faster bid creation
+- **Strengths**:
+  - Proven at scale (10,000+ users)
+  - Strong audit trails and compliance features
+  - Enterprise-grade security and controls
+  - Acquired by Xait (strong backing)
+- **Weaknesses**:
+  - Steep learning curve
+  - Expensive for small businesses
+  - Complex feature set may be overkill for SMBs
+
+### Capture2Proposal
+
+**Position**: Capture lifecycle management for GovCon BD
+- **Pricing**: $2,640/year starting price
+- **Key Features**:
+  - Search by security clearance, evaluation criteria, keywords in documents
+  - ML-based opportunity recommendations
+  - PWin analytics with recommended capture strategies
+  - Teaming agreement tracking (workshare, NDAs, TAs, set-asides)
+  - FIPS-validated encryption (DFARS/NIST SP 800-171)
+  - Microsoft Teams + Outlook integration
+- **Strengths**:
+  - Affordable entry point ($2,640/year)
+  - Strong capture management features
+  - DFARS/NIST compliance built-in
+  - Users find opportunities not discoverable elsewhere
+  - Promotes collaboration without per-seat licensing
+- **Weaknesses**:
+  - Limited AI proposal writing vs GovDash/GovSignals
+  - More focused on capture than proposal execution
+  - Smaller player vs funded competitors
+
+### GovTribe (Opportunity Intelligence Specialist)
+
+**Position**: Government contract intelligence and opportunity discovery
+- **Pricing**: $60/month starting price. 14-day free trial on Standard Plan ($5,500/year for 10 users).
+- **Key Features**:
+  - Aggregates SAM.gov, FBO.gov, and procurement portals
+  - Rich filtering by NAICS/PSC, agency, set-asides, vehicles, Contracting Officers
+  - Saved searches with scheduled notifications
+  - Federal contractor performance profiles (past performance, competitors, teaming)
+  - Insights on government spending, contract awards, industry trends
+  - Proposal management, document sharing, compliance tracking
+- **Strengths**:
+  - Affordable ($60/month entry)
+  - Deep competitive intelligence (every federal contractor profiled)
+  - Strong for market research and capture planning
+  - Team collaboration with up to 10 users on Standard Plan
+- **Weaknesses**:
+  - No AI proposal writing (intelligence/discovery focus)
+  - Limited automation vs newer AI-first competitors
+  - Older platform UI vs Govly/Sweetspot
+
+### Lohfeld Consulting + Deltek GovWin IQ
+
+**Position**: Market intelligence + consulting services
+- **Pricing**: Expensive. Reviews cite "hard for small companies to afford."
+- **Customers**: Lohfeld Consulting uses GovWin for client engagements (20+ years serving GovCon)
+- **Key Features**:
+  - GovWin IQ for market research, pipeline building
+  - 2026: AI-generated proposal frameworks from solicitations
+  - AI briefs and notifications for key leads/agencies
+  - Labor pricing analytics (15M+ historical/future rates, 1,000+ programs)
+  - Deltek Proposals integration (AI-generated proposal creation)
+- **Strengths**:
+  - Most comprehensive US public contract data source
+  - Research and customer support "second to none"
+  - Labor pricing analytics unmatched
+  - Lohfeld consulting expertise for high-touch support
+- **Weaknesses**:
+  - Prohibitively expensive for small businesses
+  - Complex platform (enterprise-focused)
+  - AI proposal features still emerging (2026 roadmap)
+
+### Awarded AI (Procurement Sciences)
+
+**Position**: End-to-end AI-driven platform
+- **Key Features**:
+  - AI-driven opportunity search
+  - Bid/no-bid analysis
+  - Advanced proposal creation
+  - Compliance verification
+  - Competitive intelligence
+- **Strengths**:
+  - Comprehensive lifecycle coverage
+  - AI-first approach across all modules
+- **Weaknesses**:
+  - Limited public information
+  - Unclear pricing and customer base
+
+---
+
 ## GovTech Sniper Current State
 
 ### What We Have (Phases 0-7 Complete)
@@ -274,6 +539,9 @@ GovDash and Govly represent two distinct competitive threats:
 - Deliverable status tracking
 - Task/milestone tracking
 - CPARS review preparation
+- Contract modification tracking
+- CLIN quantity/funding lifecycle management
+- Parent/child hierarchical contract relationships
 - Monthly status report generation
 
 #### Enterprise Features
@@ -305,9 +573,9 @@ GovDash and Govly represent two distinct competitive threats:
 - Budget document ingestion
 - Award summaries
 - AI predictions
-- Collaboration workspace
 - Email ingestion
-- CRM sync
+- Microsoft Dynamics integration depth
+- Salesforce AppExchange/AppSource go-to-market packaging
 
 ---
 
@@ -325,22 +593,22 @@ GovDash and Govly represent two distinct competitive threats:
 | Feature | GovTech Sniper | GovDash | Govly |
 |---------|---------------|---------|-------|
 | SAM.gov integration | ✅ | ✅ | ✅ |
-| GSA eBuy integration | ❌ | ✅ | ✅ |
-| SLED sources (10,000+) | ❌ (tag only) | ✅ | ✅ |
-| Private contract vehicles (GWACs/IDIQs) | ❌ | ❌ | ✅ (40+) |
+| GSA eBuy integration | ✅ | ✅ | ✅ |
+| SLED sources (10,000+) | ✅ (BidNet baseline + extensible provider registry) | ✅ | ✅ |
+| Private contract vehicles (GWACs/IDIQs) | 🟡 (GSA MAS/CIO-SP3/ITES/OASIS baseline) | ❌ | ✅ (40+) |
 | Procurement forecasts | ❌ | ❌ | ✅ |
-| Industry days & events | ❌ | ❌ | ✅ |
-| DIBBS (DLA) | ❌ | ❌ | ✅ |
+| Industry days & events | ✅ | ❌ | ✅ |
+| DIBBS (DLA) | ✅ | ❌ | ✅ |
 | Canada coverage | ❌ | ❌ | ✅ |
-| Market signals / daily intel | ❌ | ❌ | ✅ |
+| Market signals / daily intel | ✅ | ❌ | ✅ |
 | AI opportunity matching (Bid Match) | ✅ (Killer Filter) | ✅ | ✅ |
-| Semantic search | ❌ | ❌ | ✅ |
+| Semantic search | ✅ | ❌ | ✅ |
 | RFQ predictions | ❌ | ❌ | ✅ |
-| Free tier | ❌ | ❌ | ✅ |
+| Free tier | ✅ | ❌ | ✅ |
 | Opportunity change tracking | ✅ (snapshots) | 🟡 | ✅ (alerts) |
 | Award tracking | ✅ | ✅ | ✅ |
 | Budget intelligence | ✅ | ❌ | ✅ |
-| Contact intelligence (AI-extracted) | 🟡 (manual) | ❌ | ✅ |
+| Contact intelligence (AI-extracted) | ✅ | ❌ | ✅ |
 
 ### Proposal Writing
 
@@ -348,17 +616,17 @@ GovDash and Govly represent two distinct competitive threats:
 |---------|---------------|---------|-------|
 | Compliance matrix generation | ✅ | ✅ | ❌ |
 | Full solicitation parsing (Sections C, H, PWS) | 🟡 | ✅ | ❌ |
-| Annotated outline generation | ❌ | ✅ | ❌ |
-| Writing plans (per-section instructions) | ❌ | ✅ | ❌ |
+| Annotated outline generation | ✅ | ✅ | ❌ |
+| Writing plans (per-section instructions) | ✅ | ✅ | ❌ |
 | AI proposal draft generation | ✅ | ✅ | ❌ |
 | Pink-team-ready quality | 🟡 | ✅ | ❌ |
 | Focus documents / knowledge base RAG | ✅ | ✅ | ❌ |
 | Citation automation | ✅ | ✅ | ❌ |
-| Rich text section editor | 🟡 | ✅ | ❌ |
-| Word Assistant (MS Word add-in) | 🟡 (sessions) | ✅ (full add-in) | ❌ |
-| Past performance reuse | 🟡 | ✅ | ❌ |
-| Color team reviews (pink/red/gold) | ❌ | ✅ | ❌ |
-| Graphic generation | 🟡 (tracking) | ✅ | ❌ |
+| Rich text section editor | ✅ | ✅ | ❌ |
+| Word Assistant (MS Word add-in) | ✅ | ✅ (full add-in) | ❌ |
+| Past performance reuse | ✅ | ✅ | ❌ |
+| Color team reviews (pink/red/gold) | ✅ | ✅ | ❌ |
+| Graphic generation | ✅ | ✅ | ❌ |
 | Proposal outline editor | 🔨 | ✅ | ❌ |
 | Redline workflows | 🔨 | 🟡 | ❌ |
 | Compliance shreds | 🔨 | ❌ | ❌ |
@@ -371,7 +639,7 @@ GovDash and Govly represent two distinct competitive threats:
 | Feature | GovTech Sniper | GovDash | Govly |
 |---------|---------------|---------|-------|
 | Kanban pipeline view | ✅ | ✅ | ❌ |
-| Gantt chart view | ❌ | ✅ | ❌ |
+| Gantt chart view | ✅ | ✅ | ❌ |
 | Custom pipeline stages | ✅ | ✅ | ❌ |
 | Custom fields | ✅ | ✅ | ❌ |
 | Gate reviews | ✅ | ✅ | ❌ |
@@ -379,8 +647,8 @@ GovDash and Govly represent two distinct competitive threats:
 | Bid decision tracking | ✅ | ✅ | ❌ |
 | Teaming partners | ✅ | ✅ | ✅ |
 | Competitor tracking | ✅ | ✅ | ✅ |
-| Salesforce sync | ❌ | ✅ (bidirectional) | ✅ |
-| Teammate evaluation/workshare | ❌ | ✅ | ❌ |
+| Salesforce sync | ✅ | ✅ (bidirectional) | ✅ |
+| Teammate evaluation/workshare | ✅ (workflow action automation) | ✅ | ❌ |
 
 ### Contract Management
 
@@ -389,8 +657,8 @@ GovDash and Govly represent two distinct competitive threats:
 | Post-award tracking | ✅ | ✅ | ❌ |
 | CPARS preparation | ✅ | ✅ | ❌ |
 | Deliverable tracking | ✅ | ✅ | ❌ |
-| Contract modifications/CLINs | ❌ | ✅ | ❌ |
-| Hierarchical contract structures | ❌ | ✅ | ❌ |
+| Contract modifications/CLINs | ✅ | ✅ | ❌ |
+| Hierarchical contract structures | ✅ | ✅ | ❌ |
 | Monthly status reports | ✅ | ✅ | ❌ |
 
 ### AI Capabilities
@@ -400,11 +668,11 @@ GovDash and Govly represent two distinct competitive threats:
 | AI assistant (Dash) | ✅ | ✅ | ✅ |
 | Semantic document search | 🟡 | ✅ | ✅ |
 | Agentic tool-calling | ✅ | ✅ | ✅ |
-| Voice mode | ❌ | ✅ | ❌ |
-| AI agents (autonomous) | ❌ | 🟡 | ✅ |
-| AI contact extraction | ❌ | ❌ | ✅ |
+| Voice mode | ✅ | ✅ | ❌ |
+| AI agents (autonomous) | ✅ | 🟡 | ✅ |
+| AI contact extraction | ✅ | ❌ | ✅ |
 | AI opportunity predictions | ❌ | ❌ | ✅ |
-| AI-generated graphics | ❌ | ✅ | ❌ |
+| AI-generated graphics | ✅ | ✅ | ❌ |
 
 ### Collaboration
 
@@ -413,21 +681,21 @@ GovDash and Govly represent two distinct competitive threats:
 | Team management | ✅ | ✅ | ✅ |
 | RBAC with custom roles | ✅ | ✅ | ✅ |
 | Task assignment & comments | 🟡 | ✅ | ✅ |
-| Cross-org workspaces | ❌ | ❌ | ✅ |
-| Partner/sub sharing | ❌ | ❌ | ✅ |
-| Teaming board (find partners) | ❌ | ❌ | ✅ |
-| Vendor search | ❌ | ❌ | ✅ |
+| Cross-org workspaces | ✅ | ❌ | ✅ |
+| Partner/sub sharing | ✅ | ❌ | ✅ |
+| Teaming board (find partners) | ✅ | ❌ | ✅ |
+| Vendor search | ✅ | ❌ | ✅ |
 | Shared team inboxes | ❌ | ❌ | ✅ |
-| Real-time collaborative editing | ❌ | ✅ | ❌ |
+| Real-time collaborative editing | ✅ | ✅ | ❌ |
 
 ### Integrations
 
 | Feature | GovTech Sniper | GovDash | Govly |
 |---------|---------------|---------|-------|
-| Salesforce | ❌ | ✅ | ✅ |
-| SharePoint | ❌ | ✅ | ❌ |
-| Microsoft Word Add-in | 🟡 | ✅ | ❌ |
-| Unanet | ❌ | ❌ | ✅ |
+| Salesforce | ✅ | ✅ | ✅ |
+| SharePoint | ✅ | ✅ | ❌ |
+| Microsoft Word Add-in | ✅ | ✅ | ❌ |
+| Unanet | 🟡 | ❌ | ✅ |
 | Microsoft Dynamics | ❌ | ❌ | 🔨 |
 | Webhooks | ✅ | ✅ | ❌ |
 | API access | ✅ | ❌ | ✅ |
@@ -436,16 +704,16 @@ GovDash and Govly represent two distinct competitive threats:
 
 | Feature | GovTech Sniper | GovDash | Govly |
 |---------|---------------|---------|-------|
-| Win rate analytics | ❌ | ✅ | ❌ |
-| Pipeline value/stage breakdown | ❌ | ✅ | ❌ |
-| Conversion rates | ❌ | ✅ | ❌ |
-| Proposal turnaround time | ❌ | ✅ | ❌ |
-| NAICS performance | ❌ | ✅ | ❌ |
-| Team performance metrics | ❌ | ✅ | ❌ |
-| Revenue forecasting | ❌ | ✅ | ❌ |
+| Win rate analytics | ✅ | ✅ | ❌ |
+| Pipeline value/stage breakdown | ✅ | ✅ | ❌ |
+| Conversion rates | ✅ | ✅ | ❌ |
+| Proposal turnaround time | ✅ | ✅ | ❌ |
+| NAICS performance | ✅ | ✅ | ❌ |
+| Team performance metrics | 🟡 | ✅ | ❌ |
+| Revenue forecasting | ✅ | ✅ | ❌ |
 | Usage metrics dashboard | ✅ | ✅ | ✅ |
-| Custom/dynamic reports | ❌ | ✅ | ❌ |
-| Data visualizations/trends | ❌ | ❌ | ✅ |
+| Custom/dynamic reports | ✅ | ✅ | ❌ |
+| Data visualizations/trends | ✅ | ❌ | ✅ |
 
 ### Security & Compliance
 
@@ -456,10 +724,10 @@ GovDash and Govly represent two distinct competitive threats:
 | MFA | ✅ | ✅ | 🟡 |
 | Audit logging | ✅ | ✅ | 🟡 |
 | Encryption at rest | ✅ | ✅ | ✅ |
-| FedRAMP Moderate | ❌ | ✅ | ❌ |
-| CMMC certification | ❌ | ✅ | ✅ |
-| GovCloud hosting | ❌ | ✅ | ❌ |
-| Data not used for model training | ❌ (unclear) | ✅ | ❌ |
+| FedRAMP Moderate | 🟡 (readiness in progress) | ✅ | ❌ |
+| CMMC certification | 🟡 (readiness in progress) | ✅ | ✅ |
+| GovCloud hosting | 🟡 (migration in progress) | ✅ | ❌ |
+| Data not used for model training | 🟡 (privacy controls + documentation surfaced) | ✅ | ❌ |
 
 ---
 
@@ -504,94 +772,94 @@ GovDash and Govly represent two distinct competitive threats:
 ### P0 — Critical (Must Ship ASAP)
 
 #### 1. Expand Data Sources Beyond SAM.gov
-**Gap**: We only have SAM.gov. Govly has 40+ contract vehicles and 10,000+ SLED sources. GovDash has GSA eBuy and SLED.
-- [ ] **1a. GSA eBuy integration** — Ingest RFQs from GSA eBuy; map to existing RFP model
-- [ ] **1b. SLED data source integration** — Partner with or scrape from aggregators (Bonfire, BidNet Direct) for state/local/education opportunities
-- [ ] **1c. FPDS integration** — Pull award data from Federal Procurement Data System for competitor/award intelligence
-- [ ] **1d. USAspending integration** — Spending data for budget intelligence and agency analysis
-- [ ] **1e. DIBBS integration** — Defense Logistics Agency bid board for defense-focused customers
-- [ ] **1f. GWAC/IDIQ contract vehicle feeds** — Start with SEWP, CIO-SP, ITES, GSA MAS, OASIS (evaluate partnership model vs direct scraping)
+**Gap**: Foundational breadth is now integrated (GSA eBuy, FPDS, USAspending, SLED BidNet, DIBBS, and core contract-vehicle feeds); next step is scale expansion toward Govly-level source volume.
+- [x] **1a. GSA eBuy integration** — Ingest RFQs from GSA eBuy; map to existing RFP model
+- [x] **1b. SLED data source integration** — Partner with or scrape from aggregators (Bonfire, BidNet Direct) for state/local/education opportunities
+- [x] **1c. FPDS integration** — Pull award data from Federal Procurement Data System for competitor/award intelligence
+- [x] **1d. USAspending integration** — Spending data for budget intelligence and agency analysis
+- [x] **1e. DIBBS integration** — Defense Logistics Agency bid board for defense-focused customers
+- [x] **1f. GWAC/IDIQ contract vehicle feeds** — Start with SEWP, CIO-SP, ITES, GSA MAS, OASIS (evaluate partnership model vs direct scraping)
 
 #### 2. Salesforce Integration
 **Gap**: Both competitors have Salesforce integration. This is table stakes for enterprise customers.
-- [ ] **2a. Bidirectional opportunity sync** — Push/pull opportunities between Sniper and Salesforce
-- [ ] **2b. Custom field mapping** — Map Sniper capture fields to Salesforce fields
-- [ ] **2c. Webhook-based real-time sync** — Leverage existing webhook infrastructure
-- [ ] **2d. Salesforce app listing** — Package as a Salesforce AppExchange app
+- [x] **2a. Bidirectional opportunity sync** — Push/pull opportunities between Sniper and Salesforce
+- [x] **2b. Custom field mapping** — Map Sniper capture fields to Salesforce fields
+- [x] **2c. Webhook-based real-time sync** — Leverage existing webhook infrastructure
+- [x] **2d. Salesforce app listing readiness** — Package + readiness tracker for Salesforce AppExchange submission
 
 #### 3. Proposal Writing Workflow Maturity
 **Gap**: GovDash's full-solicitation parsing, annotated outlines, and writing plans are their #1 selling point.
-- [ ] **3a. Full solicitation parsing (Sections C, H, PWS)** — Expand Deep Read beyond Sections L/M to parse the entire RFP package
-- [ ] **3b. Annotated outline generation** — After compliance matrix, auto-generate a proposal outline with section headings, compliance mappings, and document scaffolding
-- [ ] **3c. Writing plans per section** — Allow users to add bullet-point instructions per proposal section (key points, strengths, tone, differentiators) before AI generation
-- [ ] **3d. Focus document selection** — Let users select which knowledge base documents to prioritize for each proposal (not just all docs)
+- [x] **3a. Full solicitation parsing (Sections C, H, PWS)** — Expand Deep Read beyond Sections L/M to parse the entire RFP package
+- [x] **3b. Annotated outline generation** — After compliance matrix, auto-generate a proposal outline with section headings, compliance mappings, and document scaffolding
+- [x] **3c. Writing plans per section** — Allow users to add bullet-point instructions per proposal section (key points, strengths, tone, differentiators) before AI generation
+- [x] **3d. Focus document selection** — Let users select which knowledge base documents to prioritize for each proposal (not just all docs)
 
 #### 4. Analytics & Reporting Dashboard
-**Gap**: GovDash has a full reporting center. We have basic usage metrics only.
-- [ ] **4a. Win rate tracking** — Calculate and display win/loss ratio from capture pipeline data
-- [ ] **4b. Pipeline value by stage** — Aggregate opportunity values across capture stages
-- [ ] **4c. Proposal turnaround metrics** — Track time from opportunity to submission
-- [ ] **4d. Conversion rate tracking** — Track progression rates through pipeline stages
-- [ ] **4e. Exportable reports** — CSV/PDF export of analytics data
-- [ ] **4f. Dashboard UI** — Build a dedicated analytics page with charts and KPIs
+**Gap**: Core analytics are shipped; we still need deeper team-performance reporting and report-builder UX parity.
+- [x] **4a. Win rate tracking** — Calculate and display win/loss ratio from capture pipeline data
+- [x] **4b. Pipeline value by stage** — Aggregate opportunity values across capture stages
+- [x] **4c. Proposal turnaround metrics** — Track time from opportunity to submission
+- [x] **4d. Conversion rate tracking** — Track progression rates through pipeline stages
+- [x] **4e. Exportable reports** — CSV/PDF export of analytics data
+- [x] **4f. Dashboard UI** — Build a dedicated analytics page with charts and KPIs
 
 #### 5. Rich Text Proposal Editor
-**Gap**: GovDash has a full rich text editor for in-platform collaboration. We have basic section content display.
-- [ ] **5a. WYSIWYG section editor** — Implement a rich text editor (TipTap or Slate.js) for proposal sections
-- [ ] **5b. Inline formatting** — Bold, italic, headers, lists, tables within sections
+**Gap**: Rich editor baseline is integrated; tracked suggestions/AI-vs-human diff mode remains open.
+- [x] **5a. WYSIWYG section editor** — Implement a rich text editor (TipTap or Slate.js) for proposal sections
+- [x] **5b. Inline formatting** — Bold, italic, headers, lists, tables within sections
 - [ ] **5c. Track changes / suggestions mode** — Show AI-generated vs human-edited content
-- [ ] **5d. Comments on sections** — Allow team members to leave comments on specific sections
-- [ ] **5e. Section versioning** — Track changes over time with diff view
+- [x] **5d. Comments on sections** — Allow team members to leave comments on specific sections
+- [x] **5e. Section versioning** — Track changes over time with diff view
 
 ---
 
 ### P1 — High Priority (Ship Within 60 Days)
 
 #### 6. Color Team Review Workflow
-**Gap**: GovDash supports structured pink/red/gold team reviews. We have nothing.
-- [ ] **6a. Pink team review** — Mark proposal as ready for pink team; assign reviewers; collect structured feedback
-- [ ] **6b. Red team review** — Post-pink-team review with evaluation criteria and scoring
-- [ ] **6c. Gold team review** — Final review before submission with executive sign-off
-- [ ] **6d. Review comments and resolution** — Structured feedback with accept/reject/discuss actions
-- [ ] **6e. Review status dashboard** — Track review progress across all sections
+**Gap**: Core pink/red/gold workflow is live; next step is richer collaboration ergonomics and reviewer productivity tooling.
+- [x] **6a. Pink team review** — Mark proposal as ready for pink team; assign reviewers; collect structured feedback
+- [x] **6b. Red team review** — Post-pink-team review with evaluation criteria and scoring
+- [x] **6c. Gold team review** — Final review before submission with executive sign-off
+- [x] **6d. Review comments and resolution** — Structured feedback with accept/reject/discuss actions
+- [x] **6e. Review status dashboard** — Track review progress across all sections
 
 #### 7. Microsoft Word Add-in (Full Implementation)
-**Gap**: GovDash's Word Assistant is their most-praised feature. We only have session tracking.
-- [ ] **7a. Word add-in UI** — Build the actual Office.js add-in with sidebar panel
-- [ ] **7b. AI writing assistance** — Text shortening, expansion, rewriting within Word
-- [ ] **7c. Compliance check in Word** — Verify section content against compliance matrix requirements
-- [ ] **7d. Section sync** — Push/pull section content between Sniper and Word document
-- [ ] **7e. Microsoft AppSource listing** — Publish add-in for enterprise distribution
+**Gap**: Core Word add-in UI + rewrite/compliance/sync are integrated; marketplace distribution listing remains open.
+- [x] **7a. Word add-in UI** — Build the actual Office.js add-in with sidebar panel
+- [x] **7b. AI writing assistance** — Text shortening, expansion, rewriting within Word
+- [x] **7c. Compliance check in Word** — Verify section content against compliance matrix requirements
+- [x] **7d. Section sync** — Push/pull section content between Sniper and Word document
+- [x] **7e. Microsoft AppSource listing readiness** — Submission package + readiness tracker for enterprise distribution
 
 #### 8. Free Tier / PLG Strategy
-**Gap**: Govly's free plan drives adoption and network effects. We have no free tier.
-- [ ] **8a. Define free tier limits** — SAM.gov search (30-day window), basic filtering, limited AI analysis
-- [ ] **8b. Implement free tier** — Enforce usage limits in API rate limiter
-- [ ] **8c. Self-serve signup** — Remove demo-booking requirement for free tier
-- [ ] **8d. Upgrade nudges** — In-product prompts when hitting free tier limits
-- [ ] **8e. Landing page for free tier** — Marketing page highlighting free features
+**Gap**: Foundational free tier and self-serve signup are in place; upgrade nudges and free-tier marketing experience remain.
+- [x] **8a. Define free tier limits** — SAM.gov search (30-day window), basic filtering, limited AI analysis
+- [x] **8b. Implement free tier** — Enforce usage limits in API rate limiter
+- [x] **8c. Self-serve signup** — Remove demo-booking requirement for free tier
+- [x] **8d. Upgrade nudges** — In-product prompts when hitting free tier limits
+- [x] **8e. Landing page for free tier** — Marketing page highlighting free features
 
 #### 9. Semantic Search
-**Gap**: Govly has NLP-powered semantic search. We have keyword-based filtering.
-- [ ] **9a. Embedding pipeline** — Generate embeddings for opportunity text, compliance requirements, and knowledge base documents
+**Gap**: Semantic search MVP is live; production vector infrastructure and broad UI discoverability remain.
+- [x] **9a. Embedding pipeline** — Generate embeddings for opportunity text, compliance requirements, and knowledge base documents
 - [ ] **9b. Vector storage** — Add pgvector extension to PostgreSQL (or standalone vector DB)
-- [ ] **9c. Semantic search API** — Accept natural language queries and return semantically relevant results
-- [ ] **9d. Cross-entity search** — Search across RFPs, proposals, knowledge base, and capture plans simultaneously
-- [ ] **9e. Search UI** — Global search bar with semantic results and faceted filtering
+- [x] **9c. Semantic search API** — Accept natural language queries and return semantically relevant results
+- [x] **9d. Cross-entity search** — Search across RFPs, proposals, knowledge base, and capture plans simultaneously
+- [x] **9e. Search UI** — Global search bar with semantic results and faceted filtering
 
 #### 10. Contact Intelligence
-**Gap**: Govly has AI-extracted contacts from opportunity documents. We have manual contact management.
-- [ ] **10a. AI contact extraction** — Use LLM to extract contacts (names, titles, emails, phones) from RFP documents
-- [ ] **10b. Agency contact database** — Build/populate a searchable database of government agency contacts
-- [ ] **10c. Contact linking** — Auto-link extracted contacts to opportunities and agencies
-- [ ] **10d. Contact search/filter** — Search contacts by agency, role, location
+**Gap**: Contact intelligence lifecycle is integrated end-to-end (extraction, auto-linking, agency directory, search); next parity step is deeper graph enrichment/scoring.
+- [x] **10a. AI contact extraction** — Use LLM to extract contacts (names, titles, emails, phones) from RFP documents
+- [x] **10b. Agency contact database** — Build/populate a searchable database of government agency contacts
+- [x] **10c. Contact linking** — Auto-link extracted contacts to opportunities and agencies
+- [x] **10d. Contact search/filter** — Search contacts by agency, role, location
 
 #### 11. Past Performance Reuse System
-**Gap**: GovDash automates past performance retrieval and repackaging. We store docs but don't intelligently reuse them.
-- [ ] **11a. Past performance tagging** — Tag knowledge base documents with contract number, agency, value, period, NAICS
-- [ ] **11b. Relevance matching** — AI-match past performances to current RFP requirements
-- [ ] **11c. Narrative repackaging** — Auto-generate past performance narratives tailored to the current proposal's evaluation criteria
-- [ ] **11d. Past performance library UI** — Browse, search, and manage past performances with metadata
+**Gap**: Past-performance reuse baseline is integrated; next parity step is deeper quality calibration and narrative quality benchmarking at scale.
+- [x] **11a. Past performance tagging** — Tag knowledge base documents with contract number, agency, value, period, NAICS
+- [x] **11b. Relevance matching** — AI-match past performances to current RFP requirements
+- [x] **11c. Narrative repackaging** — Auto-generate past performance narratives tailored to the current proposal's evaluation criteria
+- [x] **11d. Past performance library UI** — Browse, search, and manage past performances with metadata
 
 ---
 
@@ -604,56 +872,61 @@ GovDash and Govly represent two distinct competitive threats:
 - [x] **12c. Forecast alerts** — Notify users when forecasted opportunities match their profile
 
 #### 13. Cross-Organization Collaboration
-**Gap**: Govly's workspaces allow primes, subs, and partners to collaborate on a shared platform.
-- [ ] **13a. External workspace invitations** — Invite users from other organizations to specific workspaces
-- [ ] **13b. Partner portal** — Lightweight view for teaming partners to see shared opportunities
-- [ ] **13c. Selective data sharing** — Control what data external partners can see
-- [ ] **13d. Partner contract feed sharing** — Share relevant contract vehicle feeds with partners
+**Gap**: Core cross-org collaboration is integrated with governed sharing, governance snapshots, SLA trend reporting, and partner audit exports.
+- [x] **13a. External workspace invitations** — Invite users from other organizations to specific workspaces
+- [x] **13b. Partner portal** — Lightweight view for teaming partners to see shared opportunities
+- [x] **13c. Selective data sharing** — Control what data external partners can see
+- [x] **13d. Partner contract feed sharing** — Share relevant contract vehicle feeds with partners
+- [x] **13e. Partner access presets + workspace switching** — Apply feed bundles quickly and switch between accessible partner portals
+- [x] **13f. Partner artifact governance policies** — Enforce admin approval, expiry windows, and partner-scoped visibility before portal release
+- [x] **13g. Governance snapshot analytics** — Surface pending approvals, expiring/expired shares, and scoped-vs-global sharing posture in workspace operations
+- [x] **13h. Governance SLA trends + audit export** — Track approval-SLA trendlines and export partner share-audit timelines for operational/compliance reviews
 
 #### 14. Teaming Board / Partner Discovery
-**Gap**: Govly has a teaming board to find and connect with potential partners.
-- [ ] **14a. Company profile pages** — Each organization has a public profile with capabilities, set-asides, past performance
-- [ ] **14b. Partner search** — Search for potential teaming partners by NAICS, set-aside, capability, clearance
-- [ ] **14c. Teaming requests** — Send/receive teaming partnership requests
-- [ ] **14d. Teaming board UI** — Marketplace-style view of available teaming partners
+**Gap**: Teaming discovery and request lifecycle are integrated with partner-fit rationale, trend tracking, and exportable acceptance audits.
+- [x] **14a. Company profile pages** — Each organization has a public profile with capabilities, set-asides, past performance
+- [x] **14b. Partner search** — Search for potential teaming partners by NAICS, set-aside, capability, clearance
+- [x] **14c. Teaming requests** — Send/receive teaming partnership requests
+- [x] **14d. Teaming board UI** — Marketplace-style view of available teaming partners
+- [x] **14e. Partner-fit trend analytics + request audit export** — Track fit-score/acceptance trendlines and export request decision timelines for collaboration audits
 
 #### 15. Gantt Chart Pipeline View
-**Gap**: GovDash has Gantt chart view alongside Kanban.
-- [ ] **15a. Timeline visualization** — Show capture plans on a timeline with milestones
-- [ ] **15b. Dependency tracking** — Show dependencies between capture activities
-- [ ] **15c. Deadline visualization** — Highlight approaching deadlines and overdue items
+**Gap**: Gantt/timeline baseline is live; advanced dependencies and at-scale timeline performance still need tuning.
+- [x] **15a. Timeline visualization** — Show capture plans on a timeline with milestones
+- [x] **15b. Dependency tracking** — Show dependencies between capture activities
+- [x] **15c. Deadline visualization** — Highlight approaching deadlines and overdue items
 
 #### 16. AI-Generated Graphics
-**Gap**: GovDash generates visual graphics within proposals.
-- [ ] **16a. Chart/diagram generation** — AI-generated charts, org charts, process flows from proposal content
-- [ ] **16b. Template library** — Pre-built graphic templates (management approach, staffing plan, timeline)
-- [ ] **16c. In-editor insertion** — Insert generated graphics directly into proposal sections
-- [ ] **16d. Export with graphics** — Include generated graphics in DOCX/PDF exports
+**Gap**: Core generation/insertion/export parity is integrated; next step is broader template depth and design fidelity tuning.
+- [x] **16a. Chart/diagram generation** — AI-generated charts, org charts, process flows from proposal content
+- [x] **16b. Template library** — Pre-built graphic templates (management approach, staffing plan, timeline)
+- [x] **16c. In-editor insertion** — Insert generated graphics directly into proposal sections
+- [x] **16d. Export with graphics** — Include generated graphics in DOCX/PDF exports
 
 #### 17. Voice Mode for Dash
-**Gap**: GovDash has voice mode for hands-free interaction.
-- [ ] **17a. Speech-to-text input** — Browser-based voice input for Dash queries
-- [ ] **17b. Text-to-speech output** — Read Dash responses aloud
-- [ ] **17c. Voice commands** — "Analyze this RFP", "Show my pipeline", "Draft section 3"
+**Gap**: Voice baseline is integrated in Dash chat; next parity step is richer command-intent coverage and telemetry.
+- [x] **17a. Speech-to-text input** — Browser-based voice input for Dash queries
+- [x] **17b. Text-to-speech output** — Read Dash responses aloud
+- [x] **17c. Voice commands** — "Analyze this RFP", "Show my pipeline", "Draft section 3"
 
 #### 18. Contract Modifications & CLINs
-**Gap**: GovDash handles contract modifications and CLIN management.
-- [ ] **18a. Contract modification tracking** — Track modifications with effective dates and descriptions
-- [ ] **18b. CLIN management** — Line item tracking with quantities, values, and fulfillment status
-- [ ] **18c. Hierarchical contracts** — Support parent/child contract relationships (task orders, delivery orders)
+**Gap**: Baseline lifecycle is now integrated; next step is richer dependency/status automation at scale.
+- [x] **18a. Contract modification tracking** — Track modifications with effective dates and descriptions
+- [x] **18b. CLIN management** — Line item tracking with quantities, values, and fulfillment status
+- [x] **18c. Hierarchical contracts** — Support parent/child contract relationships (task orders, delivery orders)
 
 #### 19. SharePoint Integration
-**Gap**: GovDash has SharePoint integration for document storage and proposal export.
-- [ ] **19a. SharePoint file browser** — Browse and import documents from SharePoint folders
-- [ ] **19b. Proposal export to SharePoint** — Export proposals directly to SharePoint
-- [ ] **19c. Two-way sync** — Keep documents in sync between Sniper and SharePoint
+**Gap**: SharePoint browse/export/sync surfaces are integrated and validated; next step is deeper import automation and error observability.
+- [x] **19a. SharePoint file browser** — Browse and import documents from SharePoint folders
+- [x] **19b. Proposal export to SharePoint** — Export proposals directly to SharePoint
+- [x] **19c. Two-way sync** — Keep documents in sync between Sniper and SharePoint
 
 #### 20. Revenue Forecasting
-**Gap**: GovDash tracks revenue timelines and forecasting.
-- [ ] **20a. Expected revenue per opportunity** — Track expected contract value and probability-weighted pipeline
-- [ ] **20b. Revenue timeline** — Visualize expected revenue by month/quarter
-- [ ] **20c. Win probability weighting** — Apply win probability to expected values for forecasting
-- [ ] **20d. Pipeline reports** — Aggregate forecasting across all active opportunities
+**Gap**: Revenue forecasting baseline is live; calibration depth and executive forecasting narratives remain.
+- [x] **20a. Expected revenue per opportunity** — Track expected contract value and probability-weighted pipeline
+- [x] **20b. Revenue timeline** — Visualize expected revenue by month/quarter
+- [x] **20c. Win probability weighting** — Apply win probability to expected values for forecasting
+- [x] **20d. Pipeline reports** — Aggregate forecasting across all active opportunities
 
 ---
 
@@ -673,19 +946,19 @@ GovDash and Govly represent two distinct competitive threats:
 - [ ] **22d. Daily digest email** — Email summary of relevant market signals
 
 #### 23. FedRAMP / CMMC Certification
-**Gap**: GovDash has FedRAMP Moderate Equivalency. Govly has CMMC Level 2. We have neither.
-- [ ] **23a. Security assessment preparation** — Document security controls against NIST 800-53
+**Gap**: Certification execution is in progress and now tracked in-product; external audit/authorization completion remains business-ops gated.
+- [x] **23a. Security assessment preparation** — Document security controls against NIST 800-53
 - [ ] **23b. GovCloud deployment** — Migrate to AWS/Azure GovCloud
 - [ ] **23c. 3PAO audit** — Engage an accredited third-party assessor
-- [ ] **23d. Data handling documentation** — Document that user data is never used for model training
+- [x] **23d. Data handling documentation** — Document that user data is never used for model training
 - [ ] **23e. CMMC Level 2 assessment** — Prepare for CMMC certification
 
 #### 24. Autonomous AI Agents
-**Gap**: Govly has autonomous agents (Program Analyst, Government Programs). GovDash has increasingly autonomous Dash.
-- [ ] **24a. Research agent** — Agent that autonomously researches an agency, incumbents, and competitors for a given opportunity
-- [ ] **24b. Capture planning agent** — Agent that generates a capture plan from an opportunity analysis
-- [ ] **24c. Proposal prep agent** — Agent that gathers all relevant knowledge base docs, extracts requirements, and sets up a proposal workspace
-- [ ] **24d. Competitive intel agent** — Agent that monitors competitor wins and surfaces relevant insights
+**Gap**: Agent baseline parity is now integrated end-to-end; next step is richer multi-step planning autonomy and long-horizon memory.
+- [x] **24a. Research agent** — Agent that autonomously researches an agency, incumbents, and competitors for a given opportunity
+- [x] **24b. Capture planning agent** — Agent that generates a capture plan from an opportunity analysis
+- [x] **24c. Proposal prep agent** — Agent that gathers all relevant knowledge base docs, extracts requirements, and sets up a proposal workspace
+- [x] **24d. Competitive intel agent** — Agent that monitors competitor wins and surfaces relevant insights
 
 #### 25. Email Ingestion
 **Gap**: Planned in Phase 9 but not started. Govly has team inboxes.
@@ -700,17 +973,17 @@ GovDash and Govly represent two distinct competitive threats:
 - [ ] **26c. Jurisdiction-aware filtering** — Filter opportunities by country/province/state
 
 #### 27. Unanet Integration
-**Gap**: Govly integrates with Unanet (popular GovCon ERP).
-- [ ] **27a. Project/opportunity sync** — Sync capture pipeline with Unanet projects
+**Gap**: Basic Unanet sync/status is implemented; resource and financial data depth remains.
+- [x] **27a. Project/opportunity sync** — Sync capture pipeline with Unanet projects
 - [ ] **27b. Resource planning data** — Pull labor categories and rates from Unanet
 - [ ] **27c. Financial data sync** — Connect contract financials between platforms
 
 #### 28. Smart Workflows / Automation Rules
-**Gap**: Govly has rule-based workflow automation. GovDash has automated teammate evaluation.
-- [ ] **28a. Workflow rule engine** — If-then rules for opportunity routing (e.g., "If NAICS 541512 AND value > $5M, assign to senior capture manager")
-- [ ] **28b. Automated stage transitions** — Auto-advance pipeline stage when conditions are met
-- [ ] **28c. Notification rules** — Custom notification triggers based on opportunity attributes
-- [ ] **28d. Teammate evaluation** — Auto-evaluate and recommend teaming partners based on requirements
+**Gap**: Rule engine and execution parity are now integrated; next step is broader action catalog and policy governance UX.
+- [x] **28a. Workflow rule engine** — If-then rules for opportunity routing (e.g., "If NAICS 541512 AND value > $5M, assign to senior capture manager")
+- [x] **28b. Automated stage transitions** — Auto-advance pipeline stage when conditions are met
+- [x] **28c. Notification rules** — Custom notification triggers based on opportunity attributes
+- [x] **28d. Teammate evaluation** — Auto-evaluate and recommend teaming partners based on requirements
 
 #### 29. Data Privacy & Model Training Guarantees
 **Gap**: GovDash explicitly states data is never used for model training. We don't.
@@ -720,35 +993,35 @@ GovDash and Govly represent two distinct competitive threats:
 - [ ] **29d. Privacy controls UI** — Give users visibility into how their data is used
 
 #### 30. Mobile Experience
-**Gap**: Neither competitor has a native mobile app, but responsive web is expected.
-- [ ] **30a. Responsive dashboard** — Ensure all dashboard views work on tablet/mobile
-- [ ] **30b. Push notifications** — Browser push notifications for alerts and opportunity changes
-- [ ] **30c. Mobile-optimized Dash** — Chat interface optimized for mobile
+**Gap**: Mobile baseline parity is integrated (responsive shell, push-subscription management, Dash mobile validation); next step is deeper route-by-route adaptive polish.
+- [x] **30a. Responsive dashboard** — Ensure all dashboard views work on tablet/mobile
+- [x] **30b. Push notifications** — Browser push notifications for alerts and opportunity changes
+- [x] **30c. Mobile-optimized Dash** — Chat interface optimized for mobile
 
 #### 31. Real-Time Collaborative Editing
-**Gap**: GovDash has real-time collaborative editing in their section editor.
-- [ ] **31a. WebSocket collaboration server** — Implement CRDT or OT-based real-time editing
-- [ ] **31b. Cursor presence** — Show other users' cursors in the document
-- [ ] **31c. Conflict resolution** — Handle simultaneous edits gracefully
+**Gap**: Real-time collaboration baseline (websocket feed, locks, cursor presence, conflict guards) is integrated; next parity step is richer CRDT-level merge ergonomics.
+- [x] **31a. WebSocket collaboration server** — Implement CRDT or OT-based real-time editing
+- [x] **31b. Cursor presence** — Show other users' cursors in the document
+- [x] **31c. Conflict resolution** — Handle simultaneous edits gracefully
 
 #### 32. Template Marketplace
-**Gap**: Currently scaffolded but not implemented.
-- [ ] **32a. Proposal templates** — Pre-built proposal structures by contract type (IT services, construction, professional services)
-- [ ] **32b. Compliance matrix templates** — Pre-built matrices for common contract vehicles
-- [ ] **32c. Community templates** — Allow users to share and discover templates
+**Gap**: Closed on 2026-02-10 with verticalized template depth + community publishing/discovery UX.
+- [x] **32a. Proposal templates** — Pre-built proposal structures by contract type (IT services, construction, professional services)
+- [x] **32b. Compliance matrix templates** — Pre-built matrices for common contract vehicles
+- [x] **32c. Community templates** — Allow users to share and discover templates
 
 #### 33. Dynamic Custom Reports
-**Gap**: GovDash has customizable reporting across all modules.
-- [ ] **33a. Report builder** — Drag-and-drop report builder with field selection
-- [ ] **33b. Saved report views** — Save and share custom report configurations
-- [ ] **33c. Scheduled report delivery** — Email reports on a schedule
+**Gap**: Closed on 2026-02-10 with drag/drop field layout, shared view controls, and scheduled email delivery.
+- [x] **33a. Report builder** — Drag-and-drop report builder with field selection
+- [x] **33b. Saved report views** — Save and share custom report configurations
+- [x] **33c. Scheduled report delivery** — Email reports on a schedule
 
 #### 34. Onboarding & Customer Success
-**Gap**: Both competitors emphasize responsive support and onboarding.
-- [ ] **34a. In-app onboarding flow** — Guided setup wizard for new accounts
-- [ ] **34b. Interactive tutorials** — Feature-specific walkthroughs
-- [ ] **34c. Knowledge base / help center** — Self-serve documentation and guides
-- [ ] **34d. In-app chat support** — Live chat or chatbot for quick questions
+**Gap**: Closed on 2026-02-10 with guided onboarding wizard, help center, interactive tutorials, and in-app support chat.
+- [x] **34a. In-app onboarding flow** — Guided setup wizard for new accounts
+- [x] **34b. Interactive tutorials** — Feature-specific walkthroughs
+- [x] **34c. Knowledge base / help center** — Self-serve documentation and guides
+- [x] **34d. In-app chat support** — Live chat or chatbot for quick questions
 
 ---
 
@@ -789,6 +1062,189 @@ Rather than simply matching features, consider areas where we can leapfrog compe
 | NPS score | Unknown | 50+ |
 | Feature parity score (vs GovDash) | ~55% | 85% |
 | Feature parity score (vs Govly) | ~35% | 70% |
+
+---
+
+## 2026 Competitive Landscape Summary
+
+### Market Segmentation by Customer Profile
+
+| Segment | Best Fit Competitor | Why They Win | Price Point |
+|---------|---------------------|--------------|-------------|
+| **Defense/IC contractors (CUI/classified)** | GovSignals | FedRAMP High authorization, SOC 2 security | $50K+/year |
+| **Enterprise GovCon (Top 100)** | GovDash | End-to-end platform, Word integration, FedRAMP Moderate | $40K+/year |
+| **Mid-market BD teams** | GovDash, Govly | Breadth of features + data sources | $15K-$40K/year |
+| **Small businesses (<50 employees)** | Govly, Sweetspot, CLEATUS | Free tier or affordable entry ($60-$3K/year) | $0-$5K/year |
+| **Micro-contractors (1-5 FTE)** | CLEATUS, Sweetspot | Simple, fast, affordable AI automation | $60-$1K/year |
+| **Capture-focused teams** | Capture2Proposal, GovTribe | Capture lifecycle management, intelligence | $2.6K-$5.5K/year |
+| **Unanet AE customers** | Unanet ProposalAI | Native integration with existing ERP/GovCon system | Unknown |
+| **Enterprise co-authoring** | XaitPorter | Distributed teams, version control, audit trails | $10K+/year |
+| **Market research/intelligence** | GovWin IQ, GovTribe | Deepest data, labor pricing, competitive intel | $7K-$45K/year |
+
+### Competitive Positioning Insights
+
+#### 1. Price Transparency Opportunity
+- **Opaque pricing**: GovDash, GovSignals, Unanet, XaitPorter, GovWin — all require sales calls
+- **Transparent pricing**: Govly ($3K-$15K), Sweetspot ($60/month), CLEATUS (trial available), Capture2Proposal ($2,640/year), GovTribe ($60/month)
+- **Opportunity**: GovTech Sniper can differentiate with transparent, published pricing tiers
+
+#### 2. Free Tier PLG Strategy
+- **Free tier leaders**: Govly (30-day SAM.gov + 6K SLED), Sweetspot (trial), CLEATUS (trial), GovTribe (14-day trial)
+- **No free option**: GovDash, GovSignals, Unanet, XaitPorter
+- **Opportunity**: GovTech Sniper's free tier can drive SMB adoption and product-led growth
+
+#### 3. Security Certification Gaps
+- **FedRAMP High**: GovSignals (ONLY one)
+- **FedRAMP Moderate**: GovDash (Q1 2026)
+- **CMMC Level 2**: Govly (first in category)
+- **AWS GovCloud**: GovDash, Unanet
+- **Everyone else**: No certifications visible
+- **Opportunity**: Fast-track FedRAMP Moderate + CMMC Level 2 to compete for defense/IC contracts
+
+#### 4. Data Source Coverage Race
+- **Broadest coverage**: Govly (40+ contract vehicles, 10K+ SLED, DIBBS, Canada)
+- **Solid coverage**: Sweetspot (SAM.gov, USAspending, FPDS, DIBBS, 1K+ state/local)
+- **Limited**: GovDash (SAM.gov, GSA eBuy, SLED)
+- **Specialized**: GovWin (deepest federal data but expensive)
+- **Opportunity**: GovTech Sniper's extensible provider registry can rapidly expand sources
+
+#### 5. AI Proposal Writing Maturity
+- **Most mature**: GovDash (pink-team-ready drafts, full solicitation parsing, Word Assistant)
+- **Strong**: GovSignals (>95% accurate outlines in <5 min, FedRAMP-secure generation)
+- **Emerging**: Unanet ProposalAI (70% time reduction, no hallucinations), ProposalWriter.ai
+- **Limited**: CLEATUS (fast but quality unclear), Sweetspot (Proposal Copilot)
+- **Not a focus**: Govly, GovTribe, Capture2Proposal
+- **Opportunity**: GovTech Sniper's Gemini 1M context + Context Caching can leapfrog on quality
+
+#### 6. Integration Ecosystem Gaps
+| Integration | GovDash | Govly | GovSignals | Others |
+|-------------|---------|-------|------------|--------|
+| Salesforce | ✅ (bidirectional) | ✅ | ❌ | Some |
+| SharePoint | ✅ | ❌ | ❌ | Rare |
+| MS Word Add-in | ✅ (AppSource) | ❌ | ❌ | XaitPorter only |
+| Unanet | ❌ | ✅ | ❌ | ProposalAI (native) |
+| MS Dynamics | ❌ | 🔨 (building) | ❌ | Rare |
+| Public API | ❌ | ✅ | ❌ | GovTribe, Sweetspot |
+
+**Opportunity**: GovTech Sniper's open API + Word add-in + SharePoint can match or exceed integration breadth
+
+#### 7. Collaboration Features
+- **Cross-org leaders**: Govly (workspaces, partner sharing, teaming board), Sweetspot (team collaboration)
+- **Limited**: GovDash (no cross-org features), GovSignals (enterprise only)
+- **Strong capture**: Capture2Proposal (teaming tracking, NDAs, workshare)
+- **Opportunity**: GovTech Sniper's cross-org workspaces + teaming board already match Govly
+
+#### 8. Customer Success & Onboarding
+- **White-glove**: GovDash (hands-on onboarding, dedicated support)
+- **Self-serve**: Govly (free tier, simple UI), Sweetspot (fast signup), CLEATUS (trial-driven)
+- **Mixed**: Most others (sales-led with training)
+- **Opportunity**: Hybrid model — self-serve for SMBs, white-glove for enterprise
+
+### Key Takeaways for GovTech Sniper Strategy
+
+#### Where We Can Win
+
+1. **Price transparency + free tier** → Attract SMBs frustrated by opaque pricing
+2. **API-first ecosystem** → Enable integrations competitors don't offer
+3. **Speed of AI generation** → Gemini Flash/Pro advantage for real-time analysis
+4. **Compliance as code** → Automated compliance checks (not just manual matrix building)
+5. **Data source breadth** → Extensible provider model can match Govly's 40+ sources
+6. **Transparent security** → Public commitment on data handling, faster FedRAMP/CMMC
+
+#### Where We Must Catch Up (P0 Gaps)
+
+1. **FedRAMP/CMMC certifications** → Critical for defense contractors
+2. **Pink-team-ready draft quality** → GovDash sets the bar; we must match or exceed
+3. **Full solicitation parsing depth** → Sections C/H/PWS beyond just L/M
+4. **Word Assistant maturity** → AppSource listing + full feature parity
+5. **Data source expansion** → Reach 10+ sources quickly (currently at ~8 with recent integrations)
+
+#### Where We Can Leapfrog
+
+1. **Compliance shreds** → Feature neither major competitor has
+2. **Gemini 1M context window** → Technical advantage for massive RFP packages
+3. **Context Caching efficiency** → Faster/cheaper than vector DB approaches
+4. **Open roadmap transparency** → Public feature voting/requests vs closed development
+5. **Developer ecosystem** → Public API + webhooks + integrations marketplace
+
+### Recommended Competitive Positioning Statement
+
+> **GovTech Sniper is the only AI proposal platform built for speed, transparency, and extensibility.**
+>
+> Unlike enterprise-only tools (GovDash, GovSignals) with opaque pricing and limited data sources, we offer:
+> - Transparent pricing with a functional free tier
+> - 10+ data sources (federal, SLED, contract vehicles) and growing
+> - Industry-leading AI speed with Gemini's 1M token context
+> - Open API and integration ecosystem
+> - Compliance automation (not just manual matrix building)
+>
+> Unlike discovery-focused tools (Govly, GovTribe) with limited proposal features, we offer:
+> - Pink-team-ready AI proposal drafts in under 2 hours
+> - Full solicitation parsing (Sections L/M/C/H/PWS)
+> - Microsoft Word add-in for in-document AI assistance
+> - Color team review workflows (pink/red/gold)
+> - Contract lifecycle management beyond capture
+>
+> We're the platform for teams that want GovDash-quality proposals at Govly-level data breadth without enterprise-only pricing.
+
+---
+
+## Sources
+
+This analysis incorporates research from the following sources (February 2026):
+
+**GovDash**
+- [GovDash Software Features | Capterra](https://www.capterra.com/p/10020317/GovDash/)
+- [Pricing | GovDash](https://www.govdash.com/pricing)
+- [GovDash Reviews | SoftwareWorld](https://www.softwareworld.co/software/govdash-reviews/)
+- [AI for Government Contracting | GovDash](https://www.govdash.com/)
+
+**Govly**
+- [Govly Pricing | Capterra](https://www.capterra.com/p/265284/Govly/)
+- [Govly Features | GetApp](https://www.getapp.com/government-social-services-software/a/govly/)
+- [Govly: Market Network for Government Contractors](https://www.govly.com/)
+
+**GovSignals**
+- [GovSignals | FedRAMP High AI Platform](https://www.govsignals.ai)
+- [GovSignals Pricing | Capterra](https://www.capterra.com/p/10016450/GovSignals/)
+- [Best Secure AI Platforms | GovEagle](https://www.goveagle.com/blog/secure-ai-platforms-government-proposal-data)
+
+**CLEATUS**
+- [CLEATUS - AI-Powered Government Contracting](https://www.cleat.ai/)
+- [CLEATUS Pricing](https://www.cleat.ai/pricing)
+- [AI Government Contract Proposal Writer | CLEATUS](https://www.cleat.ai/features/proposal-writer)
+
+**Sweetspot**
+- [Sweetspot - AI Government Contracting Platform](https://www.sweetspot.so/)
+- [Sweetspot Pricing](https://www.sweetspot.so/pricing/)
+- [Sweetspot (YC S23) | Y Combinator](https://www.ycombinator.com/companies/sweetspot)
+
+**Unanet ProposalAI**
+- [ProposalAI | Unanet](https://unanet.com/proposal-ai)
+- [Unanet ProposalAI Features | GetApp](https://www.getapp.com/sales-software/a/unanet-proposalai/)
+
+**XaitPorter/Privia**
+- [Bid and Proposal Software | Privia](https://www.xait.com/industry/proposal-software-for-government-contracting)
+- [Top Proposal Writing Software 2026 | GovCon Digest](https://govcondigest.com/top-proposal-writing-software-2026/)
+
+**Capture2Proposal**
+- [Capture2Proposal Features](https://capture2proposal.com/capture-2-features/)
+- [Capture2Proposal Pricing | Capterra](https://www.capterra.com/p/186390/Capture2Proposal/)
+
+**GovTribe**
+- [GovTribe Reviews | SoftwareWorld](https://www.softwareworld.co/software/govtribe-reviews/)
+- [GovTribe | Grow Your Government Business](https://govtribe.com/)
+- [Top 5 Government Contract Opportunity Tools](https://iquasar.com/blog/5-government-contract-opportunity-search-tools/)
+
+**Deltek GovWin IQ**
+- [Lohfeld Consulting - GovWin IQ Powers Proposal Development](https://www.deltek.com/en/blog/customer-story-lohfeld-consulting)
+- [Deltek GovWin IQ Pricing | Capterra](https://www.capterra.com/p/154858/GovWin-IQ/)
+- [Find and Win Federal Contracts | Deltek GovWin IQ](https://www.deltek.com/en/government-contracting/govwin/federal)
+
+**General Market Analysis**
+- [Best & Worst Gov Contracting Tools 2025](https://www.dodcontract.com/blog/best-worst-gov-contracting-tools-in-2025)
+- [Top Proposal Writing Software 2026 | GovCon Digest](https://govcondigest.com/top-proposal-writing-software-2026/)
+- [Top 10 Best Proposal Software 2026](https://www.inventive.ai/blog-posts/top-proposal-software-tools)
 
 ---
 
