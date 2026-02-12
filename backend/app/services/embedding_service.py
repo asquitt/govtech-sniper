@@ -1,12 +1,23 @@
-"""Embedding generation and semantic search service."""
+"""Embedding generation and semantic search service.
+
+Uses Gemini text-embedding-004 for production-quality semantic vectors.
+Falls back to hash-based embeddings when GEMINI_API_KEY is not configured.
+"""
 
 import json
 import math
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.config import settings
 from app.models.embedding import DocumentEmbedding
+
+logger = structlog.get_logger(__name__)
+
+EMBEDDING_DIM = 768
+EMBEDDING_MODEL = "text-embedding-004"
 
 
 def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
@@ -23,32 +34,84 @@ def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str
     return chunks
 
 
-def _simple_embedding(text: str) -> list[float]:
-    """Generate a simple TF-based embedding for MVP.
+async def _gemini_embed(texts: list[str]) -> list[list[float]]:
+    """Generate embeddings via Gemini text-embedding-004 API.
 
-    Uses word frequency hashing for basic similarity.
-    Replace with Gemini text-embedding-004 in production.
+    Batches up to 100 texts per request (API limit).
     """
+    import google.generativeai as genai
+
+    if not settings.gemini_api_key:
+        logger.warning("GEMINI_API_KEY not set, using fallback embeddings")
+        return [_fallback_embedding(t) for t in texts]
+
+    genai.configure(api_key=settings.gemini_api_key)
+
+    embeddings: list[list[float]] = []
+    batch_size = 100
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        try:
+            result = genai.embed_content(
+                model=f"models/{EMBEDDING_MODEL}",
+                content=batch,
+                task_type="RETRIEVAL_DOCUMENT",
+            )
+            batch_embeddings = result["embedding"]
+            if isinstance(batch_embeddings[0], float):
+                # Single text returns flat list
+                embeddings.append(batch_embeddings)
+            else:
+                embeddings.extend(batch_embeddings)
+        except Exception as e:
+            logger.error("Gemini embedding failed, using fallback", error=str(e))
+            embeddings.extend([_fallback_embedding(t) for t in batch])
+
+    return embeddings
+
+
+async def _gemini_embed_query(text: str) -> list[float]:
+    """Generate query embedding (uses RETRIEVAL_QUERY task type)."""
+    import google.generativeai as genai
+
+    if not settings.gemini_api_key:
+        return _fallback_embedding(text)
+
+    genai.configure(api_key=settings.gemini_api_key)
+
+    try:
+        result = genai.embed_content(
+            model=f"models/{EMBEDDING_MODEL}",
+            content=text,
+            task_type="RETRIEVAL_QUERY",
+        )
+        return result["embedding"]
+    except Exception as e:
+        logger.error("Gemini query embedding failed", error=str(e))
+        return _fallback_embedding(text)
+
+
+def _fallback_embedding(text: str) -> list[float]:
+    """Hash-based fallback embedding when Gemini is unavailable."""
     words = text.lower().split()
     if not words:
-        return [0.0] * 128
+        return [0.0] * EMBEDDING_DIM
 
-    # Simple hash-based embedding (128 dimensions)
-    embedding = [0.0] * 128
+    embedding = [0.0] * EMBEDDING_DIM
     for word in words:
-        h = hash(word) % 128
+        h = hash(word) % EMBEDDING_DIM
         embedding[h] += 1.0
 
-    # L2 normalize
     magnitude = math.sqrt(sum(x * x for x in embedding))
     if magnitude > 0:
         embedding = [x / magnitude for x in embedding]
-
     return embedding
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
+    if len(a) != len(b):
+        return 0.0
     dot = sum(x * y for x, y in zip(a, b, strict=False))
     mag_a = math.sqrt(sum(x * x for x in a))
     mag_b = math.sqrt(sum(x * x for x in b))
@@ -75,8 +138,13 @@ async def index_entity(
         await session.delete(emb)
 
     chunks = _chunk_text(text)
-    for i, chunk in enumerate(chunks):
-        embedding = _simple_embedding(chunk)
+    if not chunks:
+        return 0
+
+    # Batch embed all chunks
+    embeddings = await _gemini_embed(chunks)
+
+    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=False)):
         doc_emb = DocumentEmbedding(
             entity_type=entity_type,
             entity_id=entity_id,
@@ -97,7 +165,7 @@ async def search(
     limit: int = 10,
 ) -> list[dict]:
     """Semantic search across indexed entities."""
-    query_embedding = _simple_embedding(query)
+    query_embedding = await _gemini_embed_query(query)
 
     stmt = select(DocumentEmbedding)
     if entity_types:
