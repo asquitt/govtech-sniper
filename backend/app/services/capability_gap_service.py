@@ -68,7 +68,8 @@ async def analyze_capability_gaps(
     partners = partners_result.scalars().all()
 
     # Build context
-    rfp_text = rfp.raw_text[:4000] if rfp.raw_text else rfp.title
+    rfp_text_source = rfp.full_text or rfp.description or rfp.title or ""
+    rfp_text = rfp_text_source[:4000]
     profile_caps = []
     if profile:
         profile_caps = profile.capabilities if hasattr(profile, "capabilities") else []

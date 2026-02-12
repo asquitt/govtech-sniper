@@ -17,6 +17,11 @@ import google.generativeai as genai
 import structlog
 from google.generativeai import caching
 
+try:
+    from google.api_core.exceptions import ResourceExhausted as GeminiResourceExhausted
+except Exception:  # pragma: no cover - dependency shape can vary by runtime
+    GeminiResourceExhausted = None
+
 from app.config import settings
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.proposal import Citation, GeneratedContent
@@ -37,6 +42,13 @@ class GeminiService:
 
     # Citation pattern: [[Source: filename.pdf, Page XX]]
     CITATION_PATTERN = r"\[\[Source:\s*([^,\]]+)(?:,\s*Page\s*(\d+))?\]\]"
+    RETRY_IN_PATTERN = re.compile(r"retry in\s+([0-9]+(?:\.[0-9]+)?)s", re.IGNORECASE)
+    RETRY_DELAY_PATTERN = re.compile(
+        r"retry_delay\s*\{\s*seconds:\s*(\d+)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    DAILY_QUOTA_PATTERN = re.compile(r"per[_\s-]?day", re.IGNORECASE)
+    _quota_circuit_open_until: datetime | None = None
 
     def __init__(self, api_key: str | None = None):
         """
@@ -49,17 +61,19 @@ class GeminiService:
 
         if self.api_key:
             genai.configure(api_key=self.api_key)
-            pro_name = self._resolve_model_name(
+            self.pro_model_name = self._resolve_model_name(
                 settings.gemini_model_pro,
                 fallback_keywords=["gemini", "pro"],
             )
-            flash_name = self._resolve_model_name(
+            self.flash_model_name = self._resolve_model_name(
                 settings.gemini_model_flash,
                 fallback_keywords=["gemini", "flash"],
             )
-            self.pro_model = genai.GenerativeModel(pro_name)
-            self.flash_model = genai.GenerativeModel(flash_name)
+            self.pro_model = genai.GenerativeModel(self.pro_model_name)
+            self.flash_model = genai.GenerativeModel(self.flash_model_name)
         else:
+            self.pro_model_name = settings.gemini_model_pro
+            self.flash_model_name = settings.gemini_model_flash
             self.pro_model = None
             self.flash_model = None
             logger.warning("Gemini API key not configured")
@@ -92,6 +106,160 @@ class GeminiService:
                 return m.name
 
         return preferred
+
+    def _is_quota_error(self, exc: Exception) -> bool:
+        if GeminiResourceExhausted is not None and isinstance(exc, GeminiResourceExhausted):
+            return True
+        lowered = str(exc).lower()
+        return "quota exceeded" in lowered or "resourceexhausted" in lowered
+
+    def _extract_retry_after_seconds(self, exc: Exception) -> int | None:
+        message = str(exc)
+        retry_match = self.RETRY_IN_PATTERN.search(message)
+        if retry_match:
+            return max(1, int(float(retry_match.group(1))))
+
+        retry_delay_match = self.RETRY_DELAY_PATTERN.search(message)
+        if retry_delay_match:
+            return max(1, int(retry_delay_match.group(1)))
+
+        return None
+
+    def _get_remaining_quota_circuit_seconds(self) -> int | None:
+        blocked_until = self.__class__._quota_circuit_open_until
+        if not blocked_until:
+            return None
+        remaining = int((blocked_until - datetime.utcnow()).total_seconds())
+        if remaining <= 0:
+            self.__class__._quota_circuit_open_until = None
+            return None
+        return remaining
+
+    def _open_quota_circuit(
+        self,
+        *,
+        retry_after_seconds: int | None,
+        error_message: str,
+    ) -> int:
+        cooldown = retry_after_seconds or settings.gemini_rate_limit_cooldown_seconds
+        if self.DAILY_QUOTA_PATTERN.search(error_message):
+            cooldown = max(cooldown, settings.gemini_rate_limit_daily_cooldown_seconds)
+        cooldown = max(1, min(cooldown, settings.gemini_rate_limit_max_seconds))
+        self.__class__._quota_circuit_open_until = datetime.utcnow() + timedelta(seconds=cooldown)
+        logger.warning("Gemini quota circuit opened", open_seconds=cooldown)
+        return cooldown
+
+    def _ensure_quota_available(self) -> None:
+        remaining = self._get_remaining_quota_circuit_seconds()
+        if remaining:
+            raise RuntimeError(
+                f"Gemini API rate limit reached. Retry in about {remaining} seconds."
+            )
+
+    def _configured_fallback_model_names(self) -> list[str]:
+        configured = [
+            model.strip() for model in settings.gemini_fallback_models.split(",") if model.strip()
+        ]
+        return configured
+
+    def _build_model_candidates(
+        self,
+        *,
+        primary_model: genai.GenerativeModel | None,
+        primary_model_name: str | None,
+    ) -> list[tuple[str, genai.GenerativeModel]]:
+        candidates: list[tuple[str, genai.GenerativeModel]] = []
+        seen_names: set[str] = set()
+
+        if primary_model is not None:
+            label = primary_model_name or "primary"
+            candidates.append((label, primary_model))
+            if primary_model_name:
+                seen_names.add(primary_model_name)
+
+        if self.flash_model is not None and self.flash_model_name not in seen_names:
+            candidates.append((self.flash_model_name, self.flash_model))
+            seen_names.add(self.flash_model_name)
+
+        if not self.api_key:
+            return candidates
+
+        for model_name in self._configured_fallback_model_names():
+            if model_name in seen_names:
+                continue
+            try:
+                candidates.append((model_name, genai.GenerativeModel(model_name)))
+                seen_names.add(model_name)
+            except Exception as e:
+                logger.warning(
+                    "Failed to initialize fallback model",
+                    model=model_name,
+                    error=str(e),
+                )
+
+        return candidates
+
+    async def _generate_with_fallback(
+        self,
+        *,
+        prompt: str,
+        generation_config: genai.GenerationConfig,
+        primary_model: genai.GenerativeModel | None,
+        primary_model_name: str | None,
+    ) -> tuple[Any, str]:
+        self._ensure_quota_available()
+
+        candidates = self._build_model_candidates(
+            primary_model=primary_model,
+            primary_model_name=primary_model_name,
+        )
+        if not candidates:
+            raise ValueError("Gemini model not available")
+
+        max_retry_after = 0
+        last_quota_error: Exception | None = None
+        last_error: Exception | None = None
+
+        for model_name, model in candidates:
+            try:
+                response = await model.generate_content_async(
+                    prompt,
+                    generation_config=generation_config,
+                )
+                if model_name != (primary_model_name or "primary"):
+                    logger.info("Gemini fallback model used", model=model_name)
+                return response, model_name
+            except Exception as exc:
+                last_error = exc
+                if self._is_quota_error(exc):
+                    last_quota_error = exc
+                    retry_after = self._extract_retry_after_seconds(exc) or 0
+                    max_retry_after = max(max_retry_after, retry_after)
+                    logger.warning(
+                        "Gemini model quota-limited; trying fallback if available",
+                        model=model_name,
+                        retry_after=retry_after or None,
+                    )
+                    continue
+                raise
+
+        if last_quota_error is not None:
+            message = str(last_quota_error)
+            cooldown = self._open_quota_circuit(
+                retry_after_seconds=max_retry_after or None,
+                error_message=message,
+            )
+            if "limit: 0" in message.lower():
+                raise RuntimeError(
+                    "Gemini quota is unavailable for the configured model. "
+                    "Enable billing or configure GEMINI_FALLBACK_MODELS. "
+                    f"Retry in about {cooldown} seconds."
+                )
+            raise RuntimeError(f"Gemini API rate limit reached. Retry in about {cooldown} seconds.")
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Gemini generation failed unexpectedly.")
 
     # =========================================================================
     # Deep Read: Compliance Matrix Extraction
@@ -192,13 +360,15 @@ Respond with ONLY valid JSON in this format:
         start_time = datetime.utcnow()
 
         try:
-            response = await self.pro_model.generate_content_async(
-                prompt,
+            response, model_used = await self._generate_with_fallback(
+                prompt=prompt,
                 generation_config=genai.GenerationConfig(
                     temperature=0.2,
                     max_output_tokens=max_tokens,
                     response_mime_type="application/json",
                 ),
+                primary_model=self.pro_model,
+                primary_model_name=self.pro_model_name,
             )
 
             import json
@@ -233,6 +403,7 @@ Respond with ONLY valid JSON in this format:
                 "Deep Read complete",
                 requirements_found=len(requirements),
                 elapsed_seconds=elapsed,
+                model_used=model_used,
             )
 
             return {
@@ -427,12 +598,14 @@ Write the response now:"""
             prompt = f"KNOWLEDGE BASE DOCUMENTS:\n{documents_text}\n\n{prompt}"
 
         try:
-            response = await model.generate_content_async(
-                prompt,
+            response, model_used = await self._generate_with_fallback(
+                prompt=prompt,
                 generation_config=genai.GenerationConfig(
                     temperature=0.7,
                     max_output_tokens=max_words * 3,  # Rough token estimate
                 ),
+                primary_model=model,
+                primary_model_name=self.pro_model_name if model is self.pro_model else "cached",
             )
 
             raw_text = response.text
@@ -464,7 +637,7 @@ Write the response now:"""
                 raw_text=raw_text,
                 clean_text=clean_text,
                 citations=citations,
-                model_used=settings.gemini_model_pro,
+                model_used=model_used,
                 tokens_used=tokens_used,
                 generation_time_seconds=elapsed,
             )
@@ -564,12 +737,14 @@ Rewrite the content now:"""
         if documents_text:
             prompt = f"KNOWLEDGE BASE DOCUMENTS:\n{documents_text}\n\n{prompt}"
 
-        response = await self.pro_model.generate_content_async(
-            prompt,
+        response, model_used = await self._generate_with_fallback(
+            prompt=prompt,
             generation_config=genai.GenerationConfig(
                 temperature=0.7,
                 max_output_tokens=len(content.split()) * 4,
             ),
+            primary_model=self.pro_model,
+            primary_model_name=self.pro_model_name,
         )
 
         raw_text = response.text
@@ -585,7 +760,7 @@ Rewrite the content now:"""
             raw_text=raw_text,
             clean_text=clean_text,
             citations=citations,
-            model_used=settings.gemini_model_pro,
+            model_used=model_used,
             tokens_used=tokens_used,
             generation_time_seconds=elapsed,
         )
@@ -644,12 +819,14 @@ Expand the content now:"""
         if documents_text:
             prompt = f"KNOWLEDGE BASE DOCUMENTS:\n{documents_text}\n\n{prompt}"
 
-        response = await self.pro_model.generate_content_async(
-            prompt,
+        response, model_used = await self._generate_with_fallback(
+            prompt=prompt,
             generation_config=genai.GenerationConfig(
                 temperature=0.7,
                 max_output_tokens=target_words * 3,
             ),
+            primary_model=self.pro_model,
+            primary_model_name=self.pro_model_name,
         )
 
         raw_text = response.text
@@ -665,7 +842,7 @@ Expand the content now:"""
             raw_text=raw_text,
             clean_text=clean_text,
             citations=citations,
-            model_used=settings.gemini_model_pro,
+            model_used=model_used,
             tokens_used=tokens_used,
             generation_time_seconds=elapsed,
         )

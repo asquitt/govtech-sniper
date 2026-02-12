@@ -108,9 +108,20 @@ class SAMGovService:
             return
         cooldown = settings.sam_circuit_breaker_cooldown_seconds
         max_seconds = settings.sam_circuit_breaker_max_seconds
+        # Honor upstream Retry-After windows to avoid noisy repeat retries. Keep
+        # a hard safety cap of at least 24h even if local caps are configured lower.
+        retry_after_cap = max(max_seconds, 86400)
         if retry_after and retry_after > 0:
-            cooldown = max(cooldown, retry_after)
-        cooldown = min(cooldown, max_seconds)
+            cooldown = retry_after
+            if cooldown > retry_after_cap:
+                logger.warning(
+                    "Retry-After exceeded cap; capping to avoid long sleeps",
+                    retry_after=retry_after,
+                    cap=retry_after_cap,
+                )
+                cooldown = retry_after_cap
+        else:
+            cooldown = min(cooldown, max_seconds)
         self.__class__._circuit_open_until = datetime.utcnow() + timedelta(seconds=cooldown)
         self.__class__._circuit_reason = reason
         logger.warning(
@@ -142,11 +153,18 @@ class SAMGovService:
         self._validate_api_key()
         if self._is_circuit_open():
             reason = self.__class__._circuit_reason or "rate_limited"
+            retry_after_seconds = None
+            if self.__class__._circuit_open_until:
+                retry_after_seconds = max(
+                    1,
+                    int((self.__class__._circuit_open_until - datetime.utcnow()).total_seconds()),
+                )
             raise SAMGovAPIError(
                 f"SAM.gov circuit open ({reason}). Try again later.",
                 status_code=429,
                 retryable=False,
                 is_rate_limited=True,
+                retry_after_seconds=retry_after_seconds,
             )
 
         # Add API key to params
@@ -182,7 +200,7 @@ class SAMGovService:
                             )
                         except Exception:
                             retry_after = 60
-                max_retry_after = 60
+                max_retry_after = max(settings.sam_circuit_breaker_max_seconds, 86400)
                 if retry_after > max_retry_after:
                     logger.warning(
                         "Retry-After exceeded cap; capping to avoid long sleeps",
@@ -413,6 +431,8 @@ class SAMGovService:
             opportunities_data = data.get("opportunitiesData", [])
             logger.info(f"Found {len(opportunities_data)} opportunities from SAM.gov")
             return opportunities_data
+        except SAMGovAPIError:
+            raise
         except httpx.HTTPStatusError as e:
             raise SAMGovAPIError(
                 f"SAM.gov API error: {e.response.status_code}",
