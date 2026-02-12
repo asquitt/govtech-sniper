@@ -1,4 +1,10 @@
 // -----------------------------------------------------------------------------
+// Data Classification (CUI/FCI policy enforcement)
+// -----------------------------------------------------------------------------
+
+export type DataClassification = "public" | "internal" | "fci" | "cui";
+
+// -----------------------------------------------------------------------------
 // Compliance Matrix Types
 // -----------------------------------------------------------------------------
 
@@ -185,6 +191,7 @@ export interface Proposal {
   title: string;
   version: number;
   status: ProposalStatus;
+  classification: DataClassification;
   executive_summary?: string;
   total_sections: number;
   completed_sections: number;

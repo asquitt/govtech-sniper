@@ -61,6 +61,9 @@ class ContractAward(SQLModel, table=True):
         default=None, foreign_key="contract_awards.id", index=True
     )
 
+    # Data classification for CUI/FCI policy enforcement
+    classification: str = Field(default="internal", max_length=20)
+
     contract_number: str = Field(max_length=255)
     title: str = Field(max_length=500)
     agency: str | None = Field(default=None, max_length=255)

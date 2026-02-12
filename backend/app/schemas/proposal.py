@@ -8,7 +8,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.proposal import Citation, ProposalStatus, SectionStatus, SubmissionPackageStatus
+from app.models.proposal import (
+    Citation,
+    DataClassification,
+    ProposalStatus,
+    SectionStatus,
+    SubmissionPackageStatus,
+)
 
 # =============================================================================
 # Proposal Schemas
@@ -20,6 +26,7 @@ class ProposalCreate(BaseModel):
 
     rfp_id: int
     title: str = Field(max_length=500)
+    classification: DataClassification = DataClassification.INTERNAL
 
 
 class ProposalRead(BaseModel):
@@ -31,6 +38,7 @@ class ProposalRead(BaseModel):
     title: str
     version: int
     status: ProposalStatus
+    classification: DataClassification
     executive_summary: str | None
     total_sections: int
     completed_sections: int
@@ -54,6 +62,7 @@ class ProposalRead(BaseModel):
             "title": proposal.title,
             "version": proposal.version,
             "status": proposal.status,
+            "classification": proposal.classification,
             "executive_summary": proposal.executive_summary,
             "total_sections": proposal.total_sections,
             "completed_sections": proposal.completed_sections,
@@ -73,6 +82,7 @@ class ProposalUpdate(BaseModel):
 
     title: str | None = Field(default=None, max_length=500)
     status: ProposalStatus | None = None
+    classification: DataClassification | None = None
     executive_summary: str | None = None
 
 

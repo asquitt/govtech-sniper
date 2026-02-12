@@ -63,6 +63,9 @@ class KnowledgeBaseDocument(KnowledgeBaseDocumentBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
+    # Data classification for CUI/FCI policy enforcement
+    classification: str = Field(default="internal", max_length=20)
+
     # File metadata
     original_filename: str = Field(max_length=255)
     file_path: str = Field(max_length=500)

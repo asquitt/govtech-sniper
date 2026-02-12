@@ -91,6 +91,7 @@ from app.models.organization import (
 )
 from app.models.outline import OutlineSection, OutlineStatus, ProposalOutline
 from app.models.proposal import (
+    DataClassification,
     Proposal,
     ProposalSection,
     SectionEvidence,
@@ -122,6 +123,7 @@ from app.models.word_addin import WordAddinEvent, WordAddinSession, WordAddinSes
 from app.models.workflow import ExecutionStatus, TriggerType, WorkflowExecution, WorkflowRule
 
 __all__ = [
+    "DataClassification",
     "User",
     "UserProfile",
     "CompanySize",

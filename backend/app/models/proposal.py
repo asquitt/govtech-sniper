@@ -17,6 +17,15 @@ if TYPE_CHECKING:
     from app.models.user import User
 
 
+class DataClassification(str, Enum):
+    """CUI/FCI data classification for policy enforcement."""
+
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    FCI = "fci"  # Federal Contract Information
+    CUI = "cui"  # Controlled Unclassified Information
+
+
 class ProposalStatus(str, Enum):
     """Status of a proposal draft."""
 
@@ -106,6 +115,9 @@ class Proposal(ProposalBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     rfp_id: int = Field(foreign_key="rfps.id", index=True)
+
+    # Data classification for CUI/FCI policy enforcement
+    classification: DataClassification = Field(default=DataClassification.INTERNAL)
 
     # Overall proposal metadata
     executive_summary: str | None = Field(default=None, sa_column=Column(Text))

@@ -147,6 +147,9 @@ class RFP(RFPBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
 
+    # Data classification for CUI/FCI policy enforcement
+    classification: str = Field(default="internal", max_length=20)
+
     # Status tracking
     status: RFPStatus = Field(default=RFPStatus.NEW)
 
