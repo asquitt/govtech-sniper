@@ -8,6 +8,7 @@ vi.mock("@/lib/api", () => ({
   rfpApi: {
     list: vi.fn(),
     getStats: vi.fn(),
+    create: vi.fn(),
   },
   savedSearchApi: {
     list: vi.fn(),
@@ -47,6 +48,17 @@ describe("OpportunitiesPage", () => {
       pending_filter: 0,
       by_status: { analyzing: 0 },
     });
+    mockedRfpApi.create.mockResolvedValue({
+      id: 2,
+      title: "Created RFP",
+      solicitation_number: "CREATED-001",
+      agency: "GSA",
+      status: "new",
+      is_qualified: null,
+      qualification_score: null,
+      response_deadline: null,
+      created_at: "2026-02-01T12:00:00Z",
+    });
 
     mockedSavedSearchApi.list.mockResolvedValue([]);
 
@@ -80,7 +92,74 @@ describe("OpportunitiesPage", () => {
       await screen.findByText("Failed to load opportunities. Please try again.")
     ).toBeInTheDocument();
 
-    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Refresh" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Add RFP" })).toBeInTheDocument();
+  });
+
+  it("keeps primary actions available when SAM sync fails", async () => {
+    mockedIngestApi.triggerSamSearch.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: "SAM.gov rate limit reached. Retry in about 60 seconds.",
+        },
+      },
+    });
+
+    render(<OpportunitiesPage />);
+    await screen.findByText("Track and manage government contract opportunities");
+
+    await userEvent.click(screen.getByRole("button", { name: "Sync SAM.gov" }));
+
+    expect(
+      await screen.findByText("SAM.gov rate limit reached. Retry in about 60 seconds.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add RFP" })).toBeInTheDocument();
+  });
+
+  it("disables sync during Retry-After cooldown", async () => {
+    mockedIngestApi.triggerSamSearch.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: "SAM.gov rate limit reached. Retry in about 90 seconds.",
+        },
+        headers: {
+          "retry-after": "90",
+        },
+      },
+    });
+
+    render(<OpportunitiesPage />);
+    await screen.findByText("Track and manage government contract opportunities");
+
+    await userEvent.click(screen.getByRole("button", { name: "Sync SAM.gov" }));
+
+    const cooldownButton = await screen.findByRole("button", { name: /Sync in/i });
+    expect(cooldownButton).toBeDisabled();
+  });
+
+  it("allows manually creating an RFP from the opportunities page", async () => {
+    render(<OpportunitiesPage />);
+    await screen.findByText("Track and manage government contract opportunities");
+
+    await userEvent.click(screen.getByRole("button", { name: "Add RFP" }));
+
+    await userEvent.type(screen.getByLabelText("Title"), "Manual Opportunity");
+    await userEvent.type(screen.getByLabelText("Solicitation Number"), "MANUAL-001");
+    await userEvent.type(screen.getByLabelText("Agency"), "General Services Administration");
+    await userEvent.type(
+      screen.getByLabelText("Description"),
+      "Manual opportunity added while SAM.gov is unavailable."
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Save RFP" }));
+
+    expect(mockedRfpApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Manual Opportunity",
+        solicitation_number: "MANUAL-001",
+        agency: "General Services Administration",
+      })
+    );
   });
 
   it("does not poll task status when ingest completes immediately", async () => {

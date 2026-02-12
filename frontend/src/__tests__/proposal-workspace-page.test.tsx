@@ -33,6 +33,8 @@ vi.mock("@/lib/api", () => ({
   },
   graphicsApi: {
     listRequests: vi.fn(),
+    listTemplates: vi.fn(),
+    generateGraphic: vi.fn(),
   },
 }));
 
@@ -73,6 +75,14 @@ describe("ProposalWorkspacePage", () => {
     mockedDocumentApi.list.mockResolvedValue([]);
     mockedWordAddinApi.listSessions.mockResolvedValue([]);
     mockedGraphicsApi.listRequests.mockResolvedValue([]);
+    mockedGraphicsApi.listTemplates.mockResolvedValue([
+      { type: "timeline", label: "Timeline" },
+    ]);
+    mockedGraphicsApi.generateGraphic.mockResolvedValue({
+      mermaid_code: "flowchart TD\\nA-->B",
+      template_type: "timeline",
+      title: "Generated Graphic",
+    });
   });
 
   it("renders proposal workspace header", async () => {

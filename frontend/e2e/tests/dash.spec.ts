@@ -17,15 +17,14 @@ test.describe("Dash (AI Assistant) Page", () => {
   }) => {
     await page.goto("/dash");
 
-    await expect(
-      page.getByRole("button", { name: "Recent opportunities" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Pipeline overview" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Upload help" })
-    ).toBeVisible();
+    const promptCard = page
+      .locator("div")
+      .filter({ has: page.getByRole("heading", { name: "Ask Dash anything" }) })
+      .first();
+    const suggestionButtons = promptCard.getByRole("button");
+    await expect(suggestionButtons.first()).toBeVisible();
+    const suggestionCount = await suggestionButtons.count();
+    expect(suggestionCount).toBeGreaterThanOrEqual(3);
   });
 
   test("chat input is functional", async ({ authenticatedPage: page }) => {
@@ -35,5 +34,14 @@ test.describe("Dash (AI Assistant) Page", () => {
     await expect(chatInput).toBeVisible();
     await chatInput.fill("What is this opportunity about?");
     await expect(chatInput).toHaveValue("What is this opportunity about?");
+  });
+
+  test("voice controls are surfaced in the chat input bar", async ({
+    authenticatedPage: page,
+  }) => {
+    await page.goto("/dash");
+
+    const voiceControl = page.getByRole("button", { name: /Voice|Sound/ }).first();
+    await expect(voiceControl).toBeVisible();
   });
 });

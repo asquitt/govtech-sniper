@@ -24,6 +24,9 @@ test.describe("Settings Page", () => {
     await page.goto("/settings/data-sources");
 
     await expect(page.locator("h1").first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("SLED (BidNet)")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("DIBBS")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("OASIS+", { exact: true })).toBeVisible({ timeout: 10_000 });
     const body = page.locator("body");
     await expect(body).not.toContainText("Unhandled Runtime Error");
   });
@@ -46,6 +49,14 @@ test.describe("Settings Page", () => {
 
   test("workflows sub-page loads", async ({ authenticatedPage: page }) => {
     await page.goto("/settings/workflows");
+
+    await expect(page.locator("h1").first()).toBeVisible({ timeout: 10_000 });
+    const body = page.locator("body");
+    await expect(body).not.toContainText("Unhandled Runtime Error");
+  });
+
+  test("notifications sub-page loads", async ({ authenticatedPage: page }) => {
+    await page.goto("/settings/notifications");
 
     await expect(page.locator("h1").first()).toBeVisible({ timeout: 10_000 });
     const body = page.locator("body");

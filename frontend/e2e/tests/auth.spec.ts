@@ -54,7 +54,7 @@ test.describe("Authentication Flow", () => {
     });
     await logoutButton.click();
 
-    await page.waitForURL("**/login", { timeout: 10_000 });
+    await page.waitForURL("**/login*", { timeout: 10_000 });
     await expect(page.getByText("Welcome back")).toBeVisible();
 
     const token = await page.evaluate(
@@ -70,6 +70,6 @@ test.describe("Authentication Flow", () => {
 
     await page.goto("/opportunities");
 
-    await page.waitForURL("**/login", { timeout: 10_000 });
+    await page.waitForURL("**/login*", { timeout: 10_000 });
   });
 });

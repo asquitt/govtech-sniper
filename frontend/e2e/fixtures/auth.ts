@@ -3,13 +3,34 @@ import { TEST_USER, STORAGE_KEYS } from "../helpers/constants";
 
 let cachedAuth: { accessToken: string; refreshToken: string | null } | null = null;
 
+async function fillIfVisible(page: Page, label: RegExp | string, value: string): Promise<void> {
+  const locator = page.getByLabel(label).first();
+  if (await locator.count()) {
+    try {
+      await locator.fill(value, { timeout: 2000 });
+    } catch {
+      // optional field in some auth surfaces
+    }
+  }
+}
+
 async function registerTestUser(page: Page): Promise<boolean> {
   await page.goto("/register");
   await page.getByLabel("Full Name").fill(TEST_USER.fullName);
   await page.getByLabel("Email").fill(TEST_USER.email);
-  await page.getByLabel("Company Name").fill(TEST_USER.companyName);
+  await fillIfVisible(page, /Company Name/i, TEST_USER.companyName);
   await page.getByLabel("Password", { exact: true }).fill(TEST_USER.password);
   await page.getByLabel("Confirm Password").fill(TEST_USER.password);
+
+  const acceptCookies = page.getByRole("button", { name: /Accept All/i }).first();
+  if (await acceptCookies.count()) {
+    try {
+      await acceptCookies.click({ timeout: 1000 });
+    } catch {
+      // non-blocking
+    }
+  }
+
   await page.getByRole("button", { name: "Create account" }).click();
 
   const result = await Promise.race([
