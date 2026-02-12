@@ -16,6 +16,8 @@ vi.mock("@/lib/api", () => ({
     updateSection: vi.fn(),
     addSectionEvidence: vi.fn(),
     createSubmissionPackage: vi.fn(),
+    getScorecard: vi.fn(),
+    listFocusDocuments: vi.fn(),
   },
   documentApi: {
     list: vi.fn(),
@@ -72,6 +74,16 @@ describe("ProposalWorkspacePage", () => {
     ]);
     mockedDraftApi.listSubmissionPackages.mockResolvedValue([]);
     mockedDraftApi.listSectionEvidence.mockResolvedValue([]);
+    mockedDraftApi.getScorecard.mockResolvedValue({
+      proposal_id: 1,
+      proposal_title: "Test Proposal",
+      overall_score: null,
+      sections_scored: 0,
+      sections_total: 1,
+      pink_team_ready: false,
+      section_scores: [],
+    });
+    mockedDraftApi.listFocusDocuments.mockResolvedValue([]);
     mockedDocumentApi.list.mockResolvedValue([]);
     mockedWordAddinApi.listSessions.mockResolvedValue([]);
     mockedGraphicsApi.listRequests.mockResolvedValue([]);
