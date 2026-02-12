@@ -1,0 +1,62 @@
+issue_type,id,epic,title,priority,owner_role,sprint_start,sprint_end,status,dependencies,acceptance_criteria
+Epic,E-TRUST-01,,CUI Classification + Policy Enforcement,P0,SEC,1,6,Planned,,100% sensitive actions policy-evaluated and audited
+Epic,E-TRUST-02,,Control Evidence Registry + Compliance Bundles,P0,SEC,1,8,Planned,,Evidence completeness >=95% for required controls
+Epic,E-TRUST-03,,Identity Hardening (MFA policy + Passkey/WebAuthn),P0,SEC,3,10,Planned,,High-assurance auth adoption >=85% privileged users
+Epic,E-TRUST-04,,Secure SDLC + AI Risk Gates,P0,PLAT,1,7,Planned,,100% critical-path PRs pass security gates
+Epic,E-DATA-01,,Provider Maturity Upgrade (Sample -> Live),P1,DATA,2,12,Planned,,>=90% high-priority providers in Live mode
+Epic,E-DATA-02,,Freshness Dedupe Confidence Scoring,P1,DATA,4,10,Planned,,Duplicate rate reduced >=60%
+Epic,E-PROP-01,,Proposal Quality Scorecard,P1,PROP,2,9,Planned,,Scorecard coverage 100% generated sections
+Epic,E-PROP-02,,Compliance Package Export + Evaluator Lens,P1,PROP,5,12,Planned,,Package adoption >=60% submissions
+Epic,E-WORK-01,,Word Reliability + Sync Conflict Recovery,P1,INTG,3,11,Planned,,Sync success >=99.0%
+Epic,E-WORK-02,,SharePoint Deep Reliability + Diagnostics,P1,INTG,3,10,Planned,,MTTR <5 minutes retriable sync failures
+Epic,E-CS-01,,Structured Onboarding Program + Health Model,P1,CS,2,8,Planned,,Median time-to-first-proposal <=14 days
+Epic,E-CS-02,,ROI Proof System (Case studies + telemetry),P1,CS,6,12,Planned,,3-5 validated outcome stories published
+Epic,E-REL-01,,SLO Error Budget Governance,P0,PLAT,1,6,Planned,,Critical journey success >=99.0%
+Feature,E-TRUST-01-S1,E-TRUST-01,Add classification fields and migrations,P0,SEC,1,1,Planned,,Migration + API integration tests pass
+Feature,E-TRUST-01-S2,E-TRUST-01,Implement policy decision service (allow deny step_up),P0,SEC,2,2,Planned,E-TRUST-01-S1,Unit + auth matrix tests pass
+Feature,E-TRUST-01-S3,E-TRUST-01,CUI export redaction and watermarking,P0,SEC,5,5,Planned,E-TRUST-01-S2,Export integration + E2E download checks pass
+Feature,E-TRUST-01-S4,E-TRUST-01,Collaboration sharing policy overlays for CUI,P0,SEC,6,7,Planned,E-TRUST-01-S2,Collaboration role matrix E2E pass
+Feature,E-TRUST-01-S5,E-TRUST-01,Admin policy console and audit search,P1,SEC,8,9,Planned,E-TRUST-01-S2,UI tests + audit event integration pass
+Feature,E-TRUST-02-S1,E-TRUST-02,Control and evidence schema + APIs,P0,SEC,1,1,Planned,,Unit + integration pass
+Feature,E-TRUST-02-S2,E-TRUST-02,Evidence collection and control linkage workflows,P0,SEC,4,4,Planned,E-TRUST-02-S1,Integration + admin E2E pass
+Feature,E-TRUST-02-S3,E-TRUST-02,Compliance report and bundle generation,P0,SEC,6,6,Planned,E-TRUST-02-S2,Export snapshot regression passes
+Feature,E-TRUST-02-S4,E-TRUST-02,Quarterly trust report automation,P1,SEC,8,8,Planned,E-TRUST-02-S3,Scheduled report job tests pass
+Feature,E-TRUST-03-S1,E-TRUST-03,Org MFA policy modes,P0,SEC,3,3,Planned,,Auth integration + admin UI tests pass
+Feature,E-TRUST-03-S2,E-TRUST-03,Step-up auth on privileged actions,P0,SEC,3,4,Planned,E-TRUST-03-S1,Privileged action E2E pass
+Feature,E-TRUST-03-S3,E-TRUST-03,Passkey/WebAuthn registration and login,P0,SEC,5,7,Planned,E-TRUST-03-S1,Cross-browser auth E2E matrix pass
+Feature,E-TRUST-03-S4,E-TRUST-03,Access review exports and compliance checks,P1,SEC,8,10,Planned,E-TRUST-03-S2,Integration + export assertions pass
+Feature,E-TRUST-04-S1,E-TRUST-04,CI secure-SDLC gates baseline,P0,PLAT,1,1,Planned,,SAST + dependency + secret scan gates pass
+Feature,E-TRUST-04-S2,E-TRUST-04,AI release risk checklist gate,P0,PLAT,6,6,Planned,E-TRUST-04-S1,AI-impacting PRs require checklist
+Feature,E-TRUST-04-S3,E-TRUST-04,Threat model top 10 critical flows,P1,PLAT,7,7,Planned,E-TRUST-04-S1,Documented threat models + mitigations approved
+Feature,E-DATA-01-S1,E-DATA-01,Provider maturity inventory and dashboard,P1,DATA,2,2,Planned,,Admin diagnostics view + tests pass
+Feature,E-DATA-01-S2,E-DATA-01,Convert priority sample provider #1 to live,P1,DATA,3,4,Planned,E-DATA-01-S1,Provider contract tests + ingest E2E pass
+Feature,E-DATA-01-S3,E-DATA-01,Convert priority sample provider #2 to live,P1,DATA,5,6,Planned,E-DATA-01-S1,Provider contract tests + ingest E2E pass
+Feature,E-DATA-01-S4,E-DATA-01,Convert priority sample provider #3 to live,P1,DATA,7,8,Planned,E-DATA-01-S1,Provider contract tests + ingest E2E pass
+Feature,E-DATA-01-S5,E-DATA-01,Source SLA monitoring and alerting,P1,DATA,9,10,Planned,E-DATA-01-S2,Observability alert tests pass
+Feature,E-DATA-02-S1,E-DATA-02,Freshness scoring service,P1,DATA,4,4,Planned,,Unit + integration pass
+Feature,E-DATA-02-S2,E-DATA-02,Dedupe confidence and merge policy,P1,DATA,4,5,Planned,E-DATA-02-S1,Regression fixture tests pass
+Feature,E-DATA-02-S3,E-DATA-02,Parse completeness scoring,P1,DATA,6,6,Planned,E-DATA-02-S1,Ingest parse tests pass
+Feature,E-DATA-02-S4,E-DATA-02,Confidence indicators in UI,P1,DATA,7,8,Planned,E-DATA-02-S1,UI + E2E pass
+Feature,E-PROP-01-S1,E-PROP-01,Coverage + citation confidence scoring,P1,PROP,2,3,Planned,,Unit + proposal integration pass
+Feature,E-PROP-01-S2,E-PROP-01,Rewrite delta scoring,P1,PROP,3,4,Planned,E-PROP-01-S1,Workspace E2E pass
+Feature,E-PROP-01-S3,E-PROP-01,Threshold tuning with reviewer feedback,P1,PROP,6,7,Planned,E-PROP-01-S1,Analytics + review tests pass
+Feature,E-PROP-02-S1,E-PROP-02,Compliance package export v1,P1,PROP,5,5,Planned,E-PROP-01-S1,Export contract + E2E download pass
+Feature,E-PROP-02-S2,E-PROP-02,Reviewer decision trace integration,P1,PROP,6,7,Planned,E-PROP-02-S1,Review integration tests pass
+Feature,E-PROP-02-S3,E-PROP-02,Evaluator lens simulation v1,P1,PROP,8,10,Planned,E-PROP-02-S1,Deterministic scenario tests pass
+Feature,E-WORK-01-S1,E-WORK-01,Word sync conflict detection model,P1,INTG,3,3,Planned,,Host-loop unit + E2E pass
+Feature,E-WORK-01-S2,E-WORK-01,Conflict resolution UX,P1,INTG,4,5,Planned,E-WORK-01-S1,Office-host Playwright tests pass
+Feature,E-WORK-01-S3,E-WORK-01,Recovery and retry diagnostics,P1,INTG,6,7,Planned,E-WORK-01-S2,Telemetry assertions pass
+Feature,E-WORK-02-S1,E-WORK-02,SharePoint Retry-After and backoff compliance,P1,INTG,3,4,Planned,,Integration tests pass
+Feature,E-WORK-02-S2,E-WORK-02,SharePoint diagnostics and remediation actions,P1,INTG,5,6,Planned,E-WORK-02-S1,UI + E2E pass
+Feature,E-WORK-02-S3,E-WORK-02,SharePoint sync SLO tracking,P1,INTG,7,8,Planned,E-WORK-02-S1,Observability checks pass
+Feature,E-CS-01-S1,E-CS-01,Onboarding milestones and activation telemetry,P1,CS,2,3,Planned,,Onboarding E2E + analytics pass
+Feature,E-CS-01-S2,E-CS-01,Health scoring and risk alerting,P1,CS,4,5,Planned,E-CS-01-S1,Alert contract tests pass
+Feature,E-CS-01-S3,E-CS-01,CS intervention playbooks and workflow,P1,CS,6,8,Planned,E-CS-01-S2,Pilot outcome review complete
+Feature,E-CS-02-S1,E-CS-02,ROI dashboard v1,P1,CS,6,6,Planned,E-CS-01-S1,Metrics dashboard validated
+Feature,E-CS-02-S2,E-CS-02,Outcome report templates,P1,CS,7,8,Planned,E-CS-02-S1,Report export tests pass
+Feature,E-CS-02-S3,E-CS-02,Case-study evidence package pipeline,P1,CS,9,12,Planned,E-CS-02-S1,Data QA + leadership signoff
+Feature,E-REL-01-S1,E-REL-01,SLO definition and instrumentation,P0,PLAT,1,1,Planned,,Metrics integration tests pass
+Feature,E-REL-01-S2,E-REL-01,Error budget release gating,P0,PLAT,2,3,Planned,E-REL-01-S1,CI release checks pass
+Feature,E-REL-01-S3,E-REL-01,Incident command and RCA workflow,P0,PLAT,6,6,Planned,E-REL-01-S1,Sev1/Sev2 templates in use
+Ops,OPS-001,,Program governance cadence and risk register,P0,EPM,1,1,Planned,,Weekly and monthly cadences scheduled
+Ops,OPS-002,,Final suite reconciliation gate for every milestone,P0,QA,1,12,Planned,,pytest vitest playwright counts recorded from final run

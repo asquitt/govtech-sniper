@@ -106,3 +106,234 @@ Format:
 - Root cause: No host-awareness gate around Office.js loading for non-Office environments.
 - Prevention checklist: Gate Office runtime script loading to likely Office hosts and keep browser-safe fallback path tested.
 - Verification added: Added Office host detection + gated loader, validated no mount warning/telemetry failures in Playwright taskpane check, and added frontend unit tests.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: New Playwright workflow specs initially failed due strict-mode selector collisions on duplicated labels/text (`Title`, `RED Team`, `Search`, partner names in option + list rows).
+- Root cause: Selectors were not scoped to the relevant card/element type before assertions and actions.
+- Prevention checklist: Scope E2E selectors to container cards/sections and use `exact` role/name matching when shared UI labels exist.
+- Verification added: Updated selectors across capture/contracts/teaming/reviews workflow specs; reran targeted workflow specs and full Playwright suite (`34/34` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Reports generate/export endpoints returned `500` due incorrect auth attribute access (`UserAuth.user_id`).
+- Root cause: Route ownership helper used a non-existent `UserAuth` field instead of canonical `id`.
+- Prevention checklist: For every auth-dependent route helper, validate `UserAuth` field usage (`id`, `email`, `tier`) and add endpoint-level contract tests for non-list actions (`generate`, `export`, etc.).
+- Verification added: Fixed `backend/app/api/routes/reports.py` to use `user.id`, added regression coverage in `backend/tests/test_business_capabilities.py`, and validated via Playwright reports workflow + full suite (`42/42` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Admin bootstrap E2E and several dashboard assertions intermittently failed due premature visibility checks and ambiguous text matches in dense cards.
+- Root cause: Tests assumed a single visible state immediately after navigation and used text selectors that matched UI labels, legends, and options simultaneously.
+- Prevention checklist: In stateful pages, wait for either expected state branch before branching assertions; prefer scoped locator chains and exact matches for labels reused in charts/forms.
+- Verification added: Updated admin/revenue/analytics/settings/capture workflow specs with state-aware waits and strict selectors; reran targeted workflows and full Playwright regression (`42/42` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Full Playwright regression still failed once on capture workflow after adding more seeded data because `Plan Active` assertion matched multiple cards.
+- Root cause: Selector update was applied to new workflows but not consistently backported to all existing specs that share repeated badge text.
+- Prevention checklist: After adding new seeded-flow coverage, rerun and harden all pre-existing specs that rely on shared labels by using scoped `.first()` or exact role/name selectors.
+- Verification added: Updated `capture-workflow.spec.ts` selector scope and reran full Playwright suite (`44/44` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: New diagnostics Playwright step failed because `Lock Section` selector also matched `Unlock Section` under strict mode.
+- Root cause: Test used non-exact role-name matching on two similarly named controls in the same probe card.
+- Prevention checklist: For button labels that are substrings of other labels, enforce `exact: true` and/or scope locators to a specific container.
+- Verification added: Updated diagnostics spec to exact lock selector and reran targeted + full Playwright suites (`46/46` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Proposal workspace E2E surfaced a runtime error from TipTap SSR hydration handling.
+- Root cause: `RichTextEditor` initialized TipTap without `immediatelyRender: false`, triggering client-side runtime errors in dynamic workspace rendering.
+- Prevention checklist: For TipTap in Next.js client components, set `immediatelyRender: false` and include at least one dynamic-route browser validation for editor-mounted pages.
+- Verification added: Patched `rich-text-editor.tsx`, added proposal-editor deep workflow coverage, and reran full Playwright suite (`46/46` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Auth and Dash E2E checks failed after introducing `next`-query redirects and context-dependent quick-action prompts.
+- Root cause: Tests asserted exact `/login` URLs and fixed quick-action labels instead of validating behavior across supported state variants.
+- Prevention checklist: When adding redirect parameters or context-aware UI content, update E2E assertions to allow query-bearing URLs and verify structural outcomes (route pattern + control count) instead of brittle literal text.
+- Verification added: Updated `auth.spec.ts` URL matchers and `dash.spec.ts` prompt-card assertions; reran targeted specs and full Playwright regression (`46/46` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Contract hierarchy/modification/CLIN capabilities existed in pieces but remained marked open in roadmap/docs and lacked explicit lifecycle regression coverage.
+- Root cause: Capability rollout was not closed with synchronized documentation updates plus backend/UI/E2E assertions for the same feature slice.
+- Prevention checklist: For each closed roadmap item, require same-session updates to roadmap status + capability trackers + backend integration test + frontend unit assertion + Playwright workflow evidence.
+- Verification added: Expanded `test_contracts.py`, added hierarchy assertions in `contracts-page.test.tsx`, updated `contracts-workflow.spec.ts`, and updated roadmap/tracker/surface documents.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Collaboration contract-feed E2E assertion failed under Playwright strict mode because feed text matched both dropdown options and helper description copy.
+- Root cause: Assertion targeted global text instead of a scoped shared-item container in a view with repeated labels.
+- Prevention checklist: For list workflows, add stable row-level `data-testid` hooks and assert within scoped containers instead of global `getByText` when option labels repeat in form controls.
+- Verification added: Added `data-testid` to shared-data rows, updated `collaboration-workflow.spec.ts` to assert on scoped shared-item rows, and reran targeted collaboration Playwright workflow (passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Multi-context collaboration E2E initially asserted partner-portal content in a context/state branch that occasionally remained on the workspace dashboard, producing a false failure.
+- Root cause: Assertion depended on collaborator context navigation sequencing instead of validating the portal-switch behavior in a deterministic portal context.
+- Prevention checklist: For multi-user workflows, keep context-sensitive assertions scoped to the actor/session that deterministically owns the route state; validate shared outcomes with explicit route checks before content checks.
+- Verification added: Updated collaboration E2E to validate portal switching from the owner portal context after invite acceptance flow completion; reran targeted collaboration + contracts Playwright specs (passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Collaboration share-policy rollout produced a live `500` during Playwright because partner-membership validation used `scalar_one_or_none()` and crashed when duplicate membership rows existed.
+- Root cause: Membership checks assumed uniqueness at query-time but the table lacks a DB-level uniqueness guarantee, so duplicate rows surfaced as an unhandled ORM exception path.
+- Prevention checklist: For membership/lookup guards on mutable relationship tables, avoid `scalar_one_or_none()` unless a DB unique constraint is guaranteed; use duplicate-safe lookups and add regression coverage for duplicate-row tolerance.
+- Verification added: Updated collaboration route membership lookups to `scalars().first()`, added duplicate-membership regression in `backend/tests/test_collaboration.py`, and reran targeted Playwright collaboration + contracts workflows (passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Teaming gap-analysis endpoint failed with `500` during new multi-user integration coverage.
+- Root cause: Capability-gap service referenced `RFP.raw_text`, but the active model exposes `full_text`/`description` fields, causing an attribute error at runtime.
+- Prevention checklist: Before service-layer field access, verify model field names against current SQLModel definitions and add endpoint regression tests that execute the real route path.
+- Verification added: Updated `capability_gap_service.py` to use `full_text`/`description`/`title` fallback chain, expanded `test_teaming_board.py` for multi-user request acceptance + gap analysis, and validated in Playwright (`teaming-workflow.spec.ts`).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: New teaming E2E fit-analysis step initially failed with a locator timeout because the test tried to interact with search-tab controls while still on the sent-requests tab.
+- Root cause: Workflow-state transition was implicit in the test and not re-anchored to the correct tab before interacting with tab-specific controls.
+- Prevention checklist: For multi-tab UI workflows, always navigate back to the expected tab/state immediately before interacting with tab-scoped controls, and keep selectors scoped to visible tab content.
+- Verification added: Updated `teaming-workflow.spec.ts` to explicitly return to `Partner Search` before invoking fit analysis; reran targeted Playwright collaboration/teaming/contracts workflows (passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Collaboration Playwright validation initially failed with a backend `500` when loading governance trends in local dev mode.
+- Root cause: Local SQLite file (`dev.db`) predated collaboration-governance schema fields (`requires_approval`, etc.), so route queries referenced columns missing from that stale database file.
+- Prevention checklist: For deterministic SQLite Playwright runs after schema evolution, use a fresh DB path (or run migrations) before treating UI failures as product regressions.
+- Verification added: Re-ran stack with fresh SQLite database (`dev_e2e.db`) plus `DEBUG=true` and `MOCK_AI=true`, then reran `collaboration-workflow.spec.ts` and confirmed pass with governance trend + audit export checks.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Collaboration E2E helper intermittently failed right after workspace creation by asserting detail-pane heading visibility before workspace selection stabilized.
+- Root cause: Test helper assumed newly created workspace would always auto-select immediately, but UI state could briefly show the workspace only in sidebar list first.
+- Prevention checklist: After create actions in list/detail UIs, explicitly select the created row before asserting detail-pane content; avoid implicit selection assumptions.
+- Verification added: Updated `collaboration-workflow.spec.ts` helper to click the created workspace row before heading assertion; reran targeted Playwright collaboration workflow successfully.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: New global-search Playwright workflow failed to close the command palette on `Escape`.
+- Root cause: Escape handling existed only in the input key handler, so route-level keyboard events did not consistently dismiss the modal.
+- Prevention checklist: For command palettes/modals, implement `Escape` handling on a global key listener (not only focused input handlers) and include a browser test that verifies close behavior.
+- Verification added: Added global `Escape` handler in `global-search.tsx` and validated with Playwright `search-plg-workflow.spec.ts` plus `global-search.test.tsx`.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Opportunities view hard-locked into a retry-only screen after SAM sync failures, hiding primary actions.
+- Root cause: Error handling used an early-return full-page state for all errors, including transient ingest failures.
+- Prevention checklist: Keep recoverable upstream errors non-blocking in list surfaces; preserve core user actions (manual create, search, navigation) under degraded external dependencies.
+- Verification added: Replaced blocking error state with inline banner + refresh/dismiss controls and added frontend regression (`keeps primary actions available when SAM sync fails`).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: `Add RFP` CTA existed but performed no action, leaving users blocked when SAM was rate-limited.
+- Root cause: UI control was rendered without any handler or linked create surface.
+- Prevention checklist: Every primary CTA must be wired to a concrete flow and covered by a click-through test that verifies the expected side effect.
+- Verification added: Implemented in-page manual Add RFP form wired to `rfpApi.create`, added unit coverage (`allows manually creating an RFP from the opportunities page`), and validated live browser creation.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Analysis generation UI showed a generic error even when backend returned actionable Gemini quota/rate-limit detail.
+- Root cause: Frontend catch path ignored structured API error payloads (`response.data.detail`).
+- Prevention checklist: Parse and surface backend error detail for external dependency failures (rate limits/quota/auth) rather than replacing with generic fallback text.
+- Verification added: Added shared API error parser (`frontend/src/lib/api/error.ts`) with tests and wired analysis/opportunities handlers; live browser now displays `Gemini API rate limit reached...` detail.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: SAM sync retried too frequently despite long upstream `Retry-After`, causing repetitive 429 loops and noisy user experience.
+- Root cause: A hardcoded `60s` cap in SAM HTTP-429 handling overrode circuit-breaker settings and upstream retry windows.
+- Prevention checklist: Avoid duplicate hardcoded retry caps in service paths; route all retry-window limits through shared config-aware logic and cover with regression tests.
+- Verification added: Removed the hardcoded SAM 60s cap, honored long retry windows end-to-end, added ingest regression coverage, and validated live browser countdown (`Sync in 370:19`).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Draft generation repeatedly failed on primary Gemini model quota limits without automatic model fallback.
+- Root cause: Generation paths used a single model (`pro`) and retried user requests instead of attempting configured lower-tier models or opening a local quota cooldown circuit.
+- Prevention checklist: For external AI generation, implement ordered model fallback and local quota-circuit behavior before returning user-visible rate-limit errors.
+- Verification added: Added fallback/circuit logic in `gemini_service.py`, added service regression tests, and validated live generation success on fallback model (`models/gemini-2.5-flash`) in `/analysis/3`.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Diagnostics telemetry endpoint worked at `/ws/diagnostics` but frontend contract expected `/api/v1/ws/diagnostics`, causing drift until router mounting was aligned.
+- Root cause: WebSocket router was mounted without the API version prefix while frontend proxy/API clients were standardized on `/api/v1/*`.
+- Prevention checklist: For every newly added route family, validate mounted prefixes against frontend API client paths and include at least one direct endpoint integration test on the exact proxied path.
+- Verification added: Mounted websocket router under `/api/v1`, added backend diagnostics endpoint integration coverage (`test_websocket_diagnostics.py`), and validated `/diagnostics` telemetry cards in Playwright.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Office-host Playwright harness initially failed because `Office.onReady` mock did not execute callback-based usage pattern.
+- Root cause: Mock implemented Promise return only, while UI hook also relied on callback invocation semantics used by Office.js host flows.
+- Prevention checklist: When mocking Office runtime, support both callback and Promise styles for `Office.onReady` and validate with at least one host-in-loop sync scenario.
+- Verification added: Updated Office mock in `word-addin-office-host.spec.ts` to invoke callback and return Promise; reran host-in-loop taskpane sync test (passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Auth-based E2E setup intermittently failed on registration when company and cookie consent UI assumptions differed between environments.
+- Root cause: Fixture enforced required interactions for optional/conditionally rendered controls.
+- Prevention checklist: For shared auth fixtures, model optional controls (`company`, cookie banner actions) as conditional interactions and keep registration helper resilient across env toggles.
+- Verification added: Updated `frontend/e2e/fixtures/auth.ts` and workflow registration helpers to optionalize company/cookie interactions; reran admin/collaboration/teaming Playwright flows.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Initial Playwright rerun for new dash/sharepoint coverage targeted the wrong local stack and produced authentication-fixture false negatives.
+- Root cause: Tests defaulted to `localhost:3000` while feature validation required deterministic app/backend pair (`3100`/`8010`) with explicit mock/debug settings.
+- Prevention checklist: Before any full Playwright sweep, start an explicit deterministic stack and export `E2E_BASE_URL` to the active frontend port; verify both frontend and backend health endpoints before interpreting failures.
+- Verification added: Re-ran targeted and full Playwright suites on `E2E_BASE_URL=http://localhost:3100` with backend `:8010`, `DEBUG=true`, and `MOCK_AI=true` (`51/51` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: New proposal-workspace E2E assertions failed under strict mode because labels (`Export to SharePoint`, `sync`) matched multiple controls/content nodes.
+- Root cause: Assertions used broad text locators in a dense UI where headings, action buttons, and event rows reuse the same strings.
+- Prevention checklist: In workflow specs, scope assertions by semantic role/container (`heading`, card-local text) and avoid raw text matchers when button/event labels can overlap.
+- Verification added: Updated `proposal-editor-workflow.spec.ts` to role-scoped heading and deterministic event-count assertions; reran targeted specs and full Playwright suite (`51/51` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Past-performance API contracts drifted from frontend calls due duplicated backend route segments (`/documents/documents/*`).
+- Root cause: Route decorators were added with nested `/documents/*` paths under a router that already used `/documents` prefix, and no contract test covered the frontend path.
+- Prevention checklist: For prefixed routers, validate final resolved paths with endpoint-level tests and include at least one frontend client contract assertion for each new route family.
+- Verification added: Added canonical past-performance routes + legacy aliases in `documents.py`, aligned frontend list endpoint to `/documents/past-performances/list`, and added regression in `backend/tests/test_documents.py`.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Contact extraction returned `400` for manually created RFPs that had text in `description` but not `full_text`.
+- Root cause: Extraction route assumed `full_text` was always populated and did not include a fallback for pre-extraction/manual records.
+- Prevention checklist: For AI extraction endpoints, use a deterministic fallback chain across available text fields (`full_text` -> `description` -> explicit error) and cover both record shapes in integration tests.
+- Verification added: Updated `contacts.py` extraction fallback and added regression coverage in `backend/tests/test_contacts.py`.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Contacts extraction auto-link persisted agency linkage in backend, but `/contacts` UI did not refresh agency-directory state after extraction, causing stale parity behavior.
+- Root cause: Extraction callback only refreshed contacts list (`fetchContacts`) and skipped agency refresh (`fetchAgencies`) after backend writes.
+- Prevention checklist: When introducing backend side effects that update multiple UI datasets, ensure post-action callbacks refresh every affected dataset and cover the end-to-end path in Playwright.
+- Verification added: Updated `/contacts` page extraction callback to refresh contacts + agencies, added `Close extraction modal` accessibility control, and validated via `contact-extract-button.test.tsx` + `contacts-workflow.spec.ts`.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Capability docs retained stale regression counters (`51/51` Playwright, `153/153` backend) after adding six new end-to-end scenarios and twelve backend tests.
+- Root cause: Documentation updates were done before the final full-suite rerun and were not reconciled after the expanded validation set landed.
+- Prevention checklist: After adding/removing tests, run full backend/frontend/Playwright sweeps and update all status/roadmap docs in one final pass using exact suite counts from command output.
+- Verification added: Re-ran `pytest -q` (`165/165`), `vitest --run` (`31/31`), and `playwright test` (`57/57`); updated `competitive-analysis-and-roadmap.md`, `capability-integration-tracker.md`, and `capability-surface-status.md` with refreshed evidence.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Full Playwright sweep surfaced intermittent failure in signals workflow where read-state was asserted before backend propagation completed.
+- Root cause: E2E test clicked signal rows and immediately queried API without waiting for asynchronous `markRead` completion.
+- Prevention checklist: For UI actions that trigger async persistence, assert local UI transition and use `expect.poll` against backend state before final truth assertions.
+- Verification added: Hardened `signals-events-workflow.spec.ts` with row-level unread-indicator wait plus backend poll; reran targeted signals spec and full Playwright suite (`58/58` passing).
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Validation counters in docs drifted again after additional suite expansion (new Playwright and backend coverage landed post-refresh).
+- Root cause: Counts were updated from an intermediate run instead of the final regression pass.
+- Prevention checklist: Always perform a final single-source-of-truth sweep (`pytest -q`, `vitest run`, `playwright test`) immediately before closing and update docs from those exact outputs.
+- Verification added: Re-ran `pytest -q` (`169/169`), `vitest run` (`32/32`), and `playwright test` (`58/58`); refreshed all capability/roadmap status docs to match final counts.
+
+### 2026-02-10
+- Date: 2026-02-10
+- Mistake: Template-system synchronization introduced a live `500` during Playwright on `/templates`.
+- Root cause: `_ensure_system_templates` used `scalar_one_or_none()` on system-template names; legacy duplicate rows triggered `MultipleResultsFound` and broke request handling.
+- Prevention checklist: For seed/sync paths that can encounter historical duplicates, always use duplicate-tolerant fetches (`scalars().first()`) unless a DB uniqueness constraint is guaranteed.
+- Verification added: Updated `templates.py` synchronization lookup to `scalars().first()`, reran backend template/report/support integration tests, and revalidated affected Playwright workflows (`analytics-reports-intelligence-workflow.spec.ts`, `templates-reports-help-onboarding-workflow.spec.ts`).

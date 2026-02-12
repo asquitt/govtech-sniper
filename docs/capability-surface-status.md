@@ -8,26 +8,31 @@ Purpose: maintain a route-level, live-verified status map of surfaced and hidden
 - `Drift`: Contract mismatch or runtime issue found; fix in progress.
 
 ## Latest Comprehensive Sweep
-- Date: 2026-02-09
-- Method: authenticated Playwright route sweep (`/tmp/gts-comprehensive-ui-sweep-final.json`) + frontend static API contract scan (`/tmp/frontend-static-api-method-scan.json`)
-- Routes checked: 30
-- Result: 29 `Healthy`, 1 `Guarded` (`/admin` for non-org user)
-- Static API contract check: 146 frontend API call signatures scanned via proxy; 0 redirect/404 contract failures after fixes
+- Date: 2026-02-10
+- Method: authenticated Playwright full suite (`frontend/e2e/tests`, `58/58` passing) plus targeted reruns for dash/proposal/settings integrations (`dash.spec.ts`, `proposal-editor-workflow.spec.ts`, `settings-integrations-workflow.spec.ts`) and parity reruns for admin/collaboration/teaming/diagnostics/word-addin (`admin-org-workflow.spec.ts`, `collaboration-workflow.spec.ts`, `teaming-workflow.spec.ts`, `diagnostics-workflow.spec.ts`, `word-addin-office-host.spec.ts`) against deterministic local stack (`DEBUG=true`, `MOCK_AI=true`, backend `8010`, frontend `3100`) and full backend/frontend regression sweeps (`pytest`, `vitest run`); follow-up targeted sweep on 2026-02-10 for templates/reports/help/onboarding (`analytics-reports-intelligence-workflow.spec.ts`, `templates-reports-help-onboarding-workflow.spec.ts`, `3/3` passing)
+- Follow-up Real-Key Sweep: 2026-02-10 targeted live-browser validation against backend `:8020` + frontend `:3200` with `MOCK_SAM_GOV=false`, `MOCK_AI=false`, real SAM + Gemini keys; validated upstream `429` handling, manual opportunity fallback, and export download behavior.
+- Routes checked: 38
+- Result: 38 `Healthy` in live org-admin browser context; guarded `/admin` behavior for non-org/non-admin identities remains validated via backend integration tests
+- Static API contract check: 146 frontend API call signatures scanned via proxy; no active redirect/404 contract failures observed in this sweep
 
 ## Route Status (Live UI)
 | Route | Status | Evidence |
 | --- | --- | --- |
-| `/opportunities` | Healthy | Loads with no unexpected API failures |
-| `/analysis` | Healthy | Loads with no unexpected API failures |
-| `/proposals` | Healthy | Loads with no unexpected API failures |
+| `/opportunities` | Healthy | Real-key sweep confirmed SAM `429` surfaces as inline actionable message and page remains usable; manual Add RFP form now available and validated by creating `SLED-REAL-2026-001` live |
+| `/analysis` | Healthy | Real-key sweep confirmed Gemini `429` now surfaces user-facing rate-limit detail (`Gemini API rate limit reached...`) instead of generic failure |
+| `/proposals` | Healthy | Proposal list populated from analysis-created proposal in live sweep; workspace route reachable and linked |
+| `/proposals/[proposalId]` | Healthy | Deep workspace flow validated (Word session create/sync/history, section lock, inline review comment visibility, SharePoint export dialog open/close path) |
 | `/knowledge-base` | Healthy | Loads with no unexpected API failures |
 | `/reviews` | Healthy | Loads with no unexpected API failures |
-| `/dash` | Healthy | Loads with no unexpected API failures |
+| `/dash` | Healthy | Chat flow and voice controls validated (`Voice`/`Sound` actions surfaced in Playwright `dash.spec.ts`) |
+| `/agents` | Healthy | Autonomous agent catalog + all run actions validated in Playwright (`agents-workflow.spec.ts`) |
 | `/capture` | Healthy | Loads with no unexpected API failures |
-| `/teaming` | Healthy | Loads with no unexpected API failures |
-| `/collaboration` | Healthy | Loads with no unexpected API failures |
-| `/contacts` | Healthy | Loads with no unexpected API failures |
-| `/contracts` | Healthy | Root proxy rewrite validated (`/api/contracts` 200) |
+| `/teaming` | Healthy | Multi-user request lifecycle validated (sender request + receiver inbox accept), partner-fit analysis surfaced, status timeline propagation confirmed, and fit-trend metrics + partner-trend drilldowns + digest schedule/send controls verified in Playwright (`teaming-workflow.spec.ts`) |
+| `/collaboration` | Healthy | Multi-workspace create + contract-feed preset apply + governed-share approval flow validated in Playwright, including governance snapshot transitions, anomaly alerts, compliance-digest preview/schedule/send controls, SLA trend metrics, and audit CSV export request verification (`collaboration-workflow.spec.ts`) |
+| `/collaboration/accept` | Healthy | Invitation token handoff + acceptance flow validated in Playwright (`collaboration-workflow.spec.ts`) |
+| `/collaboration/portal/[workspaceId]` | Healthy | Partner portal route validated with workspace-switch selector, pending-share suppression, and post-approval visibility in Playwright (`collaboration-workflow.spec.ts`) |
+| `/contacts` | Healthy | Extraction auto-link flow validated: extract by RFP ID, linked contact appears in table, and agency directory reflects linked agency (`contacts-workflow.spec.ts`) |
+| `/contracts` | Healthy | Root proxy rewrite validated (`/api/contracts` 200) and targeted Playwright flow validated for parent/child hierarchy + modification + CLIN lifecycle |
 | `/revenue` | Healthy | Loads with no unexpected API failures |
 | `/pipeline` | Healthy | Loads with no unexpected API failures |
 | `/forecasts` | Healthy | Loads with no unexpected API failures |
@@ -36,25 +41,75 @@ Purpose: maintain a route-level, live-verified status map of surfaced and hidden
 | `/events` | Healthy | Loads with no unexpected API failures |
 | `/signals` | Healthy | Loads with no unexpected API failures |
 | `/compliance` | Healthy | Loads with no unexpected API failures |
-| `/reports` | Healthy | Loads with no unexpected API failures |
+| `/reports` | Healthy | Drag/drop report builder + shared-view save + scheduled delivery controls validated in Playwright (`analytics-reports-intelligence-workflow.spec.ts`, `templates-reports-help-onboarding-workflow.spec.ts`) |
+| `/diagnostics` | Healthy | WebSocket task-feed probe plus collaborative telemetry controls (presence/lock/cursor + event filtering) and task-watch latency/reconnect/throughput metrics validated via Playwright diagnostics workflow |
 | `/settings` | Healthy | `/api/teams` root rewrite fix verified |
-| `/settings/integrations` | Healthy | Loads with no unexpected API failures |
+| `/settings/integrations` | Healthy | UI-driven webhook + secret CRUD/rotation plus embedded SharePoint browser validated in Playwright enterprise controls workflow |
 | `/settings/data-sources` | Healthy | Loads with no unexpected API failures |
 | `/settings/email-ingest` | Healthy | Loads with no unexpected API failures |
 | `/settings/subscription` | Healthy | Loads with no unexpected API failures |
 | `/settings/workflows` | Healthy | Loads with no unexpected API failures |
-| `/templates` | Healthy | Marketplace page reachable; template categories contract fixed |
-| `/word-addin` | Healthy | Redirects to taskpane; browser-safe script loading in place |
-| `/word-addin/taskpane` | Healthy | No React mount warning; no Office telemetry host failure in browser mode |
-| `/admin` | Guarded | Expected `403` for non-admin/non-org user, no `500` |
+| `/settings/notifications` | Healthy | Push subscription management flow validated in Playwright (`settings-notifications-workflow.spec.ts`) |
+| `/free-tier` | Healthy | Public PLG landing renders feature copy + signup CTA and is linked from auth/subscription surfaces (`search-plg-workflow.spec.ts`) |
+| `/templates` | Healthy | Vertical proposal kits + compliance matrices + community share/rate/fork controls validated in Playwright (`templates-reports-help-onboarding-workflow.spec.ts`) |
+| `/help` | Healthy | Help-center knowledge base, interactive tutorials, and support chat validated in Playwright (`templates-reports-help-onboarding-workflow.spec.ts`) |
+| `/word-addin` | Healthy | Sidebar navigation validated; redirects to taskpane without runtime errors |
+| `/word-addin/taskpane` | Healthy | No React mount warning; no Office telemetry host failure in browser mode; Office-host-in-loop pull/push sync harness validated in Playwright (`word-addin-office-host.spec.ts`) |
+| `/admin` | Healthy | First-run org bootstrap flow validated; capability health card rendered; org-admin member invitation + activation flow validated in Playwright (`admin-org-workflow.spec.ts`); guarded access still covered in backend integration tests |
 
 ## Contract Drift Fixes (This Session)
 | Item | Previous State | Current State |
 | --- | --- | --- |
+| Capture/teaming/collaboration/contracts/reviews verification depth | Routes were reachable but lacked deterministic workflow-level Playwright evidence | Added workflow specs that execute core user actions and pass in live browser (`capture-workflow`, `teaming-workflow`, `collaboration-workflow`, `contracts-workflow`, `reviews-workflow`) |
+| Admin capability diagnostics | No consolidated admin capability-health contract for enterprise/discoverability readiness | Added `/api/v1/admin/capability-health` + admin UI surface consuming worker/runtime/enterprise readiness payload |
+| Primary discoverability for templates + word add-in | Pages existed but were not wired into primary sidebar nav | Sidebar entries added for `Templates` and `Word Add-in`; Playwright navigation checks added and passing |
 | `GET /templates/categories/list` | Frontend call path existed but returned `404` | Frontend now uses `/templates/categories`; backend alias `/templates/categories/list` added for backward compatibility |
 | `GET /notifications/deadlines` | Frontend client method existed but backend route missing (`404`) | Backend route implemented with user-scoped deadline filtering and tests |
 | Word add-in runtime in plain browser | React mount warning + Office telemetry DNS failure | Office.js loading gated to likely Office hosts; browser fallback remains functional without runtime noise |
+| Reports generation/export ownership check | `/api/v1/reports/{id}/generate` returned `500` (`UserAuth.user_id` attribute mismatch) | Fixed report ownership check to `user.id`, added regression coverage in `test_business_capabilities.py`, and validated through Playwright reports workflow |
+| Playwright selector strict-mode drift in high-density cards | Intermittent failures from shared labels (`Plan Active`, `Weighted Pipeline`, `Test`) | Updated specs with scoped exact selectors and state-aware waits; full suite rerun passing (`58/58`) |
+| WebSocket task-feed discoverability | WebSocket was active only in client utility code without route-level diagnostics surface | Added `/diagnostics` route, sidebar entry, admin capability-health websocket runtime metadata, and Playwright websocket workflow validation (`58/58` full suite passing) |
+| Proposal workspace SharePoint export selector drift | New SharePoint export assertion matched heading and button text in strict mode | Scoped assertion to dialog heading role and reran targeted proposal/editor workflows plus full Playwright suite (`58/58` passing) |
+| Word session history selector drift | History assertion for `sync` matched both action button and event label in strict mode | Updated to deterministic `Events: 1` scoped assertion in proposal editor workflow and reran full Playwright suite (`58/58` passing) |
+| Signals read-state validation race | Signals workflow asserted backend `is_read` state immediately after UI click, intermittently racing async persistence | Hardened `signals-events-workflow.spec.ts` with unread-indicator state wait + backend `expect.poll` confirmation and reran full Playwright suite (`58/58` passing) |
+| Agent surface parity gap | Autonomous agent backend capabilities existed but lacked first-class dashboard route | Added `/agents` route, sidebar navigation, dedicated API client, and backend + Playwright validation (`test_agents.py`, `agents-workflow.spec.ts`) |
+| Workflow execution gap | Workflow rules existed as metadata without deterministic execution evidence | Added workflow execution engine, capture-trigger wiring, `/api/v1/workflows/execute`, and backend + Playwright coverage (`test_workflows_execution.py`, `workflows-workflow.spec.ts`) |
+| Proposal graphics insertion/export gap | Graphics flow tracked requests but lacked deterministic generated insert/export coverage | Added template/generation/insert path in proposal workspace and export rendering support with backend + Playwright validation (`test_graphics.py`, `test_export_graphics.py`, `proposal-editor-workflow.spec.ts`) |
+| Compliance/listing readiness visibility gap | Certification/listing progress had no route-level readiness surface | Added `/api/v1/compliance/readiness` + compliance UI readiness card and validated in backend + Playwright (`test_compliance_dashboard.py`, `compliance-readiness.spec.ts`) |
+| Push notification management gap | Notifications UI lacked browser push subscription lifecycle controls | Added push subscription backend contracts + `/settings/notifications` management UX and validated in backend + Playwright (`test_notifications_push.py`, `settings-notifications-workflow.spec.ts`) |
+| Enterprise controls discoverability | Webhook/secret lifecycle management previously validated via API-assisted checks only | Added explicit `/settings/integrations` UI controls for webhook + secret CRUD/rotation, backend secret delete endpoint, and Playwright enterprise-controls workflow validation |
+| Proposal editor runtime stability in SSR/dev | Proposal workspace could throw TipTap SSR hydration runtime error | Set `immediatelyRender: false` in rich text editor and validated proposal editor deep workflow in Playwright |
+| Analytics route ownership ambiguity | Two analytics modules shared prefix with no automated ownership guard | Added `test_route_ownership_audit.py` to enforce method/path uniqueness and expected module ownership for frontend-used analytics contracts |
+| Collaboration invitation accept surface | Invitation accept existed API-only with no browser token handoff and no invitation-email guard | Added `/collaboration/accept` and `/collaboration/portal/[workspaceId]` UIs, surfaced accept links in collaboration dashboard, and enforced invite-email match in backend acceptance route with regression tests |
+| Partner contract-feed sharing ergonomics | Shared-data flow supported raw `entity_id` only, without feed catalog discovery or labeled portal rendering | Added `/api/v1/collaboration/contract-feeds/catalog`, contract-feed validation/labeling in collaboration routes, dashboard feed selector UX, and partner-portal label rendering with backend/unit/E2E coverage |
+| Collaboration preset + portal-switch UX depth | Sharing required manual per-feed actions and partner portal lacked in-page workspace switching | Added `/api/v1/collaboration/contract-feeds/presets`, `/api/v1/collaboration/workspaces/{id}/share/preset`, dashboard preset controls, and portal workspace switcher with backend/unit/E2E coverage |
+| Collaboration governed-sharing policy depth | Shared artifacts had no approval gates, expiry controls, or partner-scoped access policy; membership-lookup strictness caused a `500` for duplicate rows | Added governed-sharing fields on collaboration share contracts (`requires_approval`, `expires_at`, `partner_user_id`), admin approval endpoint (`/api/v1/collaboration/workspaces/{id}/shared/{perm_id}/approve`), portal visibility filtering, duplicate-safe membership checks, and backend + Playwright regression coverage |
+| Collaboration governance analytics visibility | Operators lacked route-level governance counts for pending approvals, expiring/expired shares, and scoped posture | Added `/api/v1/collaboration/workspaces/{id}/shared/governance-summary` with backend regression coverage and surfaced metric cards in `/collaboration` with Playwright assertions |
+| Collaboration governance SLA + audit export depth | Collaboration dashboard lacked long-window SLA trendline visibility and exportable partner-share audit timeline evidence | Added `/api/v1/collaboration/workspaces/{id}/shared/governance-trends` and `/api/v1/collaboration/workspaces/{id}/shared/audit-export`, surfaced SLA/overdue metrics + export action in `/collaboration`, and validated via backend/frontend tests plus Playwright workflow |
+| Teaming gap-analysis runtime contract | `/api/v1/teaming/gap-analysis/{rfp_id}` raised `500` by accessing non-existent `RFP.raw_text` and lacked multi-user acceptance/browser validation | Updated capability-gap service to use `RFP.full_text/description/title`, added backend integration coverage for sender/receiver acceptance + gap-analysis (`test_teaming_board.py`), and validated full two-user teaming lifecycle in Playwright |
+| Teaming fit-rationale + audit timeline discoverability | Teaming UI lacked explicit partner-fit rationale and acceptance/decision timeline context even though gap-analysis and status fields existed | Added Partner Fit Analysis controls and partner-card rationale rendering on `/teaming`, surfaced request `updated_at` timeline context in sent/received queues, and validated via unit + Playwright coverage |
+| Teaming fit-trend + exportability depth | Teaming operations lacked historical fit/acceptance trend telemetry and exportable request-decision audit timeline | Added `/api/v1/teaming/requests/fit-trends` + `/api/v1/teaming/requests/audit-export`, surfaced trend KPI card + CSV export action in `/teaming`, and validated through backend integration, frontend unit, and Playwright workflow coverage |
+| Org-admin member invitation activation discoverability | Multi-user admin guard validation existed primarily at API layer without complete invite/activate browser lifecycle | Added invite + pending-invitation + activation controls in `/admin` wired to `/api/v1/admin/members/invite`, `/api/v1/admin/member-invitations`, and `/api/v1/admin/member-invitations/{id}/activate`; validated with backend integration, frontend unit, and Playwright coverage |
+| Collaboration anomaly/digest operational coverage | Governance analytics exposed summaries/trends but lacked anomaly-specific alerts and scheduled compliance digest lifecycle controls | Added `/api/v1/collaboration/workspaces/{id}/shared/governance-anomalies`, `/compliance-digest-schedule`, `/compliance-digest-preview`, and `/compliance-digest-send`; surfaced schedule + send-now controls in `/collaboration`; validated in backend integration, frontend unit, and Playwright |
+| Teaming partner drilldown/digest parity | Teaming analytics exposed fit trends but lacked partner-level drilldowns and scheduled digest operations | Added `/api/v1/teaming/requests/partner-trends`, `/api/v1/teaming/digest-schedule`, and `/api/v1/teaming/digest-send`; surfaced drilldown + digest controls in `/teaming`; validated in backend integration, frontend unit, and Playwright |
+| Diagnostics telemetry depth gap | Task-feed diagnostics lacked explicit latency/reconnect/throughput runtime telemetry surface | Added `/api/v1/ws/diagnostics` telemetry payload (task-watch latency avg/p95, reconnect counters, inbound/outbound throughput) and `/diagnostics` UI cards; validated in backend integration and Playwright |
+| Word add-in host-runtime validation depth | Browser fallback checks existed but no Office-host runtime harness covered end-to-end sync inside host-like context | Added Playwright Office-host-in-loop harness with injected Office/Word runtime and validated taskpane pull/push sync lifecycle (`word-addin-office-host.spec.ts`) |
+| Analytics retirement-candidate visibility | Ownership audit checked conflicts but did not flag frontend-unused analytics contracts for deprecation planning | Extended `test_route_ownership_audit.py` to flag frontend-unused endpoints (`/api/v1/analytics/documents`, `/api/v1/analytics/slo`, `/api/v1/analytics/alerts`) as retirement candidates |
+| Auth redirect contract for protected routes | Tests asserted exact `/login` and broke after adding `next` query redirect behavior | Updated auth E2E expectations to `/login*` pattern and validated redirect-preserving login/register flow in Playwright |
+| Contracts hierarchy + modification/CLIN parity | Roadmap still marked contract hierarchy and mod/CLIN lifecycle as open, and tests did not cover those flows explicitly | Added parent/child contract wiring in API/UI, expanded backend contracts integration coverage, added frontend contracts unit assertions, and validated complete contracts lifecycle in Playwright (`contracts-workflow.spec.ts`) |
+| Global semantic search discoverability | Semantic search API existed but command palette was not wired into dashboard entry points and header search control | Wired `GlobalSearch` into dashboard layout, connected header Search icon + `Ctrl+K` trigger, added faceted entity filters, and validated via unit tests + Playwright (`global-search.test.tsx`, `header-search-trigger.test.tsx`, `search-plg-workflow.spec.ts`) |
+| Free-tier PLG discoverability + nudges | Free-tier limits existed without an explicit public landing and active in-product upgrade nudges | Added `/free-tier` landing route, linked from auth/subscription flows, activated usage-threshold upgrade nudges in subscription view, and validated with unit + Playwright checks (`subscription-upgrade-nudge.test.tsx`, `free-tier-page.test.tsx`, `search-plg-workflow.spec.ts`) |
+| Past-performance API contract drift | Backend mounted past-performance routes under duplicated `/documents/documents/*` paths while frontend called `/documents/*` contracts | Added canonical non-duplicated past-performance routes with legacy aliases, aligned frontend past-performance list path to non-conflicting canonical route, and validated through backend regression (`test_documents.py`) |
+| Contact extraction source fallback drift | Contact extraction rejected manually created RFPs that stored text in `description` but not `full_text` | Updated extraction route to fallback from `full_text` to `description` and added regression coverage (`test_contacts.py`) |
+| Contact auto-link UI refresh drift | Extracted contacts and agency links persisted in backend but agency-directory tab could remain stale until manual refresh | Updated `/contacts` extraction callback to refresh both contacts and agencies, added accessible modal-close control, and validated with unit + Playwright (`contact-extract-button.test.tsx`, `contacts-workflow.spec.ts`) |
+| Template sync duplicate-row drift | `/templates` route could raise `500` when historical duplicate system-template names existed | Updated template sync helper to use duplicate-safe lookup (`scalars().first()`) and validated in backend integration + Playwright (`test_marketplace_reports_support.py`, `templates-reports-help-onboarding-workflow.spec.ts`) |
+| Reports workflow selector drift after builder expansion | Existing Playwright reports flow targeted ambiguous report-type selector in the expanded form | Scoped report-type selector to deterministic first form select and reran analytics/reports workflow (`analytics-reports-intelligence-workflow.spec.ts`) |
+| Customer success surface discoverability gap | Help/tutorial/chat capabilities were absent from primary route surface | Added `/help` route + sidebar entry + support APIs (`/api/v1/support/*`) and validated via frontend unit + Playwright (`help-center-page.test.tsx`, `templates-reports-help-onboarding-workflow.spec.ts`) |
+| Opportunities sync failure lockout | SAM sync errors previously forced full-page retry state and hid all primary actions | Replaced blocking error state with inline banner, added `Refresh`/`Dismiss`, and regression coverage in `opportunities-page.test.tsx` (`keeps primary actions available when SAM sync fails`) |
+| Opportunities manual-ingest gap | `Add RFP` CTA was inert, leaving no customer path when SAM was rate-limited | Added in-page manual Add RFP form wired to `rfpApi.create`, validated in unit test (`allows manually creating an RFP from the opportunities page`) and live browser creation of `SLED-REAL-2026-001` |
+| Analysis generation error-detail drift | Backend returned meaningful `429` detail for Gemini quota/rate limits but UI showed generic failure text | Added shared API error parser (`frontend/src/lib/api/error.ts`), wired analysis/opportunities handlers to surface backend detail, and validated live (`Gemini API rate limit reached. Retry in about ... seconds.`) |
 
 ## Orphaned/Hidden Capability Notes
-- Enterprise APIs (`/scim/v2`, `/webhooks`, `/secrets`) remain backend-capable but lack primary dashboard discoverability.
-- Template and word-addin capabilities are now reachable without runtime failures in browser mode; discoverability/product placement still needs explicit UX decision.
+- Enterprise APIs (`/scim/v2`, `/webhooks`, `/secrets`) are now validated through backend integration suites, admin capability-health workflow checks, and `/settings/integrations` UI CRUD/rotation flows.
+- Template and word-addin capabilities are now wired into primary sidebar navigation and covered by Playwright route checks.
+- WebSocket task feed is now explicitly surfaced and validated through `/diagnostics`; next enhancement is richer collaborative presence/lock telemetry visualizations.
