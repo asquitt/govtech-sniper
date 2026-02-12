@@ -24,6 +24,9 @@ from app.models.capture import (
     NDAStatus,
     RFPTeamingPartner,
     ScorerType,
+    TeamingDigestChannel,
+    TeamingDigestFrequency,
+    TeamingDigestSchedule,
     TeamingNDA,
     TeamingPartner,
     TeamingPerformanceRating,
@@ -31,9 +34,14 @@ from app.models.capture import (
     TeamingRequestStatus,
 )
 from app.models.collaboration import (
+    ComplianceDigestChannel,
+    ComplianceDigestFrequency,
+    GovernanceAnomalySeverity,
+    ShareApprovalStatus,
     SharedDataPermission,
     SharedDataType,
     SharedWorkspace,
+    WorkspaceComplianceDigestSchedule,
     WorkspaceInvitation,
     WorkspaceMember,
     WorkspaceRole,
@@ -61,6 +69,7 @@ from app.models.embedding import DocumentEmbedding
 from app.models.event import EventType, IndustryEvent
 from app.models.forecast import ForecastAlert, ForecastSource, ProcurementForecast
 from app.models.graphics import GraphicsRequestStatus, ProposalGraphicRequest
+from app.models.inbox import InboxMessage, InboxMessageType
 from app.models.integration import (
     IntegrationConfig,
     IntegrationProvider,
@@ -72,7 +81,9 @@ from app.models.knowledge_base import DocumentChunk, KnowledgeBaseDocument
 from app.models.market_signal import DigestFrequency, MarketSignal, SignalSubscription, SignalType
 from app.models.opportunity_snapshot import SAMOpportunitySnapshot
 from app.models.organization import (
+    InvitationStatus,
     Organization,
+    OrganizationInvitation,
     OrganizationMember,
     OrgRole,
     SSOIdentity,
@@ -189,6 +200,7 @@ __all__ = [
     "WorkspaceInvitation",
     "WorkspaceMember",
     "SharedDataPermission",
+    "ShareApprovalStatus",
     "WorkspaceRole",
     "SharedDataType",
     "SalesforceFieldMapping",
@@ -226,10 +238,21 @@ __all__ = [
     "ActivityType",
     "NDAStatus",
     "TeamingNDA",
+    "TeamingDigestFrequency",
+    "TeamingDigestChannel",
+    "TeamingDigestSchedule",
     "TeamingPerformanceRating",
     "Organization",
+    "OrganizationInvitation",
+    "InvitationStatus",
     "OrganizationMember",
     "OrgRole",
     "SSOIdentity",
     "SSOProvider",
+    "ComplianceDigestFrequency",
+    "ComplianceDigestChannel",
+    "GovernanceAnomalySeverity",
+    "WorkspaceComplianceDigestSchedule",
+    "InboxMessage",
+    "InboxMessageType",
 ]

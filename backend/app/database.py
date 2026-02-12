@@ -65,6 +65,7 @@ async def init_db() -> None:
             event,
             forecast,
             graphics,
+            inbox,
             integration,
             knowledge_base,
             market_signal,
