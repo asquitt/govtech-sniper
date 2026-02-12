@@ -2,19 +2,22 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Target, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/auth-context";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
-  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedNext = searchParams.get("next");
+  const redirectTo =
+    requestedNext && requestedNext.startsWith("/") ? requestedNext : "/opportunities";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +25,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, redirectTo);
     } catch (err: unknown) {
       console.error("Login failed:", err);
       const errorMessage = err instanceof Error ? err.message : "Invalid email or password";
@@ -119,8 +122,16 @@ export default function LoginPage() {
               <span className="text-muted-foreground">
                 Don&apos;t have an account?{" "}
               </span>
-              <Link href="/register" className="text-primary hover:underline">
+              <Link
+                href={redirectTo === "/opportunities" ? "/register" : `/register?next=${encodeURIComponent(redirectTo)}`}
+                className="text-primary hover:underline"
+              >
                 Sign up
+              </Link>
+            </div>
+            <div className="mt-2 text-center text-xs">
+              <Link href="/free-tier" className="text-muted-foreground hover:text-foreground underline">
+                See what&apos;s included in the free tier
               </Link>
             </div>
           </CardContent>
@@ -138,5 +149,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <LoginPageContent />
+    </React.Suspense>
   );
 }

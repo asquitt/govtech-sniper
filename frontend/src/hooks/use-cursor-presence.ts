@@ -18,7 +18,11 @@ export function useCursorPresence(ws: WebSocket | null) {
         const now = Date.now();
         const next = new Map<number, CursorPosition>();
         for (const [uid, pos] of prev) {
-          if (now - new Date(pos.timestamp).getTime() < STALE_TIMEOUT) {
+          const timestamp = pos.timestamp || pos.updated_at;
+          if (!timestamp) {
+            continue;
+          }
+          if (now - new Date(timestamp).getTime() < STALE_TIMEOUT) {
             next.set(uid, pos);
           }
         }
@@ -38,8 +42,11 @@ export function useCursorPresence(ws: WebSocket | null) {
     const handler = (event: MessageEvent) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === "cursor_update" && msg.data) {
-          const data = msg.data as CursorPosition;
+        if (msg.type === "cursor_update") {
+          const data = (msg.data || msg) as CursorPosition;
+          if (typeof data.user_id !== "number") {
+            return;
+          }
           setCursors((prev) => {
             const next = new Map(prev);
             next.set(data.user_id, data);

@@ -23,13 +23,20 @@ const TRIGGER_LABELS: Record<TriggerType, string> = {
 };
 
 const OPERATOR_OPTIONS = ["equals", "gt", "lt", "contains", "in_list"] as const;
-const ACTION_TYPE_OPTIONS = ["move_stage", "assign_user", "send_notification", "add_tag"] as const;
+const ACTION_TYPE_OPTIONS = [
+  "move_stage",
+  "assign_user",
+  "send_notification",
+  "add_tag",
+  "evaluate_teaming",
+] as const;
 
 const ACTION_LABELS: Record<string, string> = {
   move_stage: "Move Stage",
   assign_user: "Assign User",
   send_notification: "Send Notification",
   add_tag: "Add Tag",
+  evaluate_teaming: "Evaluate Teaming",
 };
 
 function emptyCondition(): WorkflowCondition {

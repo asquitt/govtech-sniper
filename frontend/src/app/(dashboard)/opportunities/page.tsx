@@ -28,6 +28,7 @@ import {
   getDeadlineUrgency,
   cn,
 } from "@/lib/utils";
+import { getApiErrorDetail, getApiErrorMessage } from "@/lib/api/error";
 import { rfpApi, ingestApi, savedSearchApi } from "@/lib/api";
 import type { RFPListItem, RFPStatus, SavedSearch } from "@/types";
 
@@ -112,12 +113,59 @@ function DeadlineBadge({ deadline }: { deadline?: string }) {
   );
 }
 
+function parseRetryAfterSeconds(error: unknown): number | null {
+  if (typeof error !== "object" || error === null) {
+    return null;
+  }
+
+  const headers = (
+    error as { response?: { headers?: Record<string, string | number> } }
+  ).response?.headers;
+  const headerValue = headers?.["retry-after"] ?? headers?.["Retry-After"];
+  if (headerValue !== undefined) {
+    const parsed = Number(headerValue);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.ceil(parsed);
+    }
+    const headerDate = new Date(String(headerValue));
+    if (!Number.isNaN(headerDate.getTime())) {
+      const diffSeconds = Math.ceil((headerDate.getTime() - Date.now()) / 1000);
+      if (diffSeconds > 0) {
+        return diffSeconds;
+      }
+    }
+  }
+
+  const detail = getApiErrorDetail(error);
+  if (!detail) {
+    return null;
+  }
+
+  const detailMatch = detail.match(/retry in about\s+(\d+)\s+seconds/i);
+  if (detailMatch) {
+    return Number(detailMatch[1]);
+  }
+
+  return null;
+}
+
+function formatSeconds(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
+
 export default function OpportunitiesPage() {
   const [rfps, setRfps] = useState<RFPListItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showRecommended, setShowRecommended] = useState(false);
+  const [syncCooldownSeconds, setSyncCooldownSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [savedSearchName, setSavedSearchName] = useState("");
@@ -131,6 +179,15 @@ export default function OpportunitiesPage() {
   const [savedSearchStatus, setSavedSearchStatus] = useState<RFPStatus | "">("");
   const [activeSearchId, setActiveSearchId] = useState<number | null>(null);
   const [activeSearchMatchIds, setActiveSearchMatchIds] = useState<number[]>([]);
+  const [showCreateRfp, setShowCreateRfp] = useState(false);
+  const [isCreatingRfp, setIsCreatingRfp] = useState(false);
+  const [newRfp, setNewRfp] = useState({
+    title: "",
+    solicitation_number: "",
+    agency: "",
+    response_deadline: "",
+    description: "",
+  });
   const [stats, setStats] = useState({
     total: 0,
     qualified: 0,
@@ -169,9 +226,29 @@ export default function OpportunitiesPage() {
     fetchRfps();
   }, [fetchRfps]);
 
+  useEffect(() => {
+    if (syncCooldownSeconds <= 0) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setSyncCooldownSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [syncCooldownSeconds]);
+
   const handleSync = async () => {
+    if (syncCooldownSeconds > 0) {
+      setError(
+        `SAM.gov sync is cooling down. Try again in ${formatSeconds(syncCooldownSeconds)}.`
+      );
+      return;
+    }
+
     try {
       setIsSyncing(true);
+      setError(null);
       // Trigger SAM.gov search with default parameters
       const result = await ingestApi.triggerSamSearch({
         keywords: "software",
@@ -201,9 +278,14 @@ export default function OpportunitiesPage() {
 
       // Refresh the list
       await fetchRfps();
+      setSyncCooldownSeconds(0);
     } catch (err) {
       console.error("SAM.gov sync failed:", err);
-      setError("Failed to sync with SAM.gov. Please try again.");
+      const retryAfterSeconds = parseRetryAfterSeconds(err);
+      if (retryAfterSeconds && retryAfterSeconds > 0) {
+        setSyncCooldownSeconds(retryAfterSeconds);
+      }
+      setError(getApiErrorMessage(err, "Failed to sync with SAM.gov. Please try again."));
     } finally {
       setIsSyncing(false);
     }
@@ -289,6 +371,51 @@ export default function OpportunitiesPage() {
     setActiveSearchMatchIds([]);
   };
 
+  const handleCancelCreateRfp = () => {
+    setShowCreateRfp(false);
+    setNewRfp({
+      title: "",
+      solicitation_number: "",
+      agency: "",
+      response_deadline: "",
+      description: "",
+    });
+  };
+
+  const handleCreateRfp = async () => {
+    if (
+      !newRfp.title.trim() ||
+      !newRfp.solicitation_number.trim() ||
+      !newRfp.agency.trim()
+    ) {
+      setError("Title, solicitation number, and agency are required.");
+      return;
+    }
+
+    try {
+      setIsCreatingRfp(true);
+      setError(null);
+
+      await rfpApi.create({
+        title: newRfp.title.trim(),
+        solicitation_number: newRfp.solicitation_number.trim(),
+        agency: newRfp.agency.trim(),
+        response_deadline: newRfp.response_deadline
+          ? new Date(newRfp.response_deadline).toISOString()
+          : undefined,
+        description: newRfp.description.trim() || undefined,
+      });
+
+      handleCancelCreateRfp();
+      await fetchRfps();
+    } catch (err) {
+      console.error("Failed to create RFP:", err);
+      setError(getApiErrorMessage(err, "Failed to add RFP. Please try again."));
+    } finally {
+      setIsCreatingRfp(false);
+    }
+  };
+
   const activeMatchSet = useMemo(
     () => new Set(activeSearchMatchIds),
     [activeSearchMatchIds]
@@ -322,24 +449,6 @@ export default function OpportunitiesPage() {
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  if (error && !isLoading) {
-    return (
-      <div className="flex flex-col h-full">
-        <Header
-          title="Opportunities"
-          description="Track and manage government contract opportunities"
-        />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <AlertTriangle className="w-12 h-12 text-destructive mx-auto mb-4" />
-            <p className="text-destructive mb-4">{error}</p>
-            <Button onClick={fetchRfps}>Retry</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -353,19 +462,40 @@ export default function OpportunitiesPage() {
             >
               Recommended
             </Button>
-            <Button onClick={handleSync} disabled={isSyncing}>
+            <Button onClick={handleSync} disabled={isSyncing || syncCooldownSeconds > 0}>
               {isSyncing ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              Sync SAM.gov
+              {syncCooldownSeconds > 0
+                ? `Sync in ${formatSeconds(syncCooldownSeconds)}`
+                : "Sync SAM.gov"}
             </Button>
           </div>
         }
       />
 
       <div className="flex-1 p-6 overflow-hidden">
+        {error && (
+          <Card className="mb-4 border-destructive/40 bg-destructive/5">
+            <CardContent className="p-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-destructive">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <p>{error}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={fetchRfps}>
+                  Refresh
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setError(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
@@ -556,11 +686,110 @@ export default function OpportunitiesPage() {
             <Filter className="w-4 h-4" />
             Filters
           </Button>
-          <Button>
+          <Button
+            variant={showCreateRfp ? "default" : "outline"}
+            onClick={() => setShowCreateRfp((prev) => !prev)}
+          >
             <Plus className="w-4 h-4" />
             Add RFP
           </Button>
         </div>
+
+        {showCreateRfp && (
+          <Card className="border border-border mb-4">
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Add Opportunity Manually</p>
+                  <p className="text-xs text-muted-foreground">
+                    Use this when SAM.gov is unavailable or for non-SAM opportunities.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancelCreateRfp}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleCreateRfp}
+                    disabled={isCreatingRfp}
+                  >
+                    {isCreatingRfp ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Save RFP"
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm text-muted-foreground">
+                  Title
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                    value={newRfp.title}
+                    onChange={(e) =>
+                      setNewRfp((prev) => ({ ...prev, title: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="text-sm text-muted-foreground">
+                  Solicitation Number
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                    value={newRfp.solicitation_number}
+                    onChange={(e) =>
+                      setNewRfp((prev) => ({
+                        ...prev,
+                        solicitation_number: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="text-sm text-muted-foreground">
+                  Agency
+                  <input
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                    value={newRfp.agency}
+                    onChange={(e) =>
+                      setNewRfp((prev) => ({ ...prev, agency: e.target.value }))
+                    }
+                  />
+                </label>
+                <label className="text-sm text-muted-foreground">
+                  Response Deadline
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                    value={newRfp.response_deadline}
+                    onChange={(e) =>
+                      setNewRfp((prev) => ({
+                        ...prev,
+                        response_deadline: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+
+              <label className="text-sm text-muted-foreground block">
+                Description
+                <textarea
+                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
+                  rows={3}
+                  value={newRfp.description}
+                  onChange={(e) =>
+                    setNewRfp((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Data Table */}
         <Card className="flex-1 overflow-hidden">
@@ -577,9 +806,14 @@ export default function OpportunitiesPage() {
                   : "No opportunities found"}
               </p>
               {!searchQuery && (
-                <Button onClick={handleSync} disabled={isSyncing}>
+                <Button
+                  onClick={handleSync}
+                  disabled={isSyncing || syncCooldownSeconds > 0}
+                >
                   <RefreshCw className="w-4 h-4 mr-2" />
-                  Sync from SAM.gov
+                  {syncCooldownSeconds > 0
+                    ? `Sync in ${formatSeconds(syncCooldownSeconds)}`
+                    : "Sync from SAM.gov"}
                 </Button>
               )}
             </div>

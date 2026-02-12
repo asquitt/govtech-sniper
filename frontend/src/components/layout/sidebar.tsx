@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   Target,
   FileSearch,
   BarChart2,
@@ -17,6 +18,8 @@ import {
   User,
   Users,
   Share2,
+  Bot,
+  Bell,
   DollarSign,
   GitBranch,
   TrendingUp,
@@ -27,6 +30,7 @@ import {
   FileBarChart,
   ClipboardCheck,
   Building2,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -76,6 +80,11 @@ const navItems: NavItem[] = [
     title: "Dash",
     href: "/dash",
     icon: Sparkles,
+  },
+  {
+    title: "Agents",
+    href: "/agents",
+    icon: Bot,
   },
   {
     title: "Capture",
@@ -148,14 +157,39 @@ const navItems: NavItem[] = [
     icon: FileBarChart,
   },
   {
+    title: "Templates",
+    href: "/templates",
+    icon: FolderOpen,
+  },
+  {
+    title: "Word Add-in",
+    href: "/word-addin",
+    icon: FileSearch,
+  },
+  {
     title: "Admin",
     href: "/admin",
     icon: Building2,
   },
   {
+    title: "Diagnostics",
+    href: "/diagnostics",
+    icon: Activity,
+  },
+  {
+    title: "Help",
+    href: "/help",
+    icon: HelpCircle,
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: Settings,
+  },
+  {
+    title: "Notifications",
+    href: "/settings/notifications",
+    icon: Bell,
   },
 ];
 

@@ -5,7 +5,12 @@ import { Palette, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
-import type { ProposalSection, ProposalGraphicRequest } from "@/types";
+import type {
+  ProposalSection,
+  ProposalGraphicRequest,
+  GeneratedGraphic,
+  GraphicTemplateInfo,
+} from "@/types";
 
 interface GraphicsPanelProps {
   requests: ProposalGraphicRequest[];
@@ -21,6 +26,13 @@ interface GraphicsPanelProps {
   onCreateRequest: () => void;
   onUpdateStatus: (id: number, status: ProposalGraphicRequest["status"]) => void;
   onRemoveRequest: (id: number) => void;
+  templates: GraphicTemplateInfo[];
+  selectedTemplate: string;
+  onTemplateChange: (template: string) => void;
+  onGenerateGraphic: () => void;
+  generatedGraphic: GeneratedGraphic | null;
+  isGenerating: boolean;
+  onInsertGeneratedGraphic: () => void;
 }
 
 export function GraphicsPanel({
@@ -37,6 +49,13 @@ export function GraphicsPanel({
   onCreateRequest,
   onUpdateStatus,
   onRemoveRequest,
+  templates,
+  selectedTemplate,
+  onTemplateChange,
+  onGenerateGraphic,
+  generatedGraphic,
+  isGenerating,
+  onInsertGeneratedGraphic,
 }: GraphicsPanelProps) {
   return (
     <Card className="border border-border">
@@ -96,6 +115,19 @@ export function GraphicsPanel({
           )}
         </div>
         <div className="space-y-2">
+          <select
+            className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+            aria-label="Graphic template"
+            value={selectedTemplate}
+            onChange={(e) => onTemplateChange(e.target.value)}
+          >
+            <option value="">Select graphic template</option>
+            {templates.map((template) => (
+              <option key={template.type} value={template.type}>
+                {template.label}
+              </option>
+            ))}
+          </select>
           <input
             className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
             placeholder="Graphic title"
@@ -135,6 +167,29 @@ export function GraphicsPanel({
             <Plus className="w-4 h-4" />
             Create Request
           </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            onClick={onGenerateGraphic}
+            disabled={!selectedTemplate || !description.trim() || isGenerating}
+          >
+            {isGenerating ? "Generating..." : "Generate Graphic"}
+          </Button>
+          {generatedGraphic && (
+            <div className="space-y-2 rounded-md border border-border p-2">
+              <p className="text-xs font-medium text-foreground">Generated Mermaid</p>
+              <pre className="max-h-48 overflow-auto rounded bg-muted p-2 text-[11px] text-foreground whitespace-pre-wrap">
+                {generatedGraphic.mermaid_code}
+              </pre>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={onInsertGeneratedGraphic}
+              >
+                Insert into Section
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -49,6 +49,10 @@ export default function ContactsPage() {
     fetchAgencies();
   }, [fetchContacts, fetchAgencies]);
 
+  const handleExtractionLinked = useCallback(async () => {
+    await Promise.all([fetchContacts(), fetchAgencies()]);
+  }, [fetchContacts, fetchAgencies]);
+
   const handleDelete = async (id: number) => {
     try {
       await contactApi.remove(id);
@@ -90,7 +94,7 @@ export default function ContactsPage() {
               Agency Directory
             </Button>
           </div>
-          <ExtractButton onContactsSaved={fetchContacts} />
+          <ExtractButton onContactsSaved={handleExtractionLinked} />
         </div>
 
         {/* Tab content */}

@@ -5,6 +5,7 @@ import { Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDashStore } from "@/lib/stores/dash-store";
 import { MessageBubble } from "./message-bubble";
+import { VoiceControls } from "@/components/dash/voice-controls";
 
 interface Suggestion {
   label: string;
@@ -44,6 +45,8 @@ export function ChatPanel() {
 
   const suggestions = getSuggestions(selectedRfpId, messages.length);
   const isStreaming = messages[messages.length - 1]?.isStreaming ?? false;
+  const lastAssistantMessage =
+    [...messages].reverse().find((message) => message.role === "assistant")?.content ?? "";
 
   // Auto-scroll on new content
   useEffect(() => {
@@ -132,6 +135,16 @@ export function ChatPanel() {
 
       {/* Input bar */}
       <div className="border-t border-border p-4">
+        <div className="mb-2 flex items-center justify-end">
+          <VoiceControls
+            onTranscript={(text) => {
+              const spoken = text.trim();
+              if (!spoken) return;
+              handleSend(spoken);
+            }}
+            lastAssistantMessage={lastAssistantMessage}
+          />
+        </div>
         <div className="flex gap-2">
           <input
             className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"

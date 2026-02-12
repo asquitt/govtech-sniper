@@ -1,9 +1,11 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { Search, User, HelpCircle } from "lucide-react";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { Button } from "@/components/ui/button";
+import { GLOBAL_SEARCH_TOGGLE_EVENT } from "@/components/layout/global-search";
 import {
   Tooltip,
   TooltipContent,
@@ -18,6 +20,11 @@ interface HeaderProps {
 }
 
 export function Header({ title, description, actions }: HeaderProps) {
+  const handleSearchClick = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event(GLOBAL_SEARCH_TOGGLE_EVENT));
+  };
+
   return (
     <TooltipProvider>
       <header className="flex items-center justify-between h-16 px-6 border-b border-border bg-card/50 backdrop-blur-sm">
@@ -34,11 +41,16 @@ export function Header({ title, description, actions }: HeaderProps) {
           {/* Search */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Open global search"
+                onClick={handleSearchClick}
+              >
                 <Search className="w-5 h-5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Search</TooltipContent>
+            <TooltipContent>Search (Ctrl+K)</TooltipContent>
           </Tooltip>
 
           {/* Notifications */}
@@ -47,8 +59,10 @@ export function Header({ title, description, actions }: HeaderProps) {
           {/* Help */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <HelpCircle className="w-5 h-5" />
+              <Button asChild variant="ghost" size="icon">
+                <Link href="/help">
+                  <HelpCircle className="w-5 h-5" />
+                </Link>
               </Button>
             </TooltipTrigger>
             <TooltipContent>Help & Documentation</TooltipContent>
@@ -65,4 +79,3 @@ export function Header({ title, description, actions }: HeaderProps) {
     </TooltipProvider>
   );
 }
-

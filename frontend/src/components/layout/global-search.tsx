@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import { searchApi } from "@/lib/api/search";
 import type { SearchResult } from "@/types/search";
 
+export const GLOBAL_SEARCH_TOGGLE_EVENT = "rfp-sniper:global-search-toggle";
+
+const ENTITY_FILTERS = [
+  { value: "rfp", label: "Opportunities" },
+  { value: "proposal_section", label: "Proposal Sections" },
+  { value: "knowledge_doc", label: "Knowledge Base" },
+  { value: "contact", label: "Contacts" },
+] as const;
+
+type EntityFilterValue = (typeof ENTITY_FILTERS)[number]["value"];
+
 const ENTITY_LABELS: Record<string, string> = {
   rfp: "Opportunity",
   proposal_section: "Proposal",
@@ -24,11 +35,11 @@ function getEntityRoute(result: SearchResult): string {
     case "rfp":
       return `/opportunities/${result.entity_id}`;
     case "proposal_section":
-      return `/proposals/${result.entity_id}`;
+      return `/proposals?section=${result.entity_id}`;
     case "knowledge_doc":
-      return `/knowledge-base/${result.entity_id}`;
+      return "/knowledge-base";
     case "contact":
-      return `/contacts/${result.entity_id}`;
+      return "/contacts";
     default:
       return "#";
   }
@@ -40,20 +51,33 @@ export function GlobalSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedEntityTypes, setSelectedEntityTypes] = useState<Set<EntityFilterValue>>(
+    new Set(ENTITY_FILTERS.map((filter) => filter.value))
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const router = useRouter();
 
-  // Cmd+K / Ctrl+K to open
+  const selectedEntityArray = Array.from(selectedEntityTypes);
+  const allEntityTypesSelected = selectedEntityArray.length === ENTITY_FILTERS.length;
+
+  // Cmd+K / Ctrl+K and header trigger to open
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setOpen((prev) => !prev);
+      } else if (e.key === "Escape") {
+        setOpen(false);
       }
     };
+    const handleSearchToggle = () => setOpen((prev) => !prev);
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener(GLOBAL_SEARCH_TOGGLE_EVENT, handleSearchToggle);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener(GLOBAL_SEARCH_TOGGLE_EVENT, handleSearchToggle);
+    };
   }, []);
 
   // Focus input when opened
@@ -68,14 +92,18 @@ export function GlobalSearch() {
   }, [open]);
 
   // Debounced search
-  const doSearch = useCallback(async (q: string) => {
+  const doSearch = useCallback(async (q: string, entityTypes: EntityFilterValue[]) => {
     if (q.length < 2) {
       setResults([]);
       return;
     }
     setLoading(true);
     try {
-      const resp = await searchApi.search({ query: q, limit: 10 });
+      const resp = await searchApi.search({
+        query: q,
+        limit: 10,
+        entity_types: entityTypes.length === ENTITY_FILTERS.length ? undefined : entityTypes,
+      });
       setResults(resp.data.results);
       setSelectedIndex(0);
     } catch {
@@ -88,7 +116,25 @@ export function GlobalSearch() {
   const handleInputChange = (val: string) => {
     setQuery(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(val), 300);
+    debounceRef.current = setTimeout(() => doSearch(val, selectedEntityArray), 300);
+  };
+
+  const handleToggleFilter = (value: EntityFilterValue) => {
+    setSelectedEntityTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        if (next.size > 1) {
+          next.delete(value);
+        }
+      } else {
+        next.add(value);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFilters = () => {
+    setSelectedEntityTypes(new Set(ENTITY_FILTERS.map((filter) => filter.value)));
   };
 
   const navigate = (result: SearchResult) => {
@@ -110,10 +156,22 @@ export function GlobalSearch() {
     }
   };
 
+  useEffect(() => {
+    if (query.length >= 2) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        void doSearch(query, selectedEntityArray);
+      }, 150);
+    }
+  }, [query, selectedEntityArray, doSearch]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh]"
+      data-testid="global-search-dialog"
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -139,6 +197,7 @@ export function GlobalSearch() {
             />
           </svg>
           <input
+            data-testid="global-search-input"
             ref={inputRef}
             type="text"
             value={query}
@@ -150,6 +209,38 @@ export function GlobalSearch() {
           <kbd className="ml-2 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
             ESC
           </kbd>
+        </div>
+
+        {/* Facets */}
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+          <button
+            type="button"
+            onClick={handleSelectAllFilters}
+            className={`rounded-full border px-2 py-1 text-[10px] font-medium transition-colors ${
+              allEntityTypesSelected
+                ? "border-primary bg-primary/15 text-primary"
+                : "border-border text-muted-foreground hover:bg-accent/40"
+            }`}
+          >
+            All
+          </button>
+          {ENTITY_FILTERS.map((filter) => {
+            const selected = selectedEntityTypes.has(filter.value);
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => handleToggleFilter(filter.value)}
+                className={`rounded-full border px-2 py-1 text-[10px] font-medium transition-colors ${
+                  selected
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:bg-accent/40"
+                }`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Results */}

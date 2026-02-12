@@ -2,12 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Target, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/auth-context";
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -16,6 +17,10 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
+  const searchParams = useSearchParams();
+  const requestedNext = searchParams.get("next");
+  const redirectTo =
+    requestedNext && requestedNext.startsWith("/") ? requestedNext : "/opportunities";
 
   const passwordRequirements = [
     { label: "At least 8 characters", met: password.length >= 8 },
@@ -50,7 +55,7 @@ export default function RegisterPage() {
         password,
         full_name: fullName,
         company_name: companyName || undefined,
-      });
+      }, redirectTo);
     } catch (err: unknown) {
       console.error("Registration failed:", err);
       const errorMessage = err instanceof Error ? err.message : "Registration failed. Please try again.";
@@ -221,8 +226,16 @@ export default function RegisterPage() {
               <span className="text-muted-foreground">
                 Already have an account?{" "}
               </span>
-              <Link href="/login" className="text-primary hover:underline">
+              <Link
+                href={redirectTo === "/opportunities" ? "/login" : `/login?next=${encodeURIComponent(redirectTo)}`}
+                className="text-primary hover:underline"
+              >
                 Sign in
+              </Link>
+            </div>
+            <div className="mt-2 text-center text-xs">
+              <Link href="/free-tier" className="text-muted-foreground hover:text-foreground underline">
+                Compare free features before you start
               </Link>
             </div>
           </CardContent>
@@ -240,5 +253,13 @@ export default function RegisterPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <RegisterPageContent />
+    </React.Suspense>
   );
 }

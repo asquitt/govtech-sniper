@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, ExternalLink, Sparkles } from "lucide-react";
 import { PlanCard } from "@/components/subscription/plan-card";
 import { UsageMeter } from "@/components/subscription/usage-meter";
+import { UpgradeNudge } from "@/components/subscription/upgrade-nudge";
 import { subscriptionApi } from "@/lib/api";
 import type { PlanDefinition, SubscriptionStatus, UsageStats } from "@/types";
 
@@ -25,6 +27,49 @@ export default function SubscriptionPage() {
 
   const checkoutResult = searchParams.get("checkout");
   const checkoutError = searchParams.get("error");
+
+  const getNextTier = (tier: string | null | undefined) => {
+    if (tier === "free") return "starter";
+    if (tier === "starter") return "professional";
+    if (tier === "professional") return "enterprise";
+    return "enterprise";
+  };
+
+  const getUsageHotspot = (usageStats: UsageStats | null) => {
+    if (!usageStats) return null;
+    const rows = [
+      {
+        label: "RFP tracking quota",
+        used: usageStats.rfps_used,
+        limit: usageStats.rfps_limit,
+      },
+      {
+        label: "Proposal quota",
+        used: usageStats.proposals_used,
+        limit: usageStats.proposals_limit,
+      },
+      {
+        label: "Daily API request quota",
+        used: usageStats.api_calls_used,
+        limit: usageStats.api_calls_limit,
+      },
+    ].filter((row) => row.limit >= 0);
+
+    let winner: { label: string; percent: number } | null = null;
+    for (const row of rows) {
+      const percent = row.limit === 0 ? 1 : row.used / row.limit;
+      if (!winner || percent > winner.percent) {
+        winner = { label: row.label, percent };
+      }
+    }
+    return winner;
+  };
+
+  const usageHotspot = getUsageHotspot(usage);
+  const shouldShowUpgradeNudge =
+    !!usageHotspot &&
+    usageHotspot.percent >= 0.8 &&
+    currentPlan?.tier !== "enterprise";
 
   const loadData = useCallback(async () => {
     try {
@@ -134,6 +179,26 @@ export default function SubscriptionPage() {
         )}
 
         {error && <p className="text-destructive text-sm">{error}</p>}
+
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/free-tier">
+              View Free Tier Landing Page
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </Button>
+        </div>
+
+        {shouldShowUpgradeNudge && (
+          <UpgradeNudge
+            feature={
+              usageHotspot.percent >= 1
+                ? `${usageHotspot.label} is at its limit`
+                : `${usageHotspot.label} is nearing its limit`
+            }
+            requiredTier={getNextTier(currentPlan?.tier)}
+          />
+        )}
 
         {/* Subscription Status + Usage */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

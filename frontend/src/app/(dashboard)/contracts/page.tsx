@@ -11,10 +11,13 @@ import type {
   ContractAward,
   ContractDeliverable,
   ContractStatus,
+  ContractType,
   ContractTask,
   CPARSReview,
   ContractStatusReport,
   CPARSEvidence,
+  ContractModification,
+  ContractCLIN,
   KnowledgeBaseDocument,
 } from "@/types";
 
@@ -29,6 +32,8 @@ export default function ContractsPage() {
   const [contracts, setContracts] = useState<ContractAward[]>([]);
   const [deliverables, setDeliverables] = useState<ContractDeliverable[]>([]);
   const [tasks, setTasks] = useState<ContractTask[]>([]);
+  const [modifications, setModifications] = useState<ContractModification[]>([]);
+  const [clins, setClins] = useState<ContractCLIN[]>([]);
   const [cpars, setCpars] = useState<CPARSReview[]>([]);
   const [statusReports, setStatusReports] = useState<ContractStatusReport[]>([]);
   const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
@@ -38,9 +43,25 @@ export default function ContractsPage() {
   const [title, setTitle] = useState("");
   const [number, setNumber] = useState("");
   const [agency, setAgency] = useState("");
+  const [contractType, setContractType] = useState<ContractType>("prime");
+  const [parentContractId, setParentContractId] = useState("");
   const [status, setStatus] = useState<ContractStatus>("active");
   const [deliverableTitle, setDeliverableTitle] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
+  const [modNumber, setModNumber] = useState("");
+  const [modType, setModType] = useState("");
+  const [modDescription, setModDescription] = useState("");
+  const [modEffectiveDate, setModEffectiveDate] = useState("");
+  const [modValueChange, setModValueChange] = useState("");
+  const [clinNumber, setClinNumber] = useState("");
+  const [clinDescription, setClinDescription] = useState("");
+  const [clinType, setClinType] = useState("");
+  const [clinQuantity, setClinQuantity] = useState("");
+  const [clinUnitPrice, setClinUnitPrice] = useState("");
+  const [clinFundedAmount, setClinFundedAmount] = useState("");
+  const [clinEditingId, setClinEditingId] = useState<number | null>(null);
+  const [editingQuantity, setEditingQuantity] = useState("");
+  const [editingFundedAmount, setEditingFundedAmount] = useState("");
   const [cparsRating, setCparsRating] = useState("");
   const [cparsNotes, setCparsNotes] = useState("");
   const [evidenceDocumentId, setEvidenceDocumentId] = useState<number | null>(null);
@@ -80,9 +101,16 @@ export default function ContractsPage() {
       try {
         const list = await contractApi.listDeliverables(selectedContractId);
         setDeliverables(list);
-        const taskList = await contractApi.listTasks(selectedContractId);
+        const [taskList, modList, clinList, cparsList, reportList] = await Promise.all([
+          contractApi.listTasks(selectedContractId),
+          contractApi.listModifications(selectedContractId),
+          contractApi.listCLINs(selectedContractId),
+          contractApi.listCPARS(selectedContractId),
+          contractApi.listStatusReports(selectedContractId),
+        ]);
         setTasks(taskList);
-        const cparsList = await contractApi.listCPARS(selectedContractId);
+        setModifications(modList);
+        setClins(clinList);
         setCpars(cparsList);
         if (cparsList.length === 0) {
           setSelectedCparsId(null);
@@ -90,7 +118,6 @@ export default function ContractsPage() {
         } else if (!selectedCparsId || !cparsList.some((item) => item.id === selectedCparsId)) {
           setSelectedCparsId(cparsList[0].id);
         }
-        const reportList = await contractApi.listStatusReports(selectedContractId);
         setStatusReports(reportList);
       } catch (err) {
         console.error("Failed to load deliverables", err);
@@ -122,11 +149,17 @@ export default function ContractsPage() {
         contract_number: number.trim(),
         title: title.trim(),
         agency: agency.trim() || undefined,
+        parent_contract_id: parentContractId
+          ? Number.parseInt(parentContractId, 10)
+          : undefined,
+        contract_type: contractType,
         status,
       });
       setTitle("");
       setNumber("");
       setAgency("");
+      setContractType("prime");
+      setParentContractId("");
       await fetchContracts();
     } catch (err) {
       console.error("Failed to create contract", err);
@@ -159,6 +192,119 @@ export default function ContractsPage() {
     } catch (err) {
       console.error("Failed to create task", err);
       setError("Failed to create task.");
+    }
+  };
+
+  const handleCreateModification = async () => {
+    if (!selectedContractId || !modNumber.trim()) return;
+    try {
+      await contractApi.createModification(selectedContractId, {
+        modification_number: modNumber.trim(),
+        mod_type: modType.trim() || undefined,
+        description: modDescription.trim() || undefined,
+        effective_date: modEffectiveDate || undefined,
+        value_change: modValueChange ? Number.parseFloat(modValueChange) : undefined,
+      });
+      setModNumber("");
+      setModType("");
+      setModDescription("");
+      setModEffectiveDate("");
+      setModValueChange("");
+      const modList = await contractApi.listModifications(selectedContractId);
+      setModifications(modList);
+    } catch (err) {
+      console.error("Failed to create modification", err);
+      setError("Failed to create modification.");
+    }
+  };
+
+  const handleDeleteModification = async (modId: number) => {
+    if (!selectedContractId) return;
+    try {
+      await contractApi.deleteModification(selectedContractId, modId);
+      const modList = await contractApi.listModifications(selectedContractId);
+      setModifications(modList);
+    } catch (err) {
+      console.error("Failed to delete modification", err);
+      setError("Failed to delete modification.");
+    }
+  };
+
+  const handleCreateCLIN = async () => {
+    if (!selectedContractId || !clinNumber.trim()) return;
+    const quantity = clinQuantity ? Number.parseInt(clinQuantity, 10) : undefined;
+    const unitPrice = clinUnitPrice ? Number.parseFloat(clinUnitPrice) : undefined;
+    const fundedAmount = clinFundedAmount
+      ? Number.parseFloat(clinFundedAmount)
+      : undefined;
+    const totalValue =
+      quantity !== undefined && unitPrice !== undefined
+        ? quantity * unitPrice
+        : undefined;
+
+    try {
+      await contractApi.createCLIN(selectedContractId, {
+        clin_number: clinNumber.trim(),
+        description: clinDescription.trim() || undefined,
+        clin_type: clinType.trim() || undefined,
+        quantity,
+        unit_price: unitPrice,
+        funded_amount: fundedAmount,
+        total_value: totalValue,
+      });
+      setClinNumber("");
+      setClinDescription("");
+      setClinType("");
+      setClinQuantity("");
+      setClinUnitPrice("");
+      setClinFundedAmount("");
+      const clinList = await contractApi.listCLINs(selectedContractId);
+      setClins(clinList);
+    } catch (err) {
+      console.error("Failed to create CLIN", err);
+      setError("Failed to create CLIN.");
+    }
+  };
+
+  const handleSaveCLIN = async (clinId: number) => {
+    if (!selectedContractId) return;
+    const quantity = editingQuantity ? Number.parseInt(editingQuantity, 10) : undefined;
+    const fundedAmount = editingFundedAmount
+      ? Number.parseFloat(editingFundedAmount)
+      : undefined;
+    const target = clins.find((item) => item.id === clinId);
+    const unitPrice = target?.unit_price ?? undefined;
+    const totalValue =
+      quantity !== undefined && unitPrice !== undefined
+        ? quantity * unitPrice
+        : target?.total_value ?? undefined;
+
+    try {
+      await contractApi.updateCLIN(selectedContractId, clinId, {
+        quantity,
+        funded_amount: fundedAmount,
+        total_value: totalValue,
+      });
+      const clinList = await contractApi.listCLINs(selectedContractId);
+      setClins(clinList);
+      setClinEditingId(null);
+      setEditingQuantity("");
+      setEditingFundedAmount("");
+    } catch (err) {
+      console.error("Failed to update CLIN", err);
+      setError("Failed to update CLIN.");
+    }
+  };
+
+  const handleDeleteCLIN = async (clinId: number) => {
+    if (!selectedContractId) return;
+    try {
+      await contractApi.deleteCLIN(selectedContractId, clinId);
+      const clinList = await contractApi.listCLINs(selectedContractId);
+      setClins(clinList);
+    } catch (err) {
+      console.error("Failed to delete CLIN", err);
+      setError("Failed to delete CLIN.");
     }
   };
 
@@ -248,6 +394,20 @@ export default function ContractsPage() {
     () => contracts.find((c) => c.id === selectedContractId) || null,
     [contracts, selectedContractId]
   );
+  const contractsById = useMemo(
+    () => new Map(contracts.map((contract) => [contract.id, contract])),
+    [contracts]
+  );
+  const selectedParentContract = useMemo(() => {
+    if (!selectedContract?.parent_contract_id) return null;
+    return contractsById.get(selectedContract.parent_contract_id) || null;
+  }, [contractsById, selectedContract]);
+  const childContracts = useMemo(() => {
+    if (!selectedContract) return [];
+    return contracts.filter(
+      (contract) => contract.parent_contract_id === selectedContract.id
+    );
+  }, [contracts, selectedContract]);
 
   return (
     <div className="flex flex-col h-full">
@@ -262,7 +422,7 @@ export default function ContractsPage() {
         <Card className="border border-border">
           <CardContent className="p-4 space-y-3">
             <p className="text-sm font-medium">New Contract</p>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-6 gap-3">
               <input
                 className="rounded-md border border-border bg-background px-2 py-1 text-sm"
                 placeholder="Contract #"
@@ -283,12 +443,38 @@ export default function ContractsPage() {
               />
               <select
                 className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                aria-label="Contract status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ContractStatus)}
               >
                 {statusOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                aria-label="Contract type"
+                value={contractType}
+                onChange={(e) => setContractType(e.target.value as ContractType)}
+              >
+                <option value="prime">Prime</option>
+                <option value="subcontract">Subcontract</option>
+                <option value="idiq">IDIQ</option>
+                <option value="task_order">Task Order</option>
+                <option value="bpa">BPA</option>
+              </select>
+              <select
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                aria-label="Parent contract"
+                value={parentContractId}
+                onChange={(e) => setParentContractId(e.target.value)}
+              >
+                <option value="">Top-level contract</option>
+                {contracts.map((contract) => (
+                  <option key={contract.id} value={contract.id}>
+                    {contract.contract_number}
                   </option>
                 ))}
               </select>
@@ -318,9 +504,19 @@ export default function ContractsPage() {
                       onClick={() => setSelectedContractId(contract.id)}
                     >
                       <p className="font-medium">{contract.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {contract.contract_number}
-                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{contract.contract_number}</span>
+                        {contract.contract_type && (
+                          <Badge variant="outline">{contract.contract_type}</Badge>
+                        )}
+                      </div>
+                      {contract.parent_contract_id && (
+                        <p className="text-xs text-muted-foreground">
+                          Parent:{" "}
+                          {contractsById.get(contract.parent_contract_id)
+                            ?.contract_number || "Unknown"}
+                        </p>
+                      )}
                     </button>
                   ))
                 )}
@@ -413,6 +609,292 @@ export default function ContractsPage() {
                         <Badge variant="outline">
                           {task.is_complete ? "Complete" : "Open"}
                         </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <p className="text-sm font-medium">Hierarchy</p>
+                {!selectedContract ? (
+                  <p className="text-sm text-muted-foreground">
+                    Select a contract to manage hierarchy.
+                  </p>
+                ) : (
+                  <>
+                    <div className="rounded-md border border-border px-3 py-2 text-sm">
+                      <p className="font-medium">Parent Contract</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedParentContract
+                          ? `${selectedParentContract.contract_number} - ${selectedParentContract.title}`
+                          : "Top-level contract"}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border px-3 py-2 text-sm space-y-2">
+                      <p className="font-medium">Child Orders</p>
+                      {childContracts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No child orders linked.
+                        </p>
+                      ) : (
+                        childContracts.map((childContract) => (
+                          <div
+                            key={childContract.id}
+                            className="flex items-center justify-between text-xs"
+                          >
+                            <span>
+                              {childContract.contract_number} - {childContract.title}
+                            </span>
+                            <Badge variant="outline">
+                              {childContract.contract_type || "task_order"}
+                            </Badge>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <p className="text-sm font-medium">Contract Modifications</p>
+                <div className="grid grid-cols-5 gap-2">
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Mod #"
+                    value={modNumber}
+                    onChange={(e) => setModNumber(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="Modification type"
+                    value={modType}
+                    onChange={(e) => setModType(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    aria-label="Modification effective date"
+                    type="date"
+                    value={modEffectiveDate}
+                    onChange={(e) => setModEffectiveDate(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    type="number"
+                    step="0.01"
+                    placeholder="Value change"
+                    value={modValueChange}
+                    onChange={(e) => setModValueChange(e.target.value)}
+                  />
+                  <Button onClick={handleCreateModification}>Add Mod</Button>
+                </div>
+                <input
+                  className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
+                  placeholder="Modification description"
+                  value={modDescription}
+                  onChange={(e) => setModDescription(e.target.value)}
+                />
+                <div className="space-y-2">
+                  {modifications.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No modifications yet.</p>
+                  ) : (
+                    modifications.map((mod) => (
+                      <div
+                        key={mod.id}
+                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                      >
+                        <div>
+                          <p className="font-medium">{mod.modification_number}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[mod.mod_type || "type n/a", mod.effective_date || "date n/a"]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </p>
+                          {mod.description && (
+                            <p className="text-xs text-muted-foreground">{mod.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {mod.value_change != null && (
+                            <Badge variant="outline">
+                              {mod.value_change >= 0 ? "+" : ""}
+                              {mod.value_change.toLocaleString(undefined, {
+                                style: "currency",
+                                currency: "USD",
+                                maximumFractionDigits: 0,
+                              })}
+                            </Badge>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteModification(mod.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                <p className="text-sm font-medium">CLIN Management</p>
+                <div className="grid grid-cols-6 gap-2">
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="CLIN #"
+                    value={clinNumber}
+                    onChange={(e) => setClinNumber(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="CLIN description"
+                    value={clinDescription}
+                    onChange={(e) => setClinDescription(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    placeholder="CLIN type"
+                    value={clinType}
+                    onChange={(e) => setClinType(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    type="number"
+                    placeholder="Qty"
+                    value={clinQuantity}
+                    onChange={(e) => setClinQuantity(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    type="number"
+                    step="0.01"
+                    placeholder="Unit price"
+                    value={clinUnitPrice}
+                    onChange={(e) => setClinUnitPrice(e.target.value)}
+                  />
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    type="number"
+                    step="0.01"
+                    placeholder="Funded"
+                    value={clinFundedAmount}
+                    onChange={(e) => setClinFundedAmount(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleCreateCLIN}>Add CLIN</Button>
+                <div className="space-y-2">
+                  {clins.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No CLINs yet.</p>
+                  ) : (
+                    clins.map((clin) => (
+                      <div
+                        key={clin.id}
+                        className="rounded-md border border-border px-3 py-2 text-sm space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">{clin.clin_number}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {clin.description || "No description"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{clin.clin_type || "type n/a"}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteCLIN(clin.id)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
+                          <span>Qty: {clin.quantity ?? "n/a"}</span>
+                          <span>
+                            Unit:{" "}
+                            {clin.unit_price != null
+                              ? clin.unit_price.toLocaleString(undefined, {
+                                  style: "currency",
+                                  currency: "USD",
+                                  maximumFractionDigits: 0,
+                                })
+                              : "n/a"}
+                          </span>
+                          <span>
+                            Total:{" "}
+                            {clin.total_value != null
+                              ? clin.total_value.toLocaleString(undefined, {
+                                  style: "currency",
+                                  currency: "USD",
+                                  maximumFractionDigits: 0,
+                                })
+                              : "n/a"}
+                          </span>
+                          <span>
+                            Funded:{" "}
+                            {clin.funded_amount != null
+                              ? clin.funded_amount.toLocaleString(undefined, {
+                                  style: "currency",
+                                  currency: "USD",
+                                  maximumFractionDigits: 0,
+                                })
+                              : "n/a"}
+                          </span>
+                        </div>
+                        {clinEditingId === clin.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                              type="number"
+                              placeholder="Qty"
+                              value={editingQuantity}
+                              onChange={(e) => setEditingQuantity(e.target.value)}
+                            />
+                            <input
+                              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                              type="number"
+                              step="0.01"
+                              placeholder="Funded amount"
+                              value={editingFundedAmount}
+                              onChange={(e) => setEditingFundedAmount(e.target.value)}
+                            />
+                            <Button size="sm" onClick={() => handleSaveCLIN(clin.id)}>
+                              Save
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setClinEditingId(null);
+                                setEditingQuantity("");
+                                setEditingFundedAmount("");
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setClinEditingId(clin.id);
+                              setEditingQuantity(
+                                clin.quantity != null ? String(clin.quantity) : ""
+                              );
+                              setEditingFundedAmount(
+                                clin.funded_amount != null ? String(clin.funded_amount) : ""
+                              );
+                            }}
+                          >
+                            Edit Quantity/Funded
+                          </Button>
+                        )}
                       </div>
                     ))
                   )}

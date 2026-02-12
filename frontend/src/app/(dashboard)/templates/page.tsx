@@ -1,238 +1,571 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { templateMarketplaceApi } from "@/lib/api";
+import { templateApi, templateMarketplaceApi } from "@/lib/api";
+import type { ProposalTemplate } from "@/lib/api";
 import type { MarketplaceTemplate } from "@/types";
 
-type TabView = "browse" | "popular";
+type TemplateTab =
+  | "community"
+  | "popular"
+  | "proposal-kits"
+  | "compliance-matrices"
+  | "my-library";
 
-function StarRating({ ratingSum, ratingCount }: { ratingSum: number; ratingCount: number }) {
-  const avg = ratingCount > 0 ? ratingSum / ratingCount : 0;
-  const fullStars = Math.floor(avg);
-  const hasHalf = avg - fullStars >= 0.5;
+const PROPOSAL_CATEGORIES = ["IT Services", "Construction", "Professional Services"];
 
-  return (
-    <div className="flex items-center gap-1 text-sm text-gray-500">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <span key={i} className={i <= fullStars ? "text-yellow-500" : i === fullStars + 1 && hasHalf ? "text-yellow-300" : "text-gray-300"}>
-          ★
-        </span>
-      ))}
-      <span className="ml-1">({ratingCount})</span>
-    </div>
-  );
+const COMMUNITY_FILTERS = [
+  "Past Performance",
+  "Technical",
+  "Quality",
+  "Personnel",
+  "Security",
+  "Proposal Structure",
+  "Compliance Matrix",
+];
+
+function averageRating(template: { rating_sum: number; rating_count: number }) {
+  if (template.rating_count <= 0) return 0;
+  return template.rating_sum / template.rating_count;
 }
 
-function TemplateCard({
-  template,
-  onFork,
-  forking,
+function TemplateSummary({
+  title,
+  category,
+  subcategory,
+  description,
+  keywords,
+  usageCount,
+  ratingSum,
+  ratingCount,
+  footer,
 }: {
-  template: MarketplaceTemplate;
-  onFork: (id: number) => void;
-  forking: number | null;
+  title: string;
+  category: string;
+  subcategory?: string | null;
+  description: string;
+  keywords: string[];
+  usageCount: number;
+  ratingSum: number;
+  ratingCount: number;
+  footer?: React.ReactNode;
 }) {
+  const rating = averageRating({ rating_sum: ratingSum, rating_count: ratingCount });
   return (
-    <Card className="flex flex-col justify-between">
-      <CardHeader className="pb-2">
+    <Card className="h-full">
+      <CardHeader className="space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-tight">{template.name}</CardTitle>
-          <Badge variant="secondary" className="shrink-0 text-xs">
-            {template.category}
-          </Badge>
+          <CardTitle className="text-base">{title}</CardTitle>
+          <Badge variant="secondary">{category}</Badge>
         </div>
-        {template.subcategory && (
-          <span className="text-xs text-gray-500">{template.subcategory}</span>
-        )}
+        {subcategory && <p className="text-xs text-muted-foreground">{subcategory}</p>}
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-gray-600 line-clamp-2">{template.description}</p>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">{description}</p>
         <div className="flex flex-wrap gap-1">
-          {template.keywords.slice(0, 4).map((kw) => (
-            <Badge key={kw} variant="outline" className="text-xs">
-              {kw}
+          {keywords.slice(0, 5).map((keyword) => (
+            <Badge key={keyword} variant="outline" className="text-xs">
+              {keyword}
             </Badge>
           ))}
         </div>
-        <div className="flex items-center justify-between">
-          <StarRating ratingSum={template.rating_sum} ratingCount={template.rating_count} />
-          <span className="text-xs text-gray-400">{template.usage_count} uses</span>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{usageCount} uses</span>
+          <span>
+            {rating.toFixed(1)} / 5.0 ({ratingCount})
+          </span>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => onFork(template.id)}
-          disabled={forking === template.id}
-        >
-          {forking === template.id ? "Forking..." : "Fork to Library"}
-        </Button>
+        {footer}
       </CardContent>
     </Card>
   );
 }
 
 export default function TemplatesPage() {
-  const [tab, setTab] = useState<TabView>("browse");
-  const [templates, setTemplates] = useState<MarketplaceTemplate[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<TemplateTab>("community");
+  const [marketplaceTemplates, setMarketplaceTemplates] = useState<MarketplaceTemplate[]>([]);
+  const [marketplaceTotal, setMarketplaceTotal] = useState(0);
+  const [myTemplates, setMyTemplates] = useState<ProposalTemplate[]>([]);
+  const [proposalKits, setProposalKits] = useState<ProposalTemplate[]>([]);
+  const [complianceMatrices, setComplianceMatrices] = useState<ProposalTemplate[]>([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  const [forking, setForking] = useState<number | null>(null);
+  const [ratingByTemplate, setRatingByTemplate] = useState<Record<number, number>>({});
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateDescription, setNewTemplateDescription] = useState("");
+  const [newTemplateContent, setNewTemplateContent] = useState("");
+  const [newTemplateCategory, setNewTemplateCategory] = useState("Proposal Structure");
+  const [shareOnCreate, setShareOnCreate] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const fetchBrowse = useCallback(async (q?: string, cat?: string) => {
+  const fetchLibrary = useCallback(async () => {
+    const [library, proposalStructures, compliance] = await Promise.all([
+      templateApi.list(),
+      templateApi.list({ category: "Proposal Structure" }),
+      templateApi.list({ category: "Compliance Matrix" }),
+    ]);
+
+    setMyTemplates(library.filter((template) => !template.is_system));
+    setProposalKits(
+      proposalStructures.sort((a, b) => {
+        const aRank = PROPOSAL_CATEGORIES.indexOf(a.subcategory ?? "");
+        const bRank = PROPOSAL_CATEGORIES.indexOf(b.subcategory ?? "");
+        return (aRank === -1 ? 99 : aRank) - (bRank === -1 ? 99 : bRank);
+      })
+    );
+    setComplianceMatrices(compliance);
+  }, []);
+
+  const fetchCommunity = useCallback(async () => {
+    if (tab === "popular") {
+      const response = await templateMarketplaceApi.popular();
+      setMarketplaceTemplates(response.data);
+      setMarketplaceTotal(response.data.length);
+      return;
+    }
+    const response = await templateMarketplaceApi.browse({
+      q: search || undefined,
+      category: category || undefined,
+      limit: 50,
+      offset: 0,
+    });
+    setMarketplaceTemplates(response.data.items);
+    setMarketplaceTotal(response.data.total);
+  }, [category, search, tab]);
+
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string | number> = { limit: 40, offset: 0 };
-      if (q) params.q = q;
-      if (cat) params.category = cat;
-      const res = await templateMarketplaceApi.browse(params);
-      setTemplates(res.data.items);
-      setTotal(res.data.total);
+      await Promise.all([fetchLibrary(), fetchCommunity()]);
     } catch {
-      setError("Failed to load marketplace templates.");
+      setError("Failed to load templates.");
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const fetchPopular = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await templateMarketplaceApi.popular();
-      setTemplates(res.data);
-      setTotal(res.data.length);
-    } catch {
-      setError("Failed to load popular templates.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  }, [fetchCommunity, fetchLibrary]);
 
   useEffect(() => {
-    if (tab === "browse") {
-      fetchBrowse(search || undefined, category || undefined);
-    } else {
-      fetchPopular();
-    }
-  }, [tab, fetchBrowse, fetchPopular, search, category]);
+    refresh();
+  }, [refresh]);
 
-  const handleFork = async (id: number) => {
-    setForking(id);
+  useEffect(() => {
+    if (tab === "community" || tab === "popular") {
+      fetchCommunity().catch(() => {
+        setError("Failed to load community templates.");
+      });
+    }
+  }, [fetchCommunity, tab]);
+
+  const handleFork = async (templateId: number) => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
     try {
-      await templateMarketplaceApi.fork(id);
-      // Refresh to update counts
-      if (tab === "browse") {
-        await fetchBrowse(search || undefined, category || undefined);
-      } else {
-        await fetchPopular();
-      }
+      await templateMarketplaceApi.fork(templateId);
+      setSuccess("Template forked to your library.");
+      await refresh();
     } catch {
       setError("Failed to fork template.");
     } finally {
-      setForking(null);
+      setSaving(false);
     }
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchBrowse(search || undefined, category || undefined);
+  const handleRate = async (templateId: number) => {
+    const rating = ratingByTemplate[templateId];
+    if (!rating) return;
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await templateMarketplaceApi.rate(templateId, { rating });
+      setSuccess("Template rating submitted.");
+      await fetchCommunity();
+    } catch {
+      setError("Failed to submit template rating.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const categories = [
-    "Past Performance",
-    "Technical",
-    "Quality",
-    "Personnel",
-    "Security",
-  ];
+  const handlePublish = async (templateId: number) => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await templateMarketplaceApi.publish(templateId);
+      setSuccess("Template shared with the community marketplace.");
+      await refresh();
+    } catch {
+      setError("Failed to publish template.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newTemplateName.trim() || !newTemplateDescription.trim() || !newTemplateContent.trim()) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const created = await templateApi.create({
+        name: newTemplateName.trim(),
+        category: newTemplateCategory,
+        description: newTemplateDescription.trim(),
+        template_text: newTemplateContent.trim(),
+        keywords: newTemplateCategory === "Compliance Matrix"
+          ? ["community", "compliance-matrix"]
+          : ["community", "proposal-structure"],
+      });
+      if (shareOnCreate) {
+        await templateMarketplaceApi.publish(created.id);
+      }
+      setNewTemplateName("");
+      setNewTemplateDescription("");
+      setNewTemplateContent("");
+      setSuccess(
+        shareOnCreate
+          ? "Template created and shared to community."
+          : "Template created in your private library."
+      );
+      await refresh();
+    } catch {
+      setError("Failed to create template.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const proposalGroups = useMemo(() => {
+    return PROPOSAL_CATEGORIES.map((group) => ({
+      group,
+      templates: proposalKits.filter((template) => template.subcategory === group),
+    })).filter((item) => item.templates.length > 0);
+  }, [proposalKits]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <Header
         title="Template Marketplace"
-        description="Browse, fork, and rate community templates for your proposals."
+        description="Discover vertical proposal kits, compliance matrices, and community-shared templates."
       />
 
-      {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
-          variant={tab === "browse" ? "default" : "outline"}
           size="sm"
-          onClick={() => setTab("browse")}
+          variant={tab === "community" ? "default" : "outline"}
+          onClick={() => setTab("community")}
         >
-          Browse
+          Community
         </Button>
         <Button
-          variant={tab === "popular" ? "default" : "outline"}
           size="sm"
+          variant={tab === "popular" ? "default" : "outline"}
           onClick={() => setTab("popular")}
         >
           Popular
         </Button>
+        <Button
+          size="sm"
+          variant={tab === "proposal-kits" ? "default" : "outline"}
+          onClick={() => setTab("proposal-kits")}
+        >
+          Proposal Kits
+        </Button>
+        <Button
+          size="sm"
+          variant={tab === "compliance-matrices" ? "default" : "outline"}
+          onClick={() => setTab("compliance-matrices")}
+        >
+          Compliance Matrices
+        </Button>
+        <Button
+          size="sm"
+          variant={tab === "my-library" ? "default" : "outline"}
+          onClick={() => setTab("my-library")}
+        >
+          My Library
+        </Button>
       </div>
 
-      {/* Search & Filter (browse tab only) */}
-      {tab === "browse" && (
-        <form onSubmit={handleSearch} className="flex flex-wrap gap-3">
+      {(tab === "community" || tab === "popular") && (
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
-            placeholder="Search templates..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search community templates..."
+            className="w-72 rounded-md border border-border px-3 py-2 text-sm"
           />
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            onChange={(event) => setCategory(event.target.value)}
+            className="rounded-md border border-border px-3 py-2 text-sm"
           >
-            <option value="">All Categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            <option value="">All categories</option>
+            {COMMUNITY_FILTERS.map((item) => (
+              <option key={item} value={item}>
+                {item}
               </option>
             ))}
           </select>
-          <Button type="submit" size="sm">
-            Search
+          <Button size="sm" onClick={() => fetchCommunity()}>
+            Refresh Community
           </Button>
-        </form>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      )}
-
-      {/* Loading */}
-      {loading && (
-        <div className="py-12 text-center text-gray-500">Loading templates...</div>
-      )}
-
-      {/* Results */}
-      {!loading && templates.length === 0 && (
-        <div className="py-12 text-center text-gray-500">
-          No templates found. Try adjusting your search.
         </div>
       )}
 
-      {!loading && templates.length > 0 && (
+      {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+      {success && (
+        <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{success}</div>
+      )}
+
+      {loading ? (
+        <div className="py-12 text-center text-muted-foreground">Loading templates...</div>
+      ) : null}
+
+      {!loading && (tab === "community" || tab === "popular") && (
         <>
-          <p className="text-sm text-gray-500">{total} template{total !== 1 ? "s" : ""} found</p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t) => (
-              <TemplateCard key={t.id} template={t} onFork={handleFork} forking={forking} />
+          <p className="text-sm text-muted-foreground">
+            {marketplaceTotal} community template{marketplaceTotal === 1 ? "" : "s"} found
+          </p>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {marketplaceTemplates.map((template) => (
+              <TemplateSummary
+                key={template.id}
+                title={template.name}
+                category={template.category}
+                subcategory={template.subcategory}
+                description={template.description}
+                keywords={template.keywords}
+                usageCount={template.usage_count}
+                ratingSum={template.rating_sum}
+                ratingCount={template.rating_count}
+                footer={
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="w-full rounded-md border border-border px-2 py-1 text-xs"
+                        value={ratingByTemplate[template.id] ?? ""}
+                        onChange={(event) =>
+                          setRatingByTemplate((prev) => ({
+                            ...prev,
+                            [template.id]: Number(event.target.value),
+                          }))
+                        }
+                      >
+                        <option value="">Rate...</option>
+                        {[1, 2, 3, 4, 5].map((value) => (
+                          <option key={value} value={value}>
+                            {value} star{value === 1 ? "" : "s"}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRate(template.id)}
+                        disabled={saving || !ratingByTemplate[template.id]}
+                      >
+                        Rate
+                      </Button>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleFork(template.id)}
+                      disabled={saving}
+                      className="w-full"
+                    >
+                      Fork to Library
+                    </Button>
+                  </div>
+                }
+              />
             ))}
           </div>
+          {marketplaceTemplates.length === 0 && (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              No community templates match your filters.
+            </div>
+          )}
         </>
+      )}
+
+      {!loading && tab === "proposal-kits" && (
+        <div className="space-y-5">
+          {proposalGroups.map((group) => (
+            <section key={group.group} className="space-y-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                {group.group}
+              </h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {group.templates.map((template) => (
+                  <TemplateSummary
+                    key={template.id}
+                    title={template.name}
+                    category={template.category}
+                    subcategory={template.subcategory}
+                    description={template.description}
+                    keywords={template.keywords}
+                    usageCount={template.usage_count}
+                    ratingSum={template.rating_sum}
+                    ratingCount={template.rating_count}
+                    footer={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleFork(template.id)}
+                        disabled={saving}
+                        className="w-full"
+                      >
+                        Fork Proposal Kit
+                      </Button>
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
+      {!loading && tab === "compliance-matrices" && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {complianceMatrices.map((template) => (
+            <TemplateSummary
+              key={template.id}
+              title={template.name}
+              category={template.category}
+              subcategory={template.subcategory}
+              description={template.description}
+              keywords={template.keywords}
+              usageCount={template.usage_count}
+              ratingSum={template.rating_sum}
+              ratingCount={template.rating_count}
+              footer={
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleFork(template.id)}
+                  disabled={saving}
+                  className="w-full"
+                >
+                  Fork Compliance Matrix
+                </Button>
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {!loading && tab === "my-library" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Create Community Template</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-3" onSubmit={handleCreate}>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <input
+                    value={newTemplateName}
+                    onChange={(event) => setNewTemplateName(event.target.value)}
+                    placeholder="Template name"
+                    className="rounded-md border border-border px-3 py-2 text-sm"
+                    required
+                  />
+                  <select
+                    value={newTemplateCategory}
+                    onChange={(event) => setNewTemplateCategory(event.target.value)}
+                    className="rounded-md border border-border px-3 py-2 text-sm"
+                  >
+                    <option value="Proposal Structure">Proposal Structure</option>
+                    <option value="Compliance Matrix">Compliance Matrix</option>
+                    <option value="Technical">Technical</option>
+                    <option value="Past Performance">Past Performance</option>
+                  </select>
+                </div>
+                <input
+                  value={newTemplateDescription}
+                  onChange={(event) => setNewTemplateDescription(event.target.value)}
+                  placeholder="Short description"
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                  required
+                />
+                <textarea
+                  value={newTemplateContent}
+                  onChange={(event) => setNewTemplateContent(event.target.value)}
+                  placeholder="Template content"
+                  className="min-h-28 w-full rounded-md border border-border px-3 py-2 text-sm"
+                  required
+                />
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={shareOnCreate}
+                    onChange={(event) => setShareOnCreate(event.target.checked)}
+                  />
+                  Share to community after creation
+                </label>
+                <Button type="submit" disabled={saving}>
+                  Create Template
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {myTemplates.map((template) => (
+              <TemplateSummary
+                key={template.id}
+                title={template.name}
+                category={template.category}
+                subcategory={template.subcategory}
+                description={template.description}
+                keywords={template.keywords}
+                usageCount={template.usage_count}
+                ratingSum={template.rating_sum}
+                ratingCount={template.rating_count}
+                footer={
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      {template.is_public ? "Shared to community" : "Private to your workspace"}
+                    </p>
+                    {!template.is_public && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePublish(template.id)}
+                        disabled={saving}
+                        className="w-full"
+                      >
+                        Share to Community
+                      </Button>
+                    )}
+                  </div>
+                }
+              />
+            ))}
+          </div>
+          {myTemplates.length === 0 && (
+            <div className="rounded-md border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              No private templates yet. Fork a community template or create one above.
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

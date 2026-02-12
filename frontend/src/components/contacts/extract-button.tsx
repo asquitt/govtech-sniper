@@ -2,9 +2,9 @@
 
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Plus, Loader2, X } from "lucide-react";
+import { Sparkles, Loader2, X } from "lucide-react";
 import { contactApi } from "@/lib/api";
-import type { ExtractedContact, OpportunityContact } from "@/types";
+import type { ExtractedContact } from "@/types";
 
 interface ExtractButtonProps {
   onContactsSaved: () => void;
@@ -14,7 +14,6 @@ export function ExtractButton({ onContactsSaved }: ExtractButtonProps) {
   const [open, setOpen] = useState(false);
   const [rfpId, setRfpId] = useState("");
   const [extracting, setExtracting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [results, setResults] = useState<ExtractedContact[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +27,7 @@ export function ExtractButton({ onContactsSaved }: ExtractButtonProps) {
     try {
       const extracted = await contactApi.extract(id);
       setResults(extracted);
+      onContactsSaved();
       if (extracted.length === 0) {
         setError("No contacts found in this RFP.");
       }
@@ -35,53 +35,6 @@ export function ExtractButton({ onContactsSaved }: ExtractButtonProps) {
       setError("Failed to extract contacts. Check the RFP ID and try again.");
     } finally {
       setExtracting(false);
-    }
-  };
-
-  const handleSaveContact = async (contact: ExtractedContact) => {
-    setSaving(true);
-    try {
-      await contactApi.create({
-        name: contact.name,
-        title: contact.title ?? undefined,
-        email: contact.email ?? undefined,
-        phone: contact.phone ?? undefined,
-        agency: contact.agency ?? undefined,
-        role: contact.role ?? undefined,
-        rfp_id: parseInt(rfpId, 10) || undefined,
-        source: "ai_extracted",
-      } as Partial<OpportunityContact>);
-      setResults((prev) => prev.filter((c) => c.name !== contact.name));
-      onContactsSaved();
-    } catch {
-      setError("Failed to save contact.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveAll = async () => {
-    setSaving(true);
-    try {
-      for (const contact of results) {
-        await contactApi.create({
-          name: contact.name,
-          title: contact.title ?? undefined,
-          email: contact.email ?? undefined,
-          phone: contact.phone ?? undefined,
-          agency: contact.agency ?? undefined,
-          role: contact.role ?? undefined,
-          rfp_id: parseInt(rfpId, 10) || undefined,
-          source: "ai_extracted",
-        } as Partial<OpportunityContact>);
-      }
-      setResults([]);
-      onContactsSaved();
-      setOpen(false);
-    } catch {
-      setError("Failed to save some contacts.");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -97,7 +50,13 @@ export function ExtractButton({ onContactsSaved }: ExtractButtonProps) {
           <div className="bg-card border rounded-xl shadow-lg w-full max-w-lg mx-4 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">AI Contact Extraction</h3>
-              <Button variant="ghost" size="icon" onClick={() => setOpen(false)} className="h-8 w-8">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setOpen(false)}
+                className="h-8 w-8"
+                aria-label="Close extraction modal"
+              >
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -119,21 +78,18 @@ export function ExtractButton({ onContactsSaved }: ExtractButtonProps) {
 
             {results.length > 0 && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="space-y-1">
                   <span className="text-sm font-medium">
-                    {results.length} contact{results.length !== 1 ? "s" : ""} found
+                    {results.length} contact{results.length !== 1 ? "s" : ""} extracted
                   </span>
-                  <Button size="sm" onClick={handleSaveAll} disabled={saving}>
-                    {saving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
-                    Save All
-                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Extracted contacts are linked automatically to this opportunity and agency
+                    directory.
+                  </p>
                 </div>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {results.map((c, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                    >
+                    <div key={i} className="p-3 rounded-lg border bg-card">
                       <div>
                         <div className="font-medium text-sm">{c.name}</div>
                         <div className="text-xs text-muted-foreground">
@@ -143,15 +99,6 @@ export function ExtractButton({ onContactsSaved }: ExtractButtonProps) {
                           <div className="text-xs text-muted-foreground">{c.email}</div>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleSaveContact(c)}
-                        disabled={saving}
-                        className="h-8 w-8"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
                     </div>
                   ))}
                 </div>

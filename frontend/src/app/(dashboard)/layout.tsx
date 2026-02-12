@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
+import { GlobalSearch } from "@/components/layout/global-search";
+import { SupportChatWidget } from "@/components/support/support-chat-widget";
 import { cn } from "@/lib/utils";
 import { useRequireAuth } from "@/contexts/auth-context";
 import { Loader2 } from "lucide-react";
@@ -38,7 +40,8 @@ export default function DashboardLayout({
       >
         {children}
       </main>
+      <GlobalSearch />
+      <SupportChatWidget />
     </div>
   );
 }
-

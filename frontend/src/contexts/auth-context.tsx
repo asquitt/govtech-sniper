@@ -18,13 +18,13 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, redirectTo?: string) => Promise<void>;
   register: (data: {
     email: string;
     password: string;
     full_name: string;
     company_name?: string;
-  }) => Promise<void>;
+  }, redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -62,10 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
   }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, redirectTo?: string) => {
     await authApi.login(email, password);
     await refreshUser();
-    router.push("/opportunities");
+    const safeRedirect = redirectTo?.startsWith("/") ? redirectTo : "/opportunities";
+    router.push(safeRedirect);
   };
 
   const register = async (data: {
@@ -73,10 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string;
     full_name: string;
     company_name?: string;
-  }) => {
+  }, redirectTo?: string) => {
     await authApi.register(data);
     await refreshUser();
-    router.push("/opportunities");
+    const safeRedirect = redirectTo?.startsWith("/") ? redirectTo : "/opportunities";
+    router.push(safeRedirect);
   };
 
   const logout = async () => {
@@ -121,7 +123,11 @@ export function useRequireAuth() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push("/login");
+      const nextPath =
+        typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : "/opportunities";
+      router.push(`/login?next=${encodeURIComponent(nextPath)}`);
     }
   }, [isAuthenticated, isLoading, router]);
 

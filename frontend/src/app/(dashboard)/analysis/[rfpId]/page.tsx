@@ -24,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ComplianceMatrix } from "@/components/analysis/compliance-matrix";
 import { DraftPreview } from "@/components/analysis/draft-preview";
 import { rfpApi, analysisApi, draftApi, exportApi } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api/error";
 import type { ComplianceRequirement, GeneratedContent, RFP } from "@/types";
 
 export default function AnalysisPage() {
@@ -211,7 +212,7 @@ export default function AnalysisPage() {
           await refreshGeneratedResult();
         } else if (status.status === "failed") {
           completed = true;
-          setActionError("Generation failed. Please try again.");
+          setActionError(status.error || "Generation failed. Please try again.");
         }
       }
       if (!completed) {
@@ -219,7 +220,9 @@ export default function AnalysisPage() {
       }
     } catch (err) {
       console.error("Generation failed:", err);
-      setActionError("Failed to generate content. Please try again.");
+      setActionError(
+        getApiErrorMessage(err, "Failed to generate content. Please try again.")
+      );
     } finally {
       setIsGenerating(false);
       setGeneratingId(undefined);

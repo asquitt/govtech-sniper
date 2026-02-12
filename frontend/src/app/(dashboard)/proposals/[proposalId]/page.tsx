@@ -14,6 +14,8 @@ import { WordAssistantPanel } from "./_components/word-assistant-panel";
 import { GraphicsPanel } from "./_components/graphics-panel";
 import { SubmissionPanel } from "./_components/submission-panel";
 import { CompliancePanel } from "./_components/compliance-panel";
+import { CollaborationContextPanel } from "./_components/collaboration-context-panel";
+import { SharePointExportDialog } from "@/components/integrations/sharepoint-export-dialog";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
 import type {
   Proposal,
@@ -24,7 +26,16 @@ import type {
   WordAddinSession,
   WordAddinEvent,
   ProposalGraphicRequest,
+  GeneratedGraphic,
+  GraphicTemplateInfo,
 } from "@/types";
+
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
 
 export default function ProposalWorkspacePage() {
   const params = useParams();
@@ -51,12 +62,17 @@ export default function ProposalWorkspacePage() {
   const [graphicsDescription, setGraphicsDescription] = useState("");
   const [graphicsSectionId, setGraphicsSectionId] = useState<number | null>(null);
   const [graphicsDueDate, setGraphicsDueDate] = useState("");
+  const [graphicTemplates, setGraphicTemplates] = useState<GraphicTemplateInfo[]>([]);
+  const [graphicTemplateType, setGraphicTemplateType] = useState("");
+  const [generatedGraphic, setGeneratedGraphic] = useState<GeneratedGraphic | null>(null);
+  const [isGeneratingGraphic, setIsGeneratingGraphic] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
   const [citationText, setCitationText] = useState("");
   const [notesText, setNotesText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSharePointExport, setShowSharePointExport] = useState(false);
 
   const selectedSection = useMemo(
     () => sections.find((section) => section.id === selectedSectionId) || null,
@@ -67,13 +83,14 @@ export default function ProposalWorkspacePage() {
     try {
       setIsLoading(true);
       setError(null);
-      const [proposalData, sectionData, packageData, docs, sessions, graphics] = await Promise.all([
+      const [proposalData, sectionData, packageData, docs, sessions, graphics, templates] = await Promise.all([
         draftApi.getProposal(proposalId),
         draftApi.listSections(proposalId),
         draftApi.listSubmissionPackages(proposalId),
         documentApi.list({ ready_only: true }),
         wordAddinApi.listSessions({ proposal_id: proposalId }),
         graphicsApi.listRequests({ proposal_id: proposalId }),
+        graphicsApi.listTemplates(),
       ]);
 
       setProposal(proposalData);
@@ -82,6 +99,7 @@ export default function ProposalWorkspacePage() {
       setDocuments(docs);
       setWordSessions(sessions);
       setGraphicsRequests(graphics);
+      setGraphicTemplates(templates);
 
       setSelectedSectionId((current) =>
         current ?? (sectionData.length > 0 ? sectionData[0].id : null)
@@ -286,6 +304,7 @@ export default function ProposalWorkspacePage() {
       setGraphicsDescription("");
       setGraphicsSectionId(null);
       setGraphicsDueDate("");
+      setGeneratedGraphic(null);
     } catch (err) {
       console.error("Failed to create graphics request", err);
       setError("Failed to create graphics request.");
@@ -314,6 +333,62 @@ export default function ProposalWorkspacePage() {
     } catch (err) {
       console.error("Failed to remove graphics request", err);
       setError("Failed to remove graphics request.");
+    }
+  };
+
+  const handleGenerateGraphic = async () => {
+    if (!graphicTemplateType || !graphicsDescription.trim()) return;
+    try {
+      setIsGeneratingGraphic(true);
+      const generated = await graphicsApi.generateGraphic({
+        content: graphicsDescription,
+        template_type: graphicTemplateType,
+        title: graphicsTitle || undefined,
+      });
+      setGeneratedGraphic(generated);
+    } catch (err) {
+      console.error("Failed to generate graphic", err);
+      setError("Failed to generate graphic.");
+    } finally {
+      setIsGeneratingGraphic(false);
+    }
+  };
+
+  const handleInsertGeneratedGraphic = async () => {
+    if (!generatedGraphic) return;
+    const targetSectionId = graphicsSectionId ?? selectedSection?.id ?? null;
+    if (!targetSectionId) {
+      setError("Select a section before inserting a graphic.");
+      return;
+    }
+
+    const targetSection = sections.find((item) => item.id === targetSectionId);
+    if (!targetSection) {
+      setError("Selected section was not found.");
+      return;
+    }
+
+    const existing = targetSection.final_content || targetSection.generated_content?.clean_text || "";
+    const title = generatedGraphic.title || graphicsTitle || "Generated Graphic";
+    const graphicBlock = [
+      `<h4>Graphic: ${title}</h4>`,
+      `<pre><code class=\"language-mermaid\">${escapeHtml(generatedGraphic.mermaid_code)}</code></pre>`,
+    ].join("");
+    const nextContent = `${existing}${existing ? "<p></p>" : ""}${graphicBlock}`;
+
+    try {
+      const updated = await draftApi.updateSection(targetSectionId, {
+        final_content: nextContent,
+      });
+      setSections((prev) =>
+        prev.map((item) => (item.id === updated.id ? updated : item))
+      );
+      if (selectedSectionId === targetSectionId) {
+        setEditorContent(nextContent);
+      }
+    } catch (err) {
+      console.error("Failed to insert generated graphic", err);
+      setError("Failed to insert generated graphic.");
     }
   };
 
@@ -396,9 +471,22 @@ export default function ProposalWorkspacePage() {
             <Button variant="outline" onClick={() => handleExport("pdf")}>
               Export PDF
             </Button>
+            <Button variant="outline" onClick={() => setShowSharePointExport((prev) => !prev)}>
+              SharePoint Export
+            </Button>
           </div>
         }
       />
+
+      {showSharePointExport && (
+        <div className="px-6 pt-4">
+          <SharePointExportDialog
+            proposalId={proposalId}
+            proposalTitle={proposal.title}
+            onClose={() => setShowSharePointExport(false)}
+          />
+        </div>
+      )}
 
       <div className="flex-1 p-6 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
@@ -475,6 +563,18 @@ export default function ProposalWorkspacePage() {
               onCreateRequest={handleCreateGraphicsRequest}
               onUpdateStatus={handleUpdateGraphicsStatus}
               onRemoveRequest={handleRemoveGraphicsRequest}
+              templates={graphicTemplates}
+              selectedTemplate={graphicTemplateType}
+              onTemplateChange={setGraphicTemplateType}
+              onGenerateGraphic={handleGenerateGraphic}
+              generatedGraphic={generatedGraphic}
+              isGenerating={isGeneratingGraphic}
+              onInsertGeneratedGraphic={handleInsertGeneratedGraphic}
+            />
+
+            <CollaborationContextPanel
+              proposalId={proposalId}
+              selectedSectionId={selectedSectionId}
             />
 
             <CompliancePanel
