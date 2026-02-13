@@ -53,5 +53,32 @@ services:
     expose:
       - "3000"
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: rfp_sniper_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - rfp_network
+
 volumes:
   uploads:
+  caddy_data:
+  caddy_config:
