@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.models.email_ingest import ProcessingStatus
+from app.models.email_ingest import EmailProcessingStatus
 
 
 class EmailIngestConfigCreate(BaseModel):
@@ -51,7 +51,7 @@ class IngestedEmailRead(BaseModel):
     subject: str
     sender: str
     received_at: datetime
-    processing_status: ProcessingStatus
+    processing_status: EmailProcessingStatus
     created_rfp_id: int | None
     error_message: str | None
     created_at: datetime

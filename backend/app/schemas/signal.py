@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.models.market_signal import DigestFrequency, SignalType
 
@@ -15,6 +15,14 @@ class SignalCreate(BaseModel):
     source_url: str | None = None
     relevance_score: float = 0.0
     published_at: datetime | None = None
+
+    @field_validator("published_at", mode="after")
+    @classmethod
+    def strip_timezone(cls, v: datetime | None) -> datetime | None:
+        """DB uses TIMESTAMP WITHOUT TIME ZONE — normalize to naive UTC."""
+        if v is not None and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
 
 
 class SignalRead(BaseModel):

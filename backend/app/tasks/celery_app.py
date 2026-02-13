@@ -6,7 +6,7 @@ RFP Sniper - Celery Application Configuration
 import structlog
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import task_postrun, task_prerun
+from celery.signals import before_task_publish, task_postrun, task_prerun
 from kombu import Queue
 
 from app.config import settings
@@ -125,31 +125,14 @@ logger = structlog.get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-@celery_app.on_after_configure.connect
-def setup_correlation_headers(sender, **kwargs):
+@before_task_publish.connect
+def inject_correlation_id(headers=None, **kwargs):
     """Inject correlation_id into task message headers at publish time."""
-
-    def before_publish(headers=None, **kw):
-        if headers is not None:
-            ctx = structlog.contextvars.get_contextvars()
-            cid = ctx.get("correlation_id")
-            if cid:
-                headers["correlation_id"] = cid
-
-    from celery.app.amqp import AMQP
-
-    original_send = AMQP.send_task_message
-
-    def patched_send(self, producer, name, message, *args, **kwargs):
+    if headers is not None:
         ctx = structlog.contextvars.get_contextvars()
         cid = ctx.get("correlation_id")
         if cid:
-            headers = message.get("headers") or {}
             headers["correlation_id"] = cid
-            message["headers"] = headers
-        return original_send(self, producer, name, message, *args, **kwargs)
-
-    AMQP.send_task_message = patched_send
 
 
 @task_prerun.connect

@@ -9,7 +9,7 @@ from sqlmodel import select
 
 from app.api.deps import get_current_user
 from app.database import get_session
-from app.models.email_ingest import EmailIngestConfig, IngestedEmail, ProcessingStatus
+from app.models.email_ingest import EmailIngestConfig, EmailProcessingStatus, IngestedEmail
 from app.schemas.email_ingest import (
     EmailIngestConfigCreate,
     EmailIngestConfigRead,
@@ -135,7 +135,7 @@ async def test_connection(
 @router.get("/history", response_model=EmailIngestListResponse)
 async def list_history(
     config_id: int | None = None,
-    status: ProcessingStatus | None = None,
+    status: EmailProcessingStatus | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: UserAuth = Depends(get_current_user),
@@ -195,7 +195,7 @@ async def reprocess_email(
         raise HTTPException(status_code=403, detail="Not authorized")
 
     # Reset status to pending for reprocessing
-    email.processing_status = ProcessingStatus.PENDING
+    email.processing_status = EmailProcessingStatus.PENDING
     email.error_message = None
     await session.commit()
     await session.refresh(email)

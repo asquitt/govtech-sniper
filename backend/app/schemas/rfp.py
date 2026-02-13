@@ -7,7 +7,7 @@ Request/Response models for RFP endpoints.
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.models.rfp import ImportanceLevel, RequirementStatus, RFPStatus, RFPType
 
@@ -122,6 +122,15 @@ class RFPCreate(BaseModel):
     set_aside: str | None = Field(default=None, max_length=100)
     posted_date: datetime | None = None
     response_deadline: datetime | None = None
+
+    @field_validator("posted_date", "response_deadline", mode="after")
+    @classmethod
+    def strip_timezone(cls, v: datetime | None) -> datetime | None:
+        """DB uses TIMESTAMP WITHOUT TIME ZONE — normalize to naive UTC."""
+        if v is not None and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
+
     source_url: str | None = None
     description: str | None = None
     estimated_value: int | None = None

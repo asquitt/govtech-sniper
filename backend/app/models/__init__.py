@@ -63,8 +63,7 @@ from app.models.contract import (
     ModType,
 )
 from app.models.dash import DashMessage, DashRole, DashSession
-from app.models.email_ingest import EmailIngestConfig, IngestedEmail
-from app.models.email_ingest import ProcessingStatus as EmailProcessingStatus
+from app.models.email_ingest import EmailIngestConfig, EmailProcessingStatus, IngestedEmail
 from app.models.embedding import DocumentEmbedding
 from app.models.event import EventType, IndustryEvent
 from app.models.forecast import ForecastAlert, ForecastSource, ProcurementForecast

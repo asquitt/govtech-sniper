@@ -6,7 +6,7 @@ from enum import Enum
 from sqlmodel import Column, Field, SQLModel, Text
 
 
-class ProcessingStatus(str, Enum):
+class EmailProcessingStatus(str, Enum):
     PENDING = "pending"
     PROCESSED = "processed"
     IGNORED = "ignored"
@@ -39,7 +39,9 @@ class IngestedEmail(SQLModel, table=True):
     sender: str = Field(max_length=255)
     received_at: datetime = Field(default_factory=datetime.utcnow)
     body_text: str | None = Field(default=None, sa_column=Column(Text))
-    processing_status: ProcessingStatus = Field(default=ProcessingStatus.PENDING, index=True)
+    processing_status: EmailProcessingStatus = Field(
+        default=EmailProcessingStatus.PENDING, index=True
+    )
     created_rfp_id: int | None = Field(default=None, foreign_key="rfps.id", nullable=True)
     error_message: str | None = Field(default=None, sa_column=Column(Text))
     created_at: datetime = Field(default_factory=datetime.utcnow)

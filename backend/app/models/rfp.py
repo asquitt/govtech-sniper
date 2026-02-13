@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import UniqueConstraint
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel, Text
 
@@ -106,6 +106,14 @@ class RFPBase(SQLModel):
     # Dates
     posted_date: datetime | None = None
     response_deadline: datetime | None = None
+
+    @field_validator("posted_date", "response_deadline", mode="after")
+    @classmethod
+    def strip_timezone(cls, v: datetime | None) -> datetime | None:
+        """DB uses TIMESTAMP WITHOUT TIME ZONE — normalize to naive UTC."""
+        if v is not None and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
 
     # Links
     source_url: str | None = Field(default=None, max_length=1000)

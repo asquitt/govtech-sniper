@@ -3,6 +3,7 @@
 from datetime import datetime
 from enum import Enum
 
+from pydantic import field_validator
 from sqlmodel import JSON, Column, Field, SQLModel, Text
 
 
@@ -32,6 +33,15 @@ class MarketSignal(SQLModel, table=True):
     relevance_score: float = Field(default=0.0)
     published_at: datetime | None = None
     is_read: bool = Field(default=False)
+
+    @field_validator("published_at", mode="after")
+    @classmethod
+    def strip_timezone(cls, v: datetime | None) -> datetime | None:
+        """DB uses TIMESTAMP WITHOUT TIME ZONE — normalize to naive UTC."""
+        if v is not None and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
