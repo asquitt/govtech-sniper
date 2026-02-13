@@ -51,6 +51,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Lint frontend
         run: npm run lint
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high || true
       - name: Run frontend tests
         run: |
           timeout 120 npm run test:run && EXIT_CODE=0 || EXIT_CODE=$?
@@ -63,7 +65,6 @@ jobs:
 
   security-scan:
     runs-on: ubuntu-latest
-    continue-on-error: true
     defaults:
       run:
         working-directory: backend
@@ -83,7 +84,7 @@ jobs:
       - name: Python dependency vulnerability scan (pip-audit)
         run: pip-audit --require-hashes || true
       - name: Python SAST scan (bandit)
-        run: bandit -r app/ -c pyproject.toml -f json --exit-zero -o bandit-report.json
+        run: bandit -r app/ -f json -o bandit-report.json -ll
       - name: Display bandit results
         run: |
           if [ -f bandit-report.json ]; then

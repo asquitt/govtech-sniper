@@ -126,57 +126,48 @@ async def get_current_user_with_profile(
 # =============================================================================
 
 
-class RateLimiter:
+class RedisRateLimiter:
     """
-    Simple in-memory rate limiter.
-    For production, use Redis-based rate limiting.
+    Redis-backed rate limiter using INCR + EXPIRE pattern.
+    Supports horizontal scaling — all instances share state via Redis.
+    Fails open if Redis is unavailable (availability over strictness).
     """
 
-    def __init__(self):
-        self.requests: dict[str, list[datetime]] = {}
+    def __init__(self, redis_url: str) -> None:
+        self._redis_url = redis_url
+        self._redis = None
 
-    def is_allowed(
+    async def _get_redis(self):
+        if self._redis is None:
+            import redis.asyncio as aioredis
+
+            self._redis = aioredis.from_url(
+                self._redis_url, decode_responses=True, socket_connect_timeout=1
+            )
+        return self._redis
+
+    async def is_allowed(
         self,
         key: str,
         max_requests: int,
         window_seconds: int,
     ) -> tuple[bool, int]:
-        """
-        Check if request is allowed under rate limit.
-
-        Args:
-            key: Unique identifier (user_id, IP, etc.)
-            max_requests: Maximum requests in window
-            window_seconds: Time window in seconds
-
-        Returns:
-            Tuple of (is_allowed, remaining_requests)
-        """
-        now = datetime.utcnow()
-        window_start = now.timestamp() - window_seconds
-
-        # Get existing requests for this key
-        if key not in self.requests:
-            self.requests[key] = []
-
-        # Filter to only requests within window
-        self.requests[key] = [req for req in self.requests[key] if req.timestamp() > window_start]
-
-        # Check if under limit
-        current_count = len(self.requests[key])
-        remaining = max_requests - current_count
-
-        if current_count >= max_requests:
-            return False, 0
-
-        # Add this request
-        self.requests[key].append(now)
-
-        return True, remaining - 1
+        try:
+            r = await self._get_redis()
+            redis_key = f"rate:{key}"
+            current = await r.incr(redis_key)
+            if current == 1:
+                await r.expire(redis_key, window_seconds)
+            remaining = max(0, max_requests - current)
+            return current <= max_requests, remaining
+        except Exception:
+            # Fail open — allow request if Redis is down
+            logger.warning("rate_limiter_redis_unavailable", key=key)
+            return True, max_requests
 
 
 # Global rate limiter instance
-rate_limiter = RateLimiter()
+rate_limiter = RedisRateLimiter(settings.redis_url)
 
 
 async def check_rate_limit(
@@ -210,7 +201,7 @@ async def check_rate_limit(
         key = f"ip:{client_ip}:{request.url.path}"
         max_requests = 200 if settings.debug else 50
 
-    is_allowed, remaining = rate_limiter.is_allowed(
+    is_allowed, remaining = await rate_limiter.is_allowed(
         key=key,
         max_requests=max_requests,
         window_seconds=3600,  # 1 hour

@@ -3,8 +3,10 @@ RFP Sniper - Celery Application Configuration
 ==============================================
 """
 
+import structlog
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import task_postrun, task_prerun
 from kombu import Queue
 
 from app.config import settings
@@ -108,3 +110,62 @@ celery_app.conf.update(
         "app.tasks.document_tasks.*": {"queue": "documents"},
     },
 )
+
+logger = structlog.get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Correlation ID propagation into Celery tasks
+# ---------------------------------------------------------------------------
+# The HTTP middleware (CorrelationIDMiddleware) binds `correlation_id` to
+# structlog contextvars. When a task is dispatched with `.delay()`, Celery
+# automatically copies the current headers dict. We hook into the before_publish
+# signal to inject the correlation_id, then bind it on the worker side via
+# task_prerun.
+# ---------------------------------------------------------------------------
+
+
+@celery_app.on_after_configure.connect
+def setup_correlation_headers(sender, **kwargs):
+    """Inject correlation_id into task message headers at publish time."""
+
+    def before_publish(headers=None, **kw):
+        if headers is not None:
+            ctx = structlog.contextvars.get_contextvars()
+            cid = ctx.get("correlation_id")
+            if cid:
+                headers["correlation_id"] = cid
+
+    from celery.app.amqp import AMQP
+
+    original_send = AMQP.send_task_message
+
+    def patched_send(self, producer, name, message, *args, **kwargs):
+        ctx = structlog.contextvars.get_contextvars()
+        cid = ctx.get("correlation_id")
+        if cid:
+            headers = message.get("headers") or {}
+            headers["correlation_id"] = cid
+            message["headers"] = headers
+        return original_send(self, producer, name, message, *args, **kwargs)
+
+    AMQP.send_task_message = patched_send
+
+
+@task_prerun.connect
+def bind_correlation_id(task_id, task, args, kwargs, **kw):
+    """Bind correlation_id from task headers into structlog context on the worker."""
+    request = task.request
+    cid = getattr(request, "correlation_id", None)
+    if not cid and hasattr(request, "headers") and request.headers:
+        cid = request.headers.get("correlation_id")
+    if cid:
+        structlog.contextvars.bind_contextvars(correlation_id=cid, task_id=task_id)
+    else:
+        structlog.contextvars.bind_contextvars(task_id=task_id)
+
+
+@task_postrun.connect
+def unbind_correlation_id(task_id, task, **kw):
+    """Clean up structlog context after task completes."""
+    structlog.contextvars.unbind_contextvars("correlation_id", "task_id")

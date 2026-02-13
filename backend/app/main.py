@@ -201,6 +201,46 @@ API authentication is handled via JWT tokens. All endpoints (except /health and 
 # =============================================================================
 
 
+class SecurityHeadersMiddleware:
+    """Add security headers to all HTTP responses."""
+
+    def __init__(self, app: ASGIApp, *, debug: bool = False) -> None:
+        self.app = app
+        self.debug = debug
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append((b"x-content-type-options", b"nosniff"))
+                headers.append((b"x-frame-options", b"DENY"))
+                headers.append((b"x-xss-protection", b"1; mode=block"))
+                headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                if not self.debug:
+                    headers.append(
+                        (
+                            b"strict-transport-security",
+                            b"max-age=31536000; includeSubDomains",
+                        )
+                    )
+                headers.append(
+                    (
+                        b"content-security-policy",
+                        b"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                        b" style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;"
+                        b" font-src 'self' data:; connect-src 'self'",
+                    )
+                )
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 class MaxUploadSizeMiddleware:
     """Reject requests whose Content-Length exceeds the configured limit."""
 
@@ -239,6 +279,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security headers on all responses
+app.add_middleware(SecurityHeadersMiddleware, debug=settings.debug)
 
 # Observability middleware stack (order matters - applied in reverse)
 # 1. Metrics collection (innermost)

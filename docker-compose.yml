@@ -24,7 +24,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
-      - SECRET_KEY=${SECRET_KEY:-supersecretkey_change_in_production}
+      - SECRET_KEY=${SECRET_KEY}
       - DEBUG=true
     volumes:
       - ./backend/app:/app/app
@@ -63,14 +63,16 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - ./backend/app:/app/app
       - ./fixtures:/app/fixtures:ro
       - ./uploads:/app/uploads
     depends_on:
-      - api
-      - redis
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 -Q celery,ingest,analysis,generation,documents,periodic,maintenance
     networks:
       - rfp_network
@@ -96,10 +98,12 @@ services:
       - SAM_CIRCUIT_BREAKER_MAX_SECONDS=${SAM_CIRCUIT_BREAKER_MAX_SECONDS:-3600}
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - ./backend/app:/app/app
     depends_on:
-      - celery_worker
+      redis:
+        condition: service_healthy
     command: celery -A app.tasks.celery_app beat --loglevel=info
     networks:
       - rfp_network
@@ -137,6 +141,11 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - rfp_network
 
