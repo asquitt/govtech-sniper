@@ -25,6 +25,9 @@ services:
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
       - SECRET_KEY=${SECRET_KEY}
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM:-Orbitr <notifications@orbitr.io>}
       - DEBUG=true
     volumes:
       - ./backend/app:/app/app
@@ -64,6 +67,9 @@ services:
       - MOCK_AI=${MOCK_AI:-false}
       - MOCK_SAM_GOV=${MOCK_SAM_GOV:-false}
       - SECRET_KEY=${SECRET_KEY}
+      - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM:-Orbitr <notifications@orbitr.io>}
     volumes:
       - ./backend/app:/app/app
       - ./fixtures:/app/fixtures:ro

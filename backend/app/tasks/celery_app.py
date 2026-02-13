@@ -95,6 +95,12 @@ celery_app.conf.update(
             "schedule": crontab(minute=0, hour=7),
             "options": {"queue": "periodic"},
         },
+        # Send deadline reminders at 8 AM UTC daily
+        "send-deadline-reminders": {
+            "task": "app.tasks.maintenance_tasks.send_deadline_reminders",
+            "schedule": crontab(minute=0, hour=8),
+            "options": {"queue": "periodic"},
+        },
         # Watch SharePoint folders for new RFP documents every 15 minutes
         "watch-sharepoint-folders": {
             "task": "app.tasks.sharepoint_sync_tasks.watch_sharepoint_folders",

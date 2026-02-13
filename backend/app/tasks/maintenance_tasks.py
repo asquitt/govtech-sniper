@@ -39,6 +39,21 @@ def purge_audit_events_task() -> dict:
     return {"status": "ok", **result}
 
 
+@celery_app.task(name="app.tasks.maintenance_tasks.send_deadline_reminders")
+def send_deadline_reminders_task() -> dict:
+    """Send deadline reminder emails/notifications for upcoming RFP deadlines."""
+    from app.api.routes.notifications import send_deadline_reminders
+
+    async def _send() -> dict:
+        async with get_celery_session_context() as session:
+            await send_deadline_reminders(session)
+            return {"sent": True}
+
+    result = run_async(_send())
+    logger.info("Deadline reminders complete", **result)
+    return {"status": "ok", **result}
+
+
 @celery_app.task(name="app.tasks.maintenance_tasks.check_operational_alerts")
 def check_operational_alerts() -> dict:
     async def _check() -> dict:

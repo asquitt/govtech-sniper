@@ -365,6 +365,12 @@ async def invite_member(
     if not membership.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Not authorized to invite members")
 
+    # Fetch team for email context
+    team_result = await session.execute(select(Team).where(Team.id == team_id))
+    team = team_result.scalar_one_or_none()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
     # Check if user exists
     user_result = await session.execute(select(User).where(User.email == request.email.lower()))
     existing_user = user_result.scalar_one_or_none()
@@ -411,8 +417,9 @@ async def invite_member(
         session.add(invitation)
         await session.commit()
 
-        # TODO: Send invitation email
-        logger.info("Invitation created", team_id=team_id, email=request.email)
+        # Send invitation email
+        await _send_invitation_email(team, request.email, token)
+        logger.info("Invitation created and emailed", team_id=team_id, email=request.email)
 
         return {
             "message": f"Invitation sent to {request.email}",
@@ -652,3 +659,44 @@ async def resolve_comment(
 
 # Import needed for member count
 from datetime import timedelta
+
+from app.api.routes.notifications import email_service
+from app.config import settings
+
+
+async def _send_invitation_email(team: Team, to_email: str, token: str) -> None:
+    """Send a team invitation email via Resend."""
+    accept_url = f"{settings.app_url}/teams/accept?token={token}"
+
+    subject = f"You've been invited to join {team.name} on Orbitr"
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1a365d; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0;">Orbitr</h1>
+        </div>
+        <div style="padding: 20px;">
+            <h2>Team Invitation</h2>
+            <p>You've been invited to join <strong>{team.name}</strong> on Orbitr.</p>
+            {f"<p>{team.description}</p>" if team.description else ""}
+            <p>
+                <a href="{accept_url}"
+                   style="background: #3182ce; color: white; padding: 12px 24px;
+                          text-decoration: none; border-radius: 5px; display: inline-block;">
+                    Accept Invitation
+                </a>
+            </p>
+            <p style="font-size: 12px; color: #666;">This invitation expires in 7 days.</p>
+        </div>
+        <div style="background: #f7f7f7; padding: 15px; text-align: center; font-size: 12px; color: #666;">
+            <p>Orbitr - Government Proposal Automation</p>
+        </div>
+    </body>
+    </html>
+    """
+    text = (
+        f"You've been invited to join {team.name} on Orbitr.\n\n"
+        f"Accept invitation: {accept_url}\n\n"
+        f"This invitation expires in 7 days."
+    )
+    await email_service.send_email(to_email, subject, html, text)
