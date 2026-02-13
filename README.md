@@ -14,12 +14,14 @@ Government contractors spend weeks responding to a single RFP. GovTech Sniper re
 
 ## Core Capabilities
 
-### SAM.gov Integration
-- Automated opportunity ingestion from the SAM.gov API
+### SAM.gov Integration & Data Ingestion
+- Automated opportunity ingestion from SAM.gov, FPDS, and USAspending
 - Scheduled scanning via Celery Beat for new opportunities
 - NAICS code, set-aside, and keyword filtering
 - Versioned opportunity snapshots with change tracking
 - Attachment downloads with PDF text extraction
+- Email-based RFP ingestion with automatic parsing
+- Configurable data source feeds with health monitoring
 
 ### Qualification Engine ("The Killer Filter")
 - AI-powered screening using Gemini 1.5 Flash
@@ -32,12 +34,17 @@ Government contractors spend weeks responding to a single RFP. GovTech Sniper re
 - Automatic compliance matrix extraction
 - Requirement categorization: Mandatory, Evaluated, Optional
 - Section-level tagging (Technical, Management, Past Performance)
+- Compliance gap identification
 
 ### AI Proposal Writer
 - RAG-powered section generation with Gemini Context Caching
 - Strict citation enforcement: `[[Source: filename.pdf, Page X]]`
 - Knowledge base documents cached for repeated use
 - Per-section generation with word count tracking
+- TipTap rich text editor with real-time collaboration
+- Annotated outline generation from compliance matrix
+- Focus document selection for targeted generation
+- Evidence linking to past performance
 
 ### Citation Engine
 - Automatic source tracking and verification
@@ -45,18 +52,72 @@ Government contractors spend weeks responding to a single RFP. GovTech Sniper re
 - Document usage analytics (times cited, last cited)
 
 ### Capture Management
-- Full capture pipeline tracking from identification to submission
-- Custom fields, win probability scoring, and team assignments
-- Contact and relationship management per opportunity
+- Full capture pipeline from identification to submission
+- AI-powered and manual bid/no-bid scoring with scorecards
+- Gate reviews for stage progression
+- Custom fields and win probability scoring
+- Team assignments and contact management
 - Budget intelligence and competitive landscape tracking
+- Teaming partner directory with NDA tracking and capability gap analysis
+- Pipeline timeline visualization (Gantt charts)
+
+### Contract Management
+- Contract lifecycle tracking with hierarchy support
+- Contract Line Items (CLINs) management
+- Deliverable tracking with status monitoring
+- Modification and change order management
+- Task breakdown and assignment
+- Status report generation
+- CPARS performance data integration
+
+### Color Team Reviews
+- Pink, Red, and Gold team review workflows
+- Reviewer assignment with role-based access
+- Comment tracking with severity levels (Critical, Major, Minor, Suggestion)
+- Compliance checklists with configurable templates
+- Overall scoring and go/no-go decisions
+
+### Collaboration & Workspaces
+- Multi-user shared workspaces with role-based access (Viewer, Contributor, Admin)
+- Workspace invitations and member management
+- Shared data permissions and governance
+- Team inbox for workspace messaging
+- Compliance digest scheduling
+- Real-time updates via WebSocket
+
+### Intelligence & Analytics
+- Market signal tracking and opportunity intelligence
+- Pipeline forecasting with win probability
+- Revenue pipeline visualization and forecasting
+- Competitive benchmarking
+- Win/loss analysis
+- Custom report builder with saved configurations
+- Resource allocation tracking
+
+### Workflow Automation
+- Trigger-based rules (RFP created, stage changed, deadline approaching, score threshold)
+- Configurable conditions and actions
+- Execution history and audit trail
+
+### Notification System
+- Multi-channel delivery: email, in-app, Slack, webhook
+- Deadline reminders and RFP match alerts
+- Team mention and invite notifications
+- Configurable notification preferences
+
+### Word Add-in
+- Real-time sync between Microsoft Word and platform
+- AI-powered content rewriting within Word
+- Session and event tracking for usage analytics
 
 ### Enterprise Features
-- JWT authentication with role-based access control
-- SCIM provisioning and SSO integration
+- JWT authentication with token rotation
+- SCIM provisioning and SSO (Okta, Microsoft Entra ID)
 - Secrets vault with AES-256 encryption
-- Audit logging for compliance
-- Team collaboration with commenting and notifications
+- Comprehensive audit logging
 - API rate limiting by subscription tier
+- Upload size enforcement with configurable limits
+- CORS policy management
 
 ---
 
@@ -65,13 +126,28 @@ Government contractors spend weeks responding to a single RFP. GovTech Sniper re
 | Layer | Technology |
 |-------|------------|
 | Frontend | Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS |
-| UI | Shadcn/ui, Radix Primitives, Lucide Icons |
+| UI | Shadcn/ui, Radix Primitives, TipTap Editor, Lucide Icons |
 | Backend | Python 3.12, FastAPI (async), Pydantic v2 |
 | Database | PostgreSQL 16, SQLModel/SQLAlchemy, Alembic |
 | Queue/Cache | Redis 7, Celery 5.4, Celery Beat |
 | AI | Google Gemini 1.5 Pro/Flash, Context Caching API |
 | Observability | Sentry, Structlog, Prometheus |
 | Infrastructure | Docker, Docker Compose |
+| CI/CD | GitHub Actions (lint, test, security scan, e2e smoke) |
+
+---
+
+## Integrations
+
+| Category | Systems |
+|----------|---------|
+| Government Data | SAM.gov, FPDS, USAspending |
+| Identity & SSO | Okta, Microsoft Entra ID, SCIM |
+| CRM | Salesforce (opportunity sync, field mapping) |
+| Productivity | Microsoft Word (add-in), SharePoint (auto-sync) |
+| Project Management | Unanet |
+| Communication | Slack, Email (SMTP), Webhooks |
+| AI | Google Gemini 1.5 Pro/Flash with Context Caching |
 
 ---
 
@@ -80,16 +156,20 @@ Government contractors spend weeks responding to a single RFP. GovTech Sniper re
 ```
 govtech-sniper/
 ├── docker-compose.yml
+├── .github/workflows/ci.yml
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── config.py
 │   │   ├── database.py
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── tasks/
-│   │   ├── api/routes/
+│   │   ├── models/          # 35+ domain models
+│   │   ├── schemas/         # Pydantic request/response schemas
+│   │   ├── services/        # Business logic layer
+│   │   ├── tasks/           # Celery async tasks
+│   │   ├── api/
+│   │   │   ├── routes/      # 40+ route modules
+│   │   │   ├── deps.py      # Shared dependencies
+│   │   │   └── utils.py     # Generic utilities (get_or_404)
 │   │   └── observability/
 │   ├── alembic/
 │   ├── tests/
@@ -97,16 +177,21 @@ govtech-sniper/
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── app/(dashboard)/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── lib/
-│   │   └── types/
+│   │   ├── app/
+│   │   │   ├── (dashboard)/ # 25+ dashboard pages
+│   │   │   └── word-addin/  # Word add-in standalone UI
+│   │   ├── components/      # 18+ component directories
+│   │   ├── hooks/           # Custom React hooks
+│   │   ├── lib/             # API clients, utilities
+│   │   └── types/           # TypeScript interfaces
 │   ├── Dockerfile
 │   └── package.json
 ├── scripts/
-│   ├── e2e_smoke.py
-│   └── load_test.py
+│   ├── pre-commit           # Git pre-commit hook
+│   ├── e2e_smoke.py         # E2E smoke test suite
+│   ├── run_e2e.sh           # E2E test runner
+│   ├── load_test.py         # Load testing
+│   └── compose_guard.sh     # Docker compose safety checks
 └── uploads/
 ```
 
@@ -169,11 +254,13 @@ curl http://localhost:8000/health/ready
 | `POST` | `/api/v1/auth/login` | Login, receive JWT |
 | `POST` | `/api/v1/auth/refresh-token` | Refresh access token |
 
-### Ingestion
+### Ingestion & Data Sources
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/ingest/sam` | Trigger SAM.gov search |
 | `GET` | `/api/v1/ingest/sam/status/{task_id}` | Check ingest status |
+| `GET` | `/api/v1/data-sources` | List configured data feeds |
+| `POST` | `/api/v1/email-ingest/rules` | Configure email ingestion rules |
 
 ### Analysis
 | Method | Endpoint | Description |
@@ -182,12 +269,40 @@ curl http://localhost:8000/health/ready
 | `GET` | `/api/v1/analyze/{rfp_id}/matrix` | Get compliance matrix |
 | `POST` | `/api/v1/analyze/{rfp_id}/filter` | Run Killer Filter |
 
-### Draft Generation
+### Draft & Proposals
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/draft/{requirement_id}` | Generate section |
 | `POST` | `/api/v1/draft/proposals/{id}/generate-all` | Batch generate |
 | `POST` | `/api/v1/draft/refresh-cache` | Refresh AI cache |
+| `POST` | `/api/v1/draft/proposals/{id}/outline` | Generate annotated outline |
+| `GET` | `/api/v1/draft/proposals/{id}/sections` | List proposal sections |
+| `PATCH` | `/api/v1/draft/sections/{id}` | Update section content |
+
+### Capture Planning
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/capture` | List capture items |
+| `POST` | `/api/v1/capture` | Create capture item |
+| `POST` | `/api/v1/capture/{id}/bid-decision` | Score bid/no-bid |
+| `POST` | `/api/v1/capture/{id}/gate-review` | Submit gate review |
+| `GET` | `/api/v1/capture/timeline` | Pipeline timeline overview |
+
+### Contracts
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/contracts` | List contracts |
+| `POST` | `/api/v1/contracts` | Create contract |
+| `GET` | `/api/v1/contracts/{id}/clins` | List contract line items |
+| `GET` | `/api/v1/contracts/{id}/deliverables` | List deliverables |
+| `POST` | `/api/v1/contracts/{id}/status-reports` | Submit status report |
+
+### Reviews
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/reviews` | Create color team review |
+| `POST` | `/api/v1/reviews/{id}/comments` | Add review comment |
+| `PATCH` | `/api/v1/reviews/{id}/complete` | Complete review with score |
 
 ### Knowledge Base
 | Method | Endpoint | Description |
@@ -196,13 +311,12 @@ curl http://localhost:8000/health/ready
 | `GET` | `/api/v1/documents` | List documents |
 | `DELETE` | `/api/v1/documents/{id}` | Remove document |
 
-### Capture and Contracts
+### Collaboration
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/capture` | List capture items |
-| `POST` | `/api/v1/capture` | Create capture item |
-| `GET` | `/api/v1/contracts` | List contracts |
-| `POST` | `/api/v1/contracts` | Create contract |
+| `POST` | `/api/v1/collaboration/workspaces` | Create workspace |
+| `POST` | `/api/v1/collaboration/workspaces/{id}/invite` | Invite member |
+| `GET` | `/api/v1/collaboration/workspaces/{id}/inbox` | Workspace inbox |
 
 ### Export
 | Method | Endpoint | Description |
@@ -211,13 +325,23 @@ curl http://localhost:8000/health/ready
 | `POST` | `/api/v1/export/proposals/{id}/pdf` | Export as PDF |
 | `GET` | `/api/v1/export/rfps/{id}/compliance-matrix/xlsx` | Export matrix |
 
-### Enterprise
+### Intelligence & Analytics
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/v1/analytics/dashboard` | Usage metrics |
+| `GET` | `/api/v1/signals` | Market signals |
+| `GET` | `/api/v1/forecasts/pipeline` | Pipeline forecast |
+| `GET` | `/api/v1/revenue/pipeline` | Revenue pipeline |
+| `GET` | `/api/v1/benchmark` | Competitive benchmarks |
+
+### Enterprise
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/api/v1/audit/events` | Audit log |
 | `POST` | `/api/v1/scim/v2/Users` | SCIM provisioning |
 | `POST` | `/api/v1/secrets` | Store encrypted secret |
+| `GET` | `/api/v1/integrations` | List integrations |
+| `POST` | `/api/v1/webhooks/subscriptions` | Subscribe to events |
 
 ### Snapshots
 | Method | Endpoint | Description |
@@ -282,7 +406,28 @@ npm install && npm run dev
 
 **Celery Worker:**
 ```bash
-celery -A app.tasks.celery_app worker --loglevel=info
+celery -A app.tasks.celery_app worker -Q celery,ingest,analysis,generation,documents,periodic,maintenance --loglevel=info
+```
+
+### Git Hooks
+
+```bash
+cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
+
+Pre-commit runs ruff (lint + format) on Python and tsc on TypeScript staged files.
+
+### Linting
+
+```bash
+# Python
+ruff check backend/app/           # Lint
+ruff check --fix backend/app/     # Auto-fix
+ruff format backend/app/          # Format
+
+# TypeScript
+cd frontend && npx tsc --noEmit   # Type check
+cd frontend && npm run lint       # ESLint
 ```
 
 ### Database Migrations
@@ -312,6 +457,19 @@ python scripts/load_test.py
 
 ---
 
+## CI/CD Pipeline
+
+GitHub Actions runs on every push with 4 jobs:
+
+| Job | Checks |
+|-----|--------|
+| **backend-tests** | ruff lint, ruff format, pytest |
+| **frontend-tests** | tsc, ESLint, Vitest, npm audit |
+| **security-scan** | pip-audit, bandit SAST, git secret scan |
+| **e2e-smoke** | Docker compose stack, health checks, smoke tests |
+
+---
+
 ## Roadmap
 
 - [x] JWT authentication and user management
@@ -326,10 +484,20 @@ python scripts/load_test.py
 - [x] Secrets vault
 - [x] Capture pipeline management
 - [x] Budget intelligence
+- [x] Color team reviews (Pink/Red/Gold)
+- [x] Contract lifecycle management
+- [x] Teaming partner discovery board
+- [x] Workflow automation engine
+- [x] Multi-channel notifications
+- [x] Word add-in integration
+- [x] Salesforce and SharePoint sync
+- [x] Market signals and pipeline forecasting
+- [x] Revenue pipeline tracking
+- [x] Email-based RFP ingestion
+- [x] CI/CD with security scanning
 - [ ] Subscription and billing integration (Stripe)
-- [ ] Slack and Teams notifications
 - [ ] Advanced win/loss analytics
-- [ ] Template marketplace
+- [ ] Template marketplace (backend ready, UI in progress)
 - [ ] Mobile application
 
 ---
@@ -337,13 +505,16 @@ python scripts/load_test.py
 ## Security
 
 - All secrets loaded from environment variables
+- Runtime validation: `SECRET_KEY` cannot be default in production
 - JWT authentication with token rotation
 - AES-256 encryption for stored secrets
 - CORS restricted by environment
 - API rate limiting per subscription tier
+- Upload size enforcement (configurable, default 50MB)
 - SCIM provisioning for enterprise identity management
 - Audit logging for compliance tracking
 - SQL injection prevention via parameterized queries
+- Security scanning in CI (pip-audit, bandit, secret detection)
 
 ---
 
