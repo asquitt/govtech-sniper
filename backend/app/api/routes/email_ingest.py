@@ -18,6 +18,8 @@ from app.schemas.email_ingest import (
     IngestedEmailRead,
 )
 from app.services.auth_service import UserAuth
+from app.services.email_ingest_service import EmailIngestService
+from app.services.encryption_service import decrypt_value, encrypt_value
 
 router = APIRouter(prefix="/email-ingest", tags=["email-ingest"])
 
@@ -36,7 +38,7 @@ async def create_config(
         imap_server=payload.imap_server,
         imap_port=payload.imap_port,
         email_address=payload.email_address,
-        encrypted_password=payload.password,  # TODO: encrypt before storing
+        encrypted_password=encrypt_value(payload.password),
         folder=payload.folder,
     )
     session.add(config)
@@ -78,7 +80,7 @@ async def update_config(
 
     update_data = payload.model_dump(exclude_unset=True)
     if "password" in update_data:
-        config.encrypted_password = update_data.pop("password")  # TODO: encrypt
+        config.encrypted_password = encrypt_value(update_data.pop("password"))
     for field, value in update_data.items():
         setattr(config, field, value)
     config.updated_at = datetime.utcnow()
@@ -125,8 +127,22 @@ async def test_connection(
     if not config:
         raise HTTPException(status_code=404, detail="Config not found")
 
-    # Mock IMAP connection test for now
-    return {"success": True, "message": f"Connection to {config.imap_server} successful (mock)"}
+    password = decrypt_value(config.encrypted_password)
+    service = EmailIngestService(
+        host=config.imap_server,
+        port=config.imap_port,
+        username=config.email_address,
+        password=password,
+        use_ssl=config.imap_port == 993,
+    )
+    test_result = await service.test_connection()
+    if test_result.get("status") == "connected":
+        return {
+            "success": True,
+            "message": f"Connected to {config.imap_server}",
+            "folders": test_result.get("folders", []),
+        }
+    raise HTTPException(status_code=400, detail=test_result.get("message", "Connection failed"))
 
 
 # ---- Ingested email history ----
