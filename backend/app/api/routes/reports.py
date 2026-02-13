@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import get_current_user
+from app.api.utils import get_or_404
 from app.database import get_session
 from app.models.report import ReportType, SavedReport, ScheduleFrequency
 from app.models.user import User
@@ -130,10 +131,7 @@ def _normalize_email_list(emails: list[str]) -> list[str]:
 
 
 async def _get_report_or_404(report_id: int, session: AsyncSession) -> SavedReport:
-    report = await session.get(SavedReport, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-    return report
+    return await get_or_404(session, SavedReport, report_id, "Report not found")
 
 
 def _can_view_report(report: SavedReport, user: UserAuth) -> bool:

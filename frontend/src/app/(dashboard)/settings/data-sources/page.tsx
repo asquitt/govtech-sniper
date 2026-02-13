@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { dataSourcesApi } from "@/lib/api";
+import { useAsyncData } from "@/hooks/use-async-data";
 import type {
   DataSourceProvider,
   DataSourceSearchParams,
@@ -15,13 +16,16 @@ import type {
 import { IngestSummary, SearchResults } from "./_components/search-results";
 
 export default function DataSourcesPage() {
-  const [providers, setProviders] = useState<DataSourceProvider[]>([]);
+  const { data: providers, error: fetchError, refetch } = useAsyncData<DataSourceProvider[]>(
+    () => dataSourcesApi.listProviders(),
+    [],
+  );
   const [healthMap, setHealthMap] = useState<Record<string, boolean | null>>({});
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<DataSourceSearchResponse | null>(null);
   const [ingestResult, setIngestResult] = useState<DataSourceIngestResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Search form state
   const [keywords, setKeywords] = useState("");
@@ -30,19 +34,7 @@ export default function DataSourcesPage() {
   const [daysBack, setDaysBack] = useState("90");
   const [limit, setLimit] = useState("25");
 
-  const fetchProviders = useCallback(async () => {
-    try {
-      const list = await dataSourcesApi.listProviders();
-      setProviders(list);
-    } catch (err) {
-      console.error("Failed to load providers", err);
-      setError("Failed to load data source providers.");
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchProviders();
-  }, [fetchProviders]);
+  const error = fetchError ? fetchError.message : actionError;
 
   const handleHealthCheck = async (providerName: string) => {
     setHealthMap((prev) => ({ ...prev, [providerName]: null }));
@@ -67,7 +59,7 @@ export default function DataSourcesPage() {
   const handleSearch = async () => {
     if (!selectedProvider) return;
     setLoading(true);
-    setError(null);
+    setActionError(null);
     setSearchResults(null);
     setIngestResult(null);
     try {
@@ -78,7 +70,7 @@ export default function DataSourcesPage() {
       setSearchResults(result);
     } catch (err) {
       console.error("Search failed", err);
-      setError("Search failed. Check provider configuration.");
+      setActionError("Search failed. Check provider configuration.");
     } finally {
       setLoading(false);
     }
@@ -87,7 +79,7 @@ export default function DataSourcesPage() {
   const handleIngest = async () => {
     if (!selectedProvider) return;
     setLoading(true);
-    setError(null);
+    setActionError(null);
     setIngestResult(null);
     try {
       const result = await dataSourcesApi.ingestFromProvider(
@@ -97,7 +89,7 @@ export default function DataSourcesPage() {
       setIngestResult(result);
     } catch (err) {
       console.error("Ingest failed", err);
-      setError("Ingest failed. Check provider configuration.");
+      setActionError("Ingest failed. Check provider configuration.");
     } finally {
       setLoading(false);
     }
@@ -115,7 +107,7 @@ export default function DataSourcesPage() {
 
         {/* Provider Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {providers.map((p) => {
+          {(providers ?? []).map((p) => {
             const health = healthMap[p.provider_name];
             const isSelected = selectedProvider === p.provider_name;
             return (
@@ -177,7 +169,7 @@ export default function DataSourcesPage() {
             <CardContent className="p-4 space-y-4">
               <p className="text-sm font-medium">
                 Search:{" "}
-                {providers.find((p) => p.provider_name === selectedProvider)?.display_name}
+                {(providers ?? []).find((p) => p.provider_name === selectedProvider)?.display_name}
               </p>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <input

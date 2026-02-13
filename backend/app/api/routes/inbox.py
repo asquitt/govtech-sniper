@@ -226,8 +226,9 @@ async def delete_inbox_message(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete an inbox message (admin or sender only)."""
-    from app.api.routes.collaboration import _get_workspace_or_404, _require_member_role
-    from app.models.collaboration import WorkspaceRole
+    from app.api.routes.collaboration import _require_member_role
+    from app.api.utils import get_or_404
+    from app.models.collaboration import SharedWorkspace, WorkspaceRole
 
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.VIEWER, session)
 
@@ -242,7 +243,7 @@ async def delete_inbox_message(
         raise HTTPException(404, "Message not found")
 
     # Only sender or workspace admin/owner can delete
-    ws = await _get_workspace_or_404(workspace_id, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
     is_owner = ws.owner_id == current_user.id
     is_sender = msg.sender_id == current_user.id
     if not is_owner and not is_sender:

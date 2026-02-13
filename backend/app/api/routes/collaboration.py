@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from app.api.deps import get_current_user
+from app.api.utils import get_or_404
 from app.database import get_session
 from app.models.collaboration import (
     ComplianceDigestChannel,
@@ -119,16 +120,6 @@ CONTRACT_FEED_PRESETS: dict[str, ContractFeedPresetItem] = {
 # ---------------------------------------------------------------------------
 
 
-async def _get_workspace_or_404(
-    workspace_id: int,
-    session: AsyncSession,
-) -> SharedWorkspace:
-    ws = await session.get(SharedWorkspace, workspace_id)
-    if not ws:
-        raise HTTPException(404, "Workspace not found")
-    return ws
-
-
 async def _require_member_role(
     workspace_id: int,
     user_id: int,
@@ -136,7 +127,7 @@ async def _require_member_role(
     session: AsyncSession,
 ) -> None:
     """Check the user is the owner or has at least `min_role`."""
-    ws = await _get_workspace_or_404(workspace_id, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
     if ws.owner_id == user_id:
         return  # Owner always has full access
 
@@ -546,7 +537,7 @@ async def update_workspace(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> WorkspaceRead:
-    ws = await _get_workspace_or_404(workspace_id, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
     if ws.owner_id != current_user.id:
         raise HTTPException(403, "Only the workspace owner can update it")
 
@@ -577,7 +568,7 @@ async def delete_workspace(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    ws = await _get_workspace_or_404(workspace_id, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
     if ws.owner_id != current_user.id:
         raise HTTPException(403, "Only the workspace owner can delete it")
     await session.delete(ws)
@@ -666,7 +657,9 @@ async def accept_invitation(
     if invite.email.lower().strip() != current_user.email.lower().strip():
         raise HTTPException(403, "Invitation email does not match authenticated user")
 
-    workspace = await _get_workspace_or_404(invite.workspace_id, session)
+    workspace = await get_or_404(
+        session, SharedWorkspace, invite.workspace_id, "Workspace not found"
+    )
     if workspace.owner_id == current_user.id:
         raise HTTPException(400, "Workspace owner already has access")
 
@@ -832,7 +825,7 @@ async def share_data(
     session: AsyncSession = Depends(get_session),
 ) -> SharedDataRead:
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.CONTRIBUTOR, session)
-    ws = await _get_workspace_or_404(workspace_id, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
     if (
         payload.data_type == SharedDataType.CONTRACT_FEED.value
         and payload.entity_id not in CONTRACT_FEED_CATALOG
@@ -1225,7 +1218,7 @@ async def export_shared_data_audit(
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.ADMIN, session)
-    workspace = await _get_workspace_or_404(workspace_id, session)
+    workspace = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
 
     result = await session.execute(
         select(SharedDataPermission).where(SharedDataPermission.workspace_id == workspace_id)
@@ -1391,7 +1384,7 @@ async def partner_portal(
 ) -> PortalView:
     """Read-only portal view for workspace members."""
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.VIEWER, session)
-    ws = await _get_workspace_or_404(workspace_id, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
 
     # RFP title
     rfp_title = None

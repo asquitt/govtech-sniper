@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React from "react";
 import { Header } from "@/components/layout/header";
 import { intelligenceApi } from "@/lib/api";
+import { useAsyncData } from "@/hooks/use-async-data";
 import type {
   KPIData,
   WinLossAnalysis,
@@ -17,16 +18,16 @@ import { ForecastCard } from "./_components/ForecastCard";
 import { ResourceCard } from "./_components/ResourceCard";
 
 export default function IntelligencePage() {
-  const [loading, setLoading] = useState(true);
-  const [kpis, setKpis] = useState<KPIData | null>(null);
-  const [winLoss, setWinLoss] = useState<WinLossAnalysis | null>(null);
-  const [budget, setBudget] = useState<BudgetIntelligenceData | null>(null);
-  const [forecast, setForecast] = useState<PipelineForecast | null>(null);
-  const [resources, setResources] = useState<ResourceAllocation | null>(null);
+  interface IntelligenceData {
+    kpis: KPIData;
+    winLoss: WinLossAnalysis;
+    budget: BudgetIntelligenceData;
+    forecast: PipelineForecast;
+    resources: ResourceAllocation;
+  }
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data, loading } = useAsyncData<IntelligenceData>(
+    async () => {
       const [k, wl, b, f, r] = await Promise.all([
         intelligenceApi.getKPIs(),
         intelligenceApi.getWinLossAnalysis(),
@@ -34,21 +35,16 @@ export default function IntelligencePage() {
         intelligenceApi.getPipelineForecast("quarterly"),
         intelligenceApi.getResourceAllocation(),
       ]);
-      setKpis(k);
-      setWinLoss(wl);
-      setBudget(b);
-      setForecast(f);
-      setResources(r);
-    } catch (err) {
-      console.error("Failed to load intelligence data:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return { kpis: k, winLoss: wl, budget: b, forecast: f, resources: r };
+    },
+    [],
+  );
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  const kpis = data?.kpis ?? null;
+  const winLoss = data?.winLoss ?? null;
+  const budget = data?.budget ?? null;
+  const forecast = data?.forecast ?? null;
+  const resources = data?.resources ?? null;
 
   return (
     <div className="flex flex-col h-full">

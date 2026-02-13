@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { workflowApi } from "@/lib/api";
+import { useAsyncData } from "@/hooks/use-async-data";
 import type {
   WorkflowRule,
   WorkflowRuleCreate,
@@ -48,11 +49,29 @@ function emptyAction(): WorkflowAction {
 }
 
 export default function WorkflowsPage() {
-  const [rules, setRules] = useState<WorkflowRule[]>([]);
-  const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  interface WorkflowData {
+    rules: WorkflowRule[];
+    executions: WorkflowExecution[];
+  }
+
+  const { data, loading, error: fetchError, refetch } = useAsyncData<WorkflowData>(
+    async () => {
+      const [rulesData, execData] = await Promise.all([
+        workflowApi.listRules(),
+        workflowApi.listExecutions({ limit: 20 }).catch(() => ({ items: [] })),
+      ]);
+      return { rules: rulesData.items, executions: execData.items };
+    },
+    [],
+  );
+
+  const rules = data?.rules ?? [];
+  const executions = data?.executions ?? [];
+
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+
+  const error = fetchError ? fetchError.message : actionError;
 
   // Form state
   const [formName, setFormName] = useState("");
@@ -62,52 +81,23 @@ export default function WorkflowsPage() {
   const [formPriority, setFormPriority] = useState("0");
   const [saving, setSaving] = useState(false);
 
-  const fetchRules = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await workflowApi.listRules();
-      setRules(data.items);
-    } catch (err) {
-      console.error("Failed to load workflow rules", err);
-      setError("Failed to load workflow rules.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchExecutions = useCallback(async () => {
-    try {
-      const data = await workflowApi.listExecutions({ limit: 20 });
-      setExecutions(data.items);
-    } catch (err) {
-      console.error("Failed to load executions", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchRules();
-    fetchExecutions();
-  }, [fetchRules, fetchExecutions]);
-
   const handleToggle = async (rule: WorkflowRule) => {
     try {
       await workflowApi.updateRule(rule.id, { is_enabled: !rule.is_enabled });
-      setRules((prev) =>
-        prev.map((r) => (r.id === rule.id ? { ...r, is_enabled: !r.is_enabled } : r))
-      );
+      await refetch();
     } catch (err) {
       console.error("Failed to toggle rule", err);
-      setError("Failed to toggle rule.");
+      setActionError("Failed to toggle rule.");
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await workflowApi.deleteRule(id);
-      setRules((prev) => prev.filter((r) => r.id !== id));
+      await refetch();
     } catch (err) {
       console.error("Failed to delete rule", err);
-      setError("Failed to delete rule.");
+      setActionError("Failed to delete rule.");
     }
   };
 
@@ -117,7 +107,7 @@ export default function WorkflowsPage() {
       alert(`Test result: ${result.would_match} entities would match.`);
     } catch (err) {
       console.error("Failed to test rule", err);
-      setError("Failed to test rule.");
+      setActionError("Failed to test rule.");
     }
   };
 
@@ -132,11 +122,11 @@ export default function WorkflowsPage() {
 
   const handleCreate = async () => {
     if (!formName.trim()) {
-      setError("Rule name is required.");
+      setActionError("Rule name is required.");
       return;
     }
     setSaving(true);
-    setError(null);
+    setActionError(null);
     try {
       const payload: WorkflowRuleCreate = {
         name: formName.trim(),
@@ -145,12 +135,12 @@ export default function WorkflowsPage() {
         actions: formActions.filter((a) => a.action_type),
         priority: parseInt(formPriority, 10) || 0,
       };
-      const created = await workflowApi.createRule(payload);
-      setRules((prev) => [created, ...prev]);
+      await workflowApi.createRule(payload);
       resetForm();
+      await refetch();
     } catch (err) {
       console.error("Failed to create rule", err);
-      setError("Failed to create rule.");
+      setActionError("Failed to create rule.");
     } finally {
       setSaving(false);
     }

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from app.api.deps import get_current_user
+from app.api.utils import get_or_404
 from app.database import get_session
 from app.models.proposal import Proposal
 from app.models.review import (
@@ -45,21 +46,6 @@ from app.services.review_checklist_templates import get_checklist_template
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-async def _get_review_or_404(
-    review_id: int,
-    session: AsyncSession,
-) -> ProposalReview:
-    review = await session.get(ProposalReview, review_id)
-    if not review:
-        raise HTTPException(404, "Review not found")
-    return review
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +197,7 @@ async def assign_reviewer(
     session: AsyncSession = Depends(get_session),
 ) -> AssignmentRead:
     """Assign a reviewer to a review."""
-    await _get_review_or_404(review_id, session)
+    await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     assignment = ReviewAssignment(
         review_id=review_id,
@@ -250,7 +236,7 @@ async def add_comment(
     session: AsyncSession = Depends(get_session),
 ) -> CommentRead:
     """Add a review comment."""
-    await _get_review_or_404(review_id, session)
+    await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     comment = ReviewComment(
         review_id=review_id,
@@ -287,7 +273,7 @@ async def list_comments(
     session: AsyncSession = Depends(get_session),
 ) -> list[CommentRead]:
     """List comments for a review."""
-    await _get_review_or_404(review_id, session)
+    await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     result = await session.execute(
         select(ReviewComment)
@@ -385,7 +371,7 @@ async def get_scoring_summary(
     session: AsyncSession = Depends(get_session),
 ) -> ScoringSummary:
     """Aggregated scoring summary for a review."""
-    review = await _get_review_or_404(review_id, session)
+    review = await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     # Checklist pass rate
     checklist_result = await session.execute(
@@ -457,7 +443,7 @@ async def create_checklist_from_template(
     session: AsyncSession = Depends(get_session),
 ) -> list[ChecklistItemRead]:
     """Bulk-create checklist items from a review type template."""
-    await _get_review_or_404(review_id, session)
+    await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     template = get_checklist_template(payload.review_type)
     if not template:
@@ -488,7 +474,7 @@ async def list_checklist(
     session: AsyncSession = Depends(get_session),
 ) -> list[ChecklistItemRead]:
     """List checklist items for a review."""
-    await _get_review_or_404(review_id, session)
+    await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     result = await session.execute(
         select(ReviewChecklistItem)
@@ -542,7 +528,7 @@ async def complete_review(
     session: AsyncSession = Depends(get_session),
 ) -> ReviewRead:
     """Complete a review with an overall score."""
-    review = await _get_review_or_404(review_id, session)
+    review = await get_or_404(session, ProposalReview, review_id, "Review not found")
 
     review.status = ReviewStatus.COMPLETED
     review.completed_date = datetime.utcnow()

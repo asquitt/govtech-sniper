@@ -11,6 +11,7 @@ from sqlmodel import func, select
 
 from app.api.deps import get_current_user_optional, resolve_user_id
 from app.database import get_session
+from app.models.activity import ActivityType
 from app.models.proposal import (
     Proposal,
     ProposalSection,
@@ -25,6 +26,7 @@ from app.schemas.proposal import (
     ProposalSectionRead,
     ProposalSectionUpdate,
 )
+from app.services.activity_service import log_activity
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
 from app.services.webhook_service import dispatch_webhook_event
@@ -67,6 +69,15 @@ async def create_section(
 
     await session.commit()
     await session.refresh(new_section)
+
+    await log_activity(
+        session,
+        proposal_id=proposal_id,
+        user_id=proposal.user_id,
+        activity_type=ActivityType.SECTION_EDITED,
+        summary=f"Created section: {new_section.title}",
+        section_id=new_section.id,
+    )
 
     return ProposalSectionRead.model_validate(new_section)
 
@@ -270,6 +281,15 @@ async def update_section(
 
     await session.commit()
     await session.refresh(section)
+
+    await log_activity(
+        session,
+        proposal_id=section.proposal_id,
+        user_id=resolved_user_id,
+        activity_type=ActivityType.SECTION_EDITED,
+        summary=f"Updated section: {section.title}",
+        section_id=section.id,
+    )
 
     return ProposalSectionRead.model_validate(section)
 

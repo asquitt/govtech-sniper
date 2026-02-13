@@ -28,6 +28,6 @@ async def log_activity(
         metadata_json=metadata,
     )
     session.add(entry)
-    await session.commit()
+    await session.flush()
     await session.refresh(entry)
     return entry

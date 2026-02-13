@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,28 +8,13 @@ import { captureTimelineApi } from "@/lib/api";
 import type { GanttPlanRow } from "@/types";
 import { GanttChart, STAGE_VARIANT } from "@/components/pipeline/gantt-chart";
 import { DeadlineAlerts } from "@/components/pipeline/deadline-alerts";
+import { useAsyncData } from "@/hooks/use-async-data";
 
 export default function PipelinePage() {
-  const [rows, setRows] = useState<GanttPlanRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await captureTimelineApi.getOverview();
-      setRows(data);
-    } catch {
-      setError("Failed to load pipeline data.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: rows, loading, error, refetch } = useAsyncData<GanttPlanRow[]>(
+    () => captureTimelineApi.getOverview(),
+    [],
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -41,15 +26,15 @@ export default function PipelinePage() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {error && (
           <div className="bg-destructive/10 text-destructive rounded-lg p-4 flex items-center justify-between">
-            <span>{error}</span>
-            <Button variant="outline" size="sm" onClick={fetchData}>
+            <span>{error.message}</span>
+            <Button variant="outline" size="sm" onClick={refetch}>
               Retry
             </Button>
           </div>
         )}
 
         {/* Stage summary badges */}
-        {!loading && rows.length > 0 && (
+        {!loading && rows && rows.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {Object.entries(
               rows.reduce<Record<string, number>>((acc, r) => {
@@ -67,9 +52,9 @@ export default function PipelinePage() {
           </div>
         )}
 
-        <DeadlineAlerts data={rows} />
+        <DeadlineAlerts data={rows ?? []} />
 
-        <GanttChart data={rows} loading={loading} />
+        <GanttChart data={rows ?? []} loading={loading} />
       </div>
     </div>
   );

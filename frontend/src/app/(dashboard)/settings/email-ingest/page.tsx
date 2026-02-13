@@ -1,23 +1,48 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { emailIngestApi } from "@/lib/api/email-ingest";
+import { useAsyncData } from "@/hooks/use-async-data";
 import type { EmailIngestConfig, IngestedEmail } from "@/types/email-ingest";
 
 const INPUT_CLASS =
   "rounded-md border border-border bg-background px-3 py-2 text-sm w-full";
 
 export default function EmailIngestPage() {
-  const [configs, setConfigs] = useState<EmailIngestConfig[]>([]);
-  const [history, setHistory] = useState<IngestedEmail[]>([]);
-  const [historyTotal, setHistoryTotal] = useState(0);
+  interface EmailIngestData {
+    configs: EmailIngestConfig[];
+    history: IngestedEmail[];
+    historyTotal: number;
+  }
+
+  const { data, error: fetchError, refetch } = useAsyncData<EmailIngestData>(
+    async () => {
+      const [configsData, historyData] = await Promise.all([
+        emailIngestApi.listConfigs(),
+        emailIngestApi.listHistory({ limit: 50 }).catch(() => ({ items: [], total: 0 })),
+      ]);
+      return {
+        configs: configsData,
+        history: historyData.items,
+        historyTotal: historyData.total,
+      };
+    },
+    [],
+  );
+
+  const configs = data?.configs ?? [];
+  const history = data?.history ?? [];
+  const historyTotal = data?.historyTotal ?? 0;
+
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  const error = fetchError ? fetchError.message : actionError;
 
   // Add config form
   const [showForm, setShowForm] = useState(false);
@@ -27,34 +52,10 @@ export default function EmailIngestPage() {
   const [password, setPassword] = useState("");
   const [folder, setFolder] = useState("INBOX");
 
-  const fetchConfigs = useCallback(async () => {
-    try {
-      const data = await emailIngestApi.listConfigs();
-      setConfigs(data);
-    } catch {
-      setError("Failed to load email configurations.");
-    }
-  }, []);
-
-  const fetchHistory = useCallback(async () => {
-    try {
-      const data = await emailIngestApi.listHistory({ limit: 50 });
-      setHistory(data.items);
-      setHistoryTotal(data.total);
-    } catch {
-      // History may be empty, that's fine
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchConfigs();
-    fetchHistory();
-  }, [fetchConfigs, fetchHistory]);
-
   const handleAddConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setActionError(null);
     try {
       await emailIngestApi.createConfig({
         imap_server: imapServer,
@@ -69,9 +70,9 @@ export default function EmailIngestPage() {
       setEmail("");
       setPassword("");
       setFolder("INBOX");
-      await fetchConfigs();
+      await refetch();
     } catch {
-      setError("Failed to create configuration.");
+      setActionError("Failed to create configuration.");
     } finally {
       setLoading(false);
     }
@@ -82,18 +83,18 @@ export default function EmailIngestPage() {
       await emailIngestApi.updateConfig(config.id, {
         is_enabled: !config.is_enabled,
       });
-      await fetchConfigs();
+      await refetch();
     } catch {
-      setError("Failed to update configuration.");
+      setActionError("Failed to update configuration.");
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await emailIngestApi.deleteConfig(id);
-      await fetchConfigs();
+      await refetch();
     } catch {
-      setError("Failed to delete configuration.");
+      setActionError("Failed to delete configuration.");
     }
   };
 
@@ -110,9 +111,9 @@ export default function EmailIngestPage() {
   const handleReprocess = async (emailId: number) => {
     try {
       await emailIngestApi.reprocess(emailId);
-      await fetchHistory();
+      await refetch();
     } catch {
-      setError("Failed to reprocess email.");
+      setActionError("Failed to reprocess email.");
     }
   };
 
