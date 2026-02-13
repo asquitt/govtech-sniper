@@ -13,7 +13,7 @@
   <DisplayName DefaultValue="Orbitr for Word"/>
   <Description DefaultValue="AI-powered proposal writing assistant for government contractors. Draft, review, and refine proposals directly in Microsoft Word."/>
   <IconUrl DefaultValue="https://app.orbitr.io/word-addin/icons/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://app.orbitr.io/word-addin/icons/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://app.orbitr.io/word-addin/icons/icon-128.png"/>
   <SupportUrl DefaultValue="https://app.orbitr.io/help"/>
 
   <AppDomains>
