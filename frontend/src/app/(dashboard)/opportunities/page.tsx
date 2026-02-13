@@ -1,163 +1,25 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import Link from "next/link";
 import {
   Search,
   Filter,
   Plus,
-  ExternalLink,
-  MoreHorizontal,
-  Target,
-  Clock,
-  Building2,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
   Loader2,
   RefreshCw,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  formatDate,
-  daysUntilDeadline,
-  getDeadlineUrgency,
-  cn,
-} from "@/lib/utils";
-import { getApiErrorDetail, getApiErrorMessage } from "@/lib/api/error";
+import { getApiErrorMessage } from "@/lib/api/error";
 import { rfpApi, ingestApi, savedSearchApi } from "@/lib/api";
-import type { RFPListItem, RFPStatus, SavedSearch } from "@/types";
-
-const statusConfig: Record<
-  RFPStatus,
-  { label: string; variant: "default" | "success" | "warning" | "destructive" }
-> = {
-  new: { label: "New", variant: "default" },
-  analyzing: { label: "Analyzing", variant: "warning" },
-  analyzed: { label: "Analyzed", variant: "success" },
-  drafting: { label: "Drafting", variant: "warning" },
-  ready: { label: "Ready", variant: "success" },
-  submitted: { label: "Submitted", variant: "success" },
-  archived: { label: "Archived", variant: "destructive" },
-};
-
-function QualificationBadge({
-  isQualified,
-  score,
-}: {
-  isQualified?: boolean;
-  score?: number;
-}) {
-  if (isQualified === undefined) {
-    return (
-      <Badge variant="outline" className="gap-1">
-        <Clock className="w-3 h-3" />
-        Pending
-      </Badge>
-    );
-  }
-
-  if (isQualified) {
-    return (
-      <Badge variant="success" className="gap-1">
-        <CheckCircle2 className="w-3 h-3" />
-        Qualified {score && `(${score}%)`}
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge variant="destructive" className="gap-1">
-      <XCircle className="w-3 h-3" />
-      Not Qualified
-    </Badge>
-  );
-}
-
-function MatchScoreBadge({ score }: { score?: number | null }) {
-  if (score === undefined || score === null) {
-    return <span className="text-muted-foreground text-xs">—</span>;
-  }
-
-  const variant =
-    score >= 70 ? "success" : score >= 40 ? "warning" : "destructive";
-  return (
-    <Badge variant={variant} className="font-mono">
-      {Math.round(score)}%
-    </Badge>
-  );
-}
-
-function DeadlineBadge({ deadline }: { deadline?: string }) {
-  const days = daysUntilDeadline(deadline);
-  const urgency = getDeadlineUrgency(deadline);
-
-  if (days === null) return <span className="text-muted-foreground">—</span>;
-
-  const colorClass =
-    urgency === "urgent"
-      ? "text-destructive"
-      : urgency === "warning"
-      ? "text-warning"
-      : "text-foreground";
-
-  return (
-    <span className={cn("flex items-center gap-1", colorClass)}>
-      {urgency === "urgent" && <AlertTriangle className="w-3 h-3" />}
-      {days < 0 ? "Overdue" : days === 0 ? "Today" : `${days} days`}
-    </span>
-  );
-}
-
-function parseRetryAfterSeconds(error: unknown): number | null {
-  if (typeof error !== "object" || error === null) {
-    return null;
-  }
-
-  const headers = (
-    error as { response?: { headers?: Record<string, string | number> } }
-  ).response?.headers;
-  const headerValue = headers?.["retry-after"] ?? headers?.["Retry-After"];
-  if (headerValue !== undefined) {
-    const parsed = Number(headerValue);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return Math.ceil(parsed);
-    }
-    const headerDate = new Date(String(headerValue));
-    if (!Number.isNaN(headerDate.getTime())) {
-      const diffSeconds = Math.ceil((headerDate.getTime() - Date.now()) / 1000);
-      if (diffSeconds > 0) {
-        return diffSeconds;
-      }
-    }
-  }
-
-  const detail = getApiErrorDetail(error);
-  if (!detail) {
-    return null;
-  }
-
-  const detailMatch = detail.match(/retry in about\s+(\d+)\s+seconds/i);
-  if (detailMatch) {
-    return Number(detailMatch[1]);
-  }
-
-  return null;
-}
-
-function formatSeconds(seconds: number): string {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
-}
+import type { RFPListItem, SavedSearch } from "@/types";
+import { parseRetryAfterSeconds, formatSeconds } from "./_components/opportunity-badges";
+import { StatsCards } from "./_components/stats-cards";
+import { SavedSearchesPanel } from "./_components/saved-searches-panel";
+import { CreateRfpForm } from "./_components/create-rfp-form";
+import { OpportunitiesTable } from "./_components/opportunities-table";
 
 export default function OpportunitiesPage() {
   const [rfps, setRfps] = useState<RFPListItem[]>([]);
@@ -168,26 +30,9 @@ export default function OpportunitiesPage() {
   const [syncCooldownSeconds, setSyncCooldownSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [savedSearchName, setSavedSearchName] = useState("");
-  const [savedSearchKeywords, setSavedSearchKeywords] = useState("");
-  const [savedSearchAgencies, setSavedSearchAgencies] = useState("");
-  const [savedSearchNaics, setSavedSearchNaics] = useState("");
-  const [savedSearchSetAside, setSavedSearchSetAside] = useState("");
-  const [savedSearchSourceType, setSavedSearchSourceType] = useState("");
-  const [savedSearchMinValue, setSavedSearchMinValue] = useState("");
-  const [savedSearchMaxValue, setSavedSearchMaxValue] = useState("");
-  const [savedSearchStatus, setSavedSearchStatus] = useState<RFPStatus | "">("");
   const [activeSearchId, setActiveSearchId] = useState<number | null>(null);
   const [activeSearchMatchIds, setActiveSearchMatchIds] = useState<number[]>([]);
   const [showCreateRfp, setShowCreateRfp] = useState(false);
-  const [isCreatingRfp, setIsCreatingRfp] = useState(false);
-  const [newRfp, setNewRfp] = useState({
-    title: "",
-    solicitation_number: "",
-    agency: "",
-    response_deadline: "",
-    description: "",
-  });
   const [stats, setStats] = useState({
     total: 0,
     qualified: 0,
@@ -227,9 +72,7 @@ export default function OpportunitiesPage() {
   }, [fetchRfps]);
 
   useEffect(() => {
-    if (syncCooldownSeconds <= 0) {
-      return;
-    }
+    if (syncCooldownSeconds <= 0) return;
 
     const timer = window.setInterval(() => {
       setSyncCooldownSeconds((current) => Math.max(0, current - 1));
@@ -249,16 +92,13 @@ export default function OpportunitiesPage() {
     try {
       setIsSyncing(true);
       setError(null);
-      // Trigger SAM.gov search with default parameters
       const result = await ingestApi.triggerSamSearch({
         keywords: "software",
         days_back: 30,
         limit: 100,
       });
 
-      // Some dev/local fallbacks complete synchronously.
       if (result.status !== "completed" && result.status !== "failed") {
-        // Poll for completion with a cap to avoid hanging forever.
         let taskComplete = false;
         let attempts = 0;
         const maxAttempts = 60;
@@ -276,7 +116,6 @@ export default function OpportunitiesPage() {
         }
       }
 
-      // Refresh the list
       await fetchRfps();
       setSyncCooldownSeconds(0);
     } catch (err) {
@@ -291,129 +130,14 @@ export default function OpportunitiesPage() {
     }
   };
 
-  const handleCreateSavedSearch = async () => {
-    if (!savedSearchName.trim()) return;
-    try {
-      const filters: Record<string, unknown> = {
-        keywords: savedSearchKeywords
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        agencies: savedSearchAgencies
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        naics_codes: savedSearchNaics
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        set_asides: savedSearchSetAside
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        source_types: savedSearchSourceType
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        statuses: savedSearchStatus ? [savedSearchStatus] : [],
-      };
-
-      if (savedSearchMinValue) {
-        const min = Number(savedSearchMinValue);
-        if (!Number.isNaN(min)) {
-          filters.min_value = min;
-        }
-      }
-
-      if (savedSearchMaxValue) {
-        const max = Number(savedSearchMaxValue);
-        if (!Number.isNaN(max)) {
-          filters.max_value = max;
-        }
-      }
-
-      await savedSearchApi.create({
-        name: savedSearchName.trim(),
-        filters,
-      });
-
-      setSavedSearchName("");
-      setSavedSearchKeywords("");
-      setSavedSearchAgencies("");
-      setSavedSearchNaics("");
-      setSavedSearchSetAside("");
-      setSavedSearchSourceType("");
-      setSavedSearchMinValue("");
-      setSavedSearchMaxValue("");
-      setSavedSearchStatus("");
-
-      const savedSearchList = await savedSearchApi.list();
-      setSavedSearches(savedSearchList);
-    } catch (err) {
-      console.error("Failed to create saved search", err);
-      setError("Failed to create saved search.");
-    }
+  const handleSearchRun = (searchId: number, matchIds: number[]) => {
+    setActiveSearchId(searchId);
+    setActiveSearchMatchIds(matchIds);
   };
 
-  const handleRunSavedSearch = async (searchId: number) => {
-    try {
-      const result = await savedSearchApi.run(searchId);
-      setActiveSearchId(searchId);
-      setActiveSearchMatchIds(result.matches.map((match) => match.id));
-    } catch (err) {
-      console.error("Failed to run saved search", err);
-      setError("Failed to run saved search.");
-    }
-  };
-
-  const handleClearSavedSearch = () => {
+  const handleSearchClear = () => {
     setActiveSearchId(null);
     setActiveSearchMatchIds([]);
-  };
-
-  const handleCancelCreateRfp = () => {
-    setShowCreateRfp(false);
-    setNewRfp({
-      title: "",
-      solicitation_number: "",
-      agency: "",
-      response_deadline: "",
-      description: "",
-    });
-  };
-
-  const handleCreateRfp = async () => {
-    if (
-      !newRfp.title.trim() ||
-      !newRfp.solicitation_number.trim() ||
-      !newRfp.agency.trim()
-    ) {
-      setError("Title, solicitation number, and agency are required.");
-      return;
-    }
-
-    try {
-      setIsCreatingRfp(true);
-      setError(null);
-
-      await rfpApi.create({
-        title: newRfp.title.trim(),
-        solicitation_number: newRfp.solicitation_number.trim(),
-        agency: newRfp.agency.trim(),
-        response_deadline: newRfp.response_deadline
-          ? new Date(newRfp.response_deadline).toISOString()
-          : undefined,
-        description: newRfp.description.trim() || undefined,
-      });
-
-      handleCancelCreateRfp();
-      await fetchRfps();
-    } catch (err) {
-      console.error("Failed to create RFP:", err);
-      setError(getApiErrorMessage(err, "Failed to add RFP. Please try again."));
-    } finally {
-      setIsCreatingRfp(false);
-    }
   };
 
   const activeMatchSet = useMemo(
@@ -496,179 +220,16 @@ export default function OpportunitiesPage() {
           </Card>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total RFPs</p>
-                  <p className="text-2xl font-bold text-primary">{stats.total}</p>
-                </div>
-                <Target className="w-8 h-8 text-primary/50" />
-              </div>
-            </CardContent>
-          </Card>
+        <StatsCards stats={stats} />
 
-          <Card className="bg-gradient-to-br from-accent/5 to-accent/10 border-accent/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Qualified</p>
-                  <p className="text-2xl font-bold text-accent">
-                    {stats.qualified}
-                  </p>
-                </div>
-                <CheckCircle2 className="w-8 h-8 text-accent/50" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-warning/5 to-warning/10 border-warning/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Pending Filter</p>
-                  <p className="text-2xl font-bold text-warning">
-                    {stats.pending}
-                  </p>
-                </div>
-                <Clock className="w-8 h-8 text-warning/50" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-secondary/50 to-secondary border-border">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Analyzing</p>
-                  <p className="text-2xl font-bold">{stats.analyzing}</p>
-                </div>
-                {stats.analyzing > 0 ? (
-                  <Loader2 className="w-8 h-8 text-muted-foreground/50 animate-spin" />
-                ) : (
-                  <Loader2 className="w-8 h-8 text-muted-foreground/50" />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="border border-border mb-6">
-          <CardContent className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Saved Searches</p>
-                <p className="text-xs text-muted-foreground">
-                  Reuse filters for federal and SLED opportunities.
-                </p>
-              </div>
-              {activeSearchId !== null && (
-                <Button variant="outline" size="sm" onClick={handleClearSavedSearch}>
-                  Clear Active Search
-                </Button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Search name"
-                value={savedSearchName}
-                onChange={(e) => setSavedSearchName(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Keywords (comma-separated)"
-                value={savedSearchKeywords}
-                onChange={(e) => setSavedSearchKeywords(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Agencies (comma-separated)"
-                value={savedSearchAgencies}
-                onChange={(e) => setSavedSearchAgencies(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="NAICS codes"
-                value={savedSearchNaics}
-                onChange={(e) => setSavedSearchNaics(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Set-Asides"
-                value={savedSearchSetAside}
-                onChange={(e) => setSavedSearchSetAside(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Source Type (federal, sled)"
-                value={savedSearchSourceType}
-                onChange={(e) => setSavedSearchSourceType(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Min Value"
-                value={savedSearchMinValue}
-                onChange={(e) => setSavedSearchMinValue(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Max Value"
-                value={savedSearchMaxValue}
-                onChange={(e) => setSavedSearchMaxValue(e.target.value)}
-              />
-              <select
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                value={savedSearchStatus}
-                onChange={(e) =>
-                  setSavedSearchStatus(e.target.value as RFPStatus | "")
-                }
-              >
-                <option value="">Any Status</option>
-                {Object.keys(statusConfig).map((status) => (
-                  <option key={status} value={status}>
-                    {statusConfig[status as RFPStatus].label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <Button onClick={handleCreateSavedSearch} size="sm">
-              Save Search
-            </Button>
-
-            {savedSearches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No saved searches yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {savedSearches.map((search) => (
-                  <div
-                    key={search.id}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{search.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Last run: {search.last_run_at ? formatDate(search.last_run_at) : "—"} ·
-                        Matches: {search.last_match_count}
-                      </p>
-                    </div>
-                    <Button
-                      variant={activeSearchId === search.id ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleRunSavedSearch(search.id)}
-                    >
-                      {activeSearchId === search.id ? "Active" : "Run"}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <SavedSearchesPanel
+          savedSearches={savedSearches}
+          activeSearchId={activeSearchId}
+          onSearchRun={handleSearchRun}
+          onSearchClear={handleSearchClear}
+          onSearchesUpdated={setSavedSearches}
+          onError={setError}
+        />
 
         {/* Search and Filters */}
         <div className="flex items-center gap-4 mb-4">
@@ -696,217 +257,21 @@ export default function OpportunitiesPage() {
         </div>
 
         {showCreateRfp && (
-          <Card className="border border-border mb-4">
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Add Opportunity Manually</p>
-                  <p className="text-xs text-muted-foreground">
-                    Use this when SAM.gov is unavailable or for non-SAM opportunities.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={handleCancelCreateRfp}>
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleCreateRfp}
-                    disabled={isCreatingRfp}
-                  >
-                    {isCreatingRfp ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      "Save RFP"
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-sm text-muted-foreground">
-                  Title
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-                    value={newRfp.title}
-                    onChange={(e) =>
-                      setNewRfp((prev) => ({ ...prev, title: e.target.value }))
-                    }
-                  />
-                </label>
-                <label className="text-sm text-muted-foreground">
-                  Solicitation Number
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-                    value={newRfp.solicitation_number}
-                    onChange={(e) =>
-                      setNewRfp((prev) => ({
-                        ...prev,
-                        solicitation_number: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="text-sm text-muted-foreground">
-                  Agency
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-                    value={newRfp.agency}
-                    onChange={(e) =>
-                      setNewRfp((prev) => ({ ...prev, agency: e.target.value }))
-                    }
-                  />
-                </label>
-                <label className="text-sm text-muted-foreground">
-                  Response Deadline
-                  <input
-                    type="date"
-                    className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-                    value={newRfp.response_deadline}
-                    onChange={(e) =>
-                      setNewRfp((prev) => ({
-                        ...prev,
-                        response_deadline: e.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-
-              <label className="text-sm text-muted-foreground block">
-                Description
-                <textarea
-                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-                  rows={3}
-                  value={newRfp.description}
-                  onChange={(e) =>
-                    setNewRfp((prev) => ({
-                      ...prev,
-                      description: e.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </CardContent>
-          </Card>
+          <CreateRfpForm
+            onCreated={fetchRfps}
+            onCancel={() => setShowCreateRfp(false)}
+            onError={setError}
+          />
         )}
 
-        {/* Data Table */}
-        <Card className="flex-1 overflow-hidden">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-          ) : sortedRfps.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <Target className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-4">
-                {searchQuery
-                  ? "No opportunities match your search"
-                  : "No opportunities found"}
-              </p>
-              {!searchQuery && (
-                <Button
-                  onClick={handleSync}
-                  disabled={isSyncing || syncCooldownSeconds > 0}
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  {syncCooldownSeconds > 0
-                    ? `Sync in ${formatSeconds(syncCooldownSeconds)}`
-                    : "Sync from SAM.gov"}
-                </Button>
-              )}
-            </div>
-          ) : (
-            <ScrollArea className="h-[calc(100vh-380px)]">
-              <table className="w-full">
-                <thead className="sticky top-0 bg-card border-b border-border">
-                  <tr className="text-left text-sm text-muted-foreground">
-                    <th className="p-4 font-medium">Opportunity</th>
-                    <th className="p-4 font-medium">Agency</th>
-                    <th className="p-4 font-medium">Status</th>
-                    <th className="p-4 font-medium">Qualification</th>
-                    <th className="p-4 font-medium">Match</th>
-                    <th className="p-4 font-medium">Deadline</th>
-                    <th className="p-4 font-medium w-10"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedRfps.map((rfp) => (
-                    <tr
-                      key={rfp.id}
-                      className="border-b border-border hover:bg-secondary/50 transition-colors"
-                    >
-                      <td className="p-4">
-                        <div className="flex flex-col gap-1">
-                          <Link
-                            href={`/opportunities/${rfp.id}`}
-                            className="font-medium text-foreground hover:text-primary transition-colors line-clamp-1"
-                          >
-                            {rfp.title}
-                          </Link>
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {rfp.solicitation_number || rfp.notice_id}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm">{rfp.agency}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <Badge variant={statusConfig[rfp.status]?.variant || "default"}>
-                          {rfp.status === "analyzing" && (
-                            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                          )}
-                          {statusConfig[rfp.status]?.label || rfp.status}
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col gap-1">
-                          <QualificationBadge
-                            isQualified={rfp.is_qualified}
-                            score={rfp.qualification_score}
-                          />
-                          {rfp.recommendation_score !== undefined && (
-                            <Badge variant="outline" className="w-fit">
-                              Rec {Math.round(rfp.recommendation_score)}%
-                            </Badge>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <MatchScoreBadge score={rfp.match_score} />
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col gap-0.5">
-                          <DeadlineBadge deadline={rfp.response_deadline} />
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(rfp.response_deadline)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" asChild>
-                            <Link href={`/analysis/${rfp.id}`}>
-                              <ExternalLink className="w-4 h-4" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ScrollArea>
-          )}
-        </Card>
+        <OpportunitiesTable
+          rfps={sortedRfps}
+          isLoading={isLoading}
+          searchQuery={searchQuery}
+          isSyncing={isSyncing}
+          syncCooldownSeconds={syncCooldownSeconds}
+          onSync={handleSync}
+        />
       </div>
     </div>
   );
