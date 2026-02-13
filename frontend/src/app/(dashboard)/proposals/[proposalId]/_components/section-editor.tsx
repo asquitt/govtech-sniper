@@ -8,6 +8,7 @@ import { WritingPlanPanel } from "@/components/proposals/writing-plan-panel";
 import { RichTextEditor } from "@/components/proposals/rich-text-editor";
 import type { ProposalSection } from "@/types";
 import { draftApi } from "@/lib/api";
+import { wrapInSuggestionMarks } from "@/components/proposals/track-changes-extension";
 
 interface SectionEditorProps {
   selectedSection: ProposalSection | null;
@@ -69,7 +70,7 @@ export function SectionEditor({
     try {
       const updated = await draftApi.rewriteSection(selectedSection.id, { tone });
       if (updated.generated_content) {
-        onEditorContentChange(updated.generated_content.clean_text);
+        onEditorContentChange(wrapInSuggestionMarks(updated.generated_content.clean_text));
       }
       onSectionUpdate?.(updated);
     } catch (err) {
@@ -88,7 +89,7 @@ export function SectionEditor({
         target_words: Math.min(targetWords, 3000),
       });
       if (updated.generated_content) {
-        onEditorContentChange(updated.generated_content.clean_text);
+        onEditorContentChange(wrapInSuggestionMarks(updated.generated_content.clean_text));
       }
       onSectionUpdate?.(updated);
     } catch (err) {

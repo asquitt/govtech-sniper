@@ -8,7 +8,11 @@ declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     aiSuggestion: {
       /** Apply the AI suggestion mark to the current selection */
-      setAiSuggestion: () => ReturnType;
+      setAiSuggestion: (attrs?: {
+        author?: string;
+        timestamp?: string;
+        suggestionId?: string;
+      }) => ReturnType;
       /** Remove the AI suggestion mark from the current selection */
       unsetAiSuggestion: () => ReturnType;
       /** Accept suggestion: remove mark but keep content */
@@ -32,6 +36,30 @@ export const AiSuggestion = Mark.create<AiSuggestionOptions>({
     };
   },
 
+  addAttributes() {
+    return {
+      author: {
+        default: "AI",
+        parseHTML: (el) => el.getAttribute("data-author") ?? "AI",
+        renderHTML: (attrs) => ({ "data-author": attrs.author }),
+      },
+      timestamp: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-timestamp"),
+        renderHTML: (attrs) =>
+          attrs.timestamp ? { "data-timestamp": attrs.timestamp } : {},
+      },
+      suggestionId: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-suggestion-id"),
+        renderHTML: (attrs) =>
+          attrs.suggestionId
+            ? { "data-suggestion-id": attrs.suggestionId }
+            : {},
+      },
+    };
+  },
+
   parseHTML() {
     return [{ tag: 'span[data-ai-suggestion="true"]' }];
   },
@@ -50,9 +78,9 @@ export const AiSuggestion = Mark.create<AiSuggestionOptions>({
   addCommands() {
     return {
       setAiSuggestion:
-        () =>
+        (attrs) =>
         ({ commands }) =>
-          commands.setMark(this.name),
+          commands.setMark(this.name, attrs),
 
       unsetAiSuggestion:
         () =>
@@ -155,4 +183,17 @@ export function countAiSuggestions(editor: Editor): number {
   });
 
   return count;
+}
+
+/**
+ * Wrap HTML content in AI suggestion marks by adding data attributes.
+ * Used when inserting AI-generated content into the editor.
+ */
+export function wrapInSuggestionMarks(
+  html: string,
+  author: string = "AI",
+): string {
+  const id = crypto.randomUUID();
+  const ts = new Date().toISOString();
+  return `<span data-ai-suggestion="true" data-author="${author}" data-timestamp="${ts}" data-suggestion-id="${id}" class="ai-suggestion">${html}</span>`;
 }
