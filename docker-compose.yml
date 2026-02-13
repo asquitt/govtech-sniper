@@ -7,6 +7,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rfp_sniper_api
+    restart: unless-stopped
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
@@ -28,7 +29,7 @@ services:
       - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM:-Orbitr <notifications@orbitr.io>}
-      - DEBUG=true
+      - DEBUG=${DEBUG:-true}
     volumes:
       - ./backend/app:/app/app
       - ./fixtures:/app/fixtures:ro
@@ -38,8 +39,18 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     networks:
       - rfp_network
 
@@ -51,6 +62,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rfp_sniper_celery
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
       - REDIS_URL=redis://redis:6379/0
@@ -79,7 +91,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping --timeout 10 || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2 -Q celery,ingest,analysis,generation,documents,periodic,maintenance
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     networks:
       - rfp_network
 
@@ -91,6 +113,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rfp_sniper_beat
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
       - REDIS_URL=redis://redis:6379/0
@@ -110,7 +133,17 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     command: celery -A app.tasks.celery_app beat --loglevel=info
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     networks:
       - rfp_network
 
@@ -120,6 +153,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: rfp_sniper_postgres
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=rfpsniper
       - POSTGRES_PASSWORD=rfpsniper_secret
@@ -133,6 +167,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     networks:
       - rfp_network
 
@@ -142,6 +180,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: rfp_sniper_redis
+    restart: unless-stopped
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -152,6 +191,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     networks:
       - rfp_network
 
@@ -163,13 +206,24 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rfp_sniper_flower
+    restart: unless-stopped
     ports:
       - "${FLOWER_PORT:-5555}:5555"
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/1
     depends_on:
       - celery_worker
-    command: celery -A app.tasks.celery_app flower --port=5555
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5555/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    command: celery -A app.tasks.celery_app flower --port=5555 --basic-auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-changeme}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     networks:
       - rfp_network
 
@@ -182,6 +236,7 @@ services:
       dockerfile: Dockerfile
       target: development
     container_name: rfp_sniper_frontend
+    restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -191,7 +246,17 @@ services:
       - ./frontend/public:/app/public
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     command: npm run dev
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     networks:
       - rfp_network
 
