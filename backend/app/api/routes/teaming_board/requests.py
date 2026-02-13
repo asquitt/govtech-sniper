@@ -1,8 +1,4 @@
-"""
-RFP Sniper - Teaming Board Routes
-==================================
-Partner discovery and teaming requests.
-"""
+"""Teaming Board - Teaming Requests and related endpoints."""
 
 import csv
 from datetime import datetime, timedelta
@@ -16,29 +12,17 @@ from sqlmodel import select
 from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.capture import (
-    NDAStatus,
     TeamingDigestChannel,
     TeamingDigestFrequency,
     TeamingDigestSchedule,
-    TeamingNDA,
     TeamingPartner,
-    TeamingPerformanceRating,
     TeamingRequest,
     TeamingRequestStatus,
 )
 from app.models.user import User
 from app.schemas.teaming import (
-    CapabilityGapResult,
-    NDACreate,
-    NDARead,
-    NDAUpdate,
     PartnerTrendDrilldownRead,
-    PerformanceRatingCreate,
-    PerformanceRatingRead,
-    TeamingDigestScheduleRead,
     TeamingDigestScheduleUpdate,
-    TeamingPartnerExtended,
-    TeamingPartnerPublicProfile,
     TeamingPartnerTrendDrilldownResponse,
     TeamingRequestCreate,
     TeamingRequestRead,
@@ -48,175 +32,15 @@ from app.schemas.teaming import (
 )
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
-from app.services.capability_gap_service import analyze_capability_gaps
 
-router = APIRouter(prefix="/teaming", tags=["Teaming Board"])
+from .helpers import (
+    TeamingDigestScheduleRead,
+    _parse_teaming_channel,
+    _parse_teaming_frequency,
+    _serialize_teaming_digest_schedule,
+)
 
-
-def _enum_value(value: object) -> str:
-    return value.value if hasattr(value, "value") else str(value)
-
-
-def _parse_teaming_frequency(value: str) -> TeamingDigestFrequency:
-    try:
-        return TeamingDigestFrequency(value)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid digest frequency") from exc
-
-
-def _parse_teaming_channel(value: str) -> TeamingDigestChannel:
-    try:
-        return TeamingDigestChannel(value)
-    except ValueError as exc:
-        raise HTTPException(400, "Invalid digest channel") from exc
-
-
-def _serialize_teaming_digest_schedule(
-    schedule: TeamingDigestSchedule,
-) -> TeamingDigestScheduleRead:
-    return TeamingDigestScheduleRead(
-        frequency=_enum_value(schedule.frequency),
-        day_of_week=schedule.day_of_week,
-        hour_utc=schedule.hour_utc,
-        minute_utc=schedule.minute_utc,
-        channel=_enum_value(schedule.channel),
-        include_declined_reasons=schedule.include_declined_reasons,
-        is_enabled=schedule.is_enabled,
-        last_sent_at=schedule.last_sent_at,
-    )
-
-
-# -----------------------------------------------------------------------------
-# Partner Search / Discovery
-# -----------------------------------------------------------------------------
-
-
-@router.get("/search", response_model=list[TeamingPartnerPublicProfile])
-async def search_partners(
-    naics: str | None = Query(None, description="Filter by NAICS code"),
-    set_aside: str | None = Query(None, description="Filter by set-aside type"),
-    capability: str | None = Query(None, description="Filter by capability keyword"),
-    clearance: str | None = Query(None, description="Filter by clearance level"),
-    q: str | None = Query(None, description="Free-text name search"),
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> list[TeamingPartnerPublicProfile]:
-    """Search public partner profiles with optional filters."""
-    stmt = select(TeamingPartner).where(TeamingPartner.is_public == True)  # noqa: E712
-
-    if q:
-        stmt = stmt.where(TeamingPartner.name.ilike(f"%{q}%"))
-
-    results = await session.execute(stmt)
-    partners = results.scalars().all()
-
-    # Apply JSON-field filters in Python (SQLite/Postgres JSON compatibility)
-    filtered = []
-    for p in partners:
-        if naics and naics not in (p.naics_codes or []):
-            continue
-        if set_aside and set_aside not in (p.set_asides or []):
-            continue
-        if capability:
-            caps = [c.lower() for c in (p.capabilities or [])]
-            if not any(capability.lower() in c for c in caps):
-                continue
-        if clearance and (p.clearance_level or "").lower() != clearance.lower():
-            continue
-        filtered.append(p)
-
-    return [TeamingPartnerPublicProfile.model_validate(p) for p in filtered]
-
-
-@router.get("/profile/{partner_id}", response_model=TeamingPartnerPublicProfile)
-async def get_partner_profile(
-    partner_id: int,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> TeamingPartnerPublicProfile:
-    """Get a public partner profile by ID."""
-    result = await session.execute(
-        select(TeamingPartner).where(
-            TeamingPartner.id == partner_id,
-            TeamingPartner.is_public == True,  # noqa: E712
-        )
-    )
-    partner = result.scalar_one_or_none()
-    if not partner:
-        raise HTTPException(status_code=404, detail="Partner not found or not public")
-
-    return TeamingPartnerPublicProfile.model_validate(partner)
-
-
-# -----------------------------------------------------------------------------
-# My Profile (make own partner record public/private)
-# -----------------------------------------------------------------------------
-
-
-@router.patch("/my-profile/{partner_id}", response_model=TeamingPartnerExtended)
-async def update_my_partner_profile(
-    partner_id: int,
-    is_public: bool | None = None,
-    naics_codes: list[str] | None = None,
-    set_asides: list[str] | None = None,
-    capabilities: list[str] | None = None,
-    clearance_level: str | None = None,
-    past_performance_summary: str | None = None,
-    website: str | None = None,
-    company_duns: str | None = None,
-    cage_code: str | None = None,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> TeamingPartnerExtended:
-    """Update extended fields on your own partner profile."""
-    result = await session.execute(
-        select(TeamingPartner).where(
-            TeamingPartner.id == partner_id,
-            TeamingPartner.user_id == current_user.id,
-        )
-    )
-    partner = result.scalar_one_or_none()
-    if not partner:
-        raise HTTPException(status_code=404, detail="Partner not found")
-
-    if is_public is not None:
-        partner.is_public = is_public
-    if naics_codes is not None:
-        partner.naics_codes = naics_codes
-    if set_asides is not None:
-        partner.set_asides = set_asides
-    if capabilities is not None:
-        partner.capabilities = capabilities
-    if clearance_level is not None:
-        partner.clearance_level = clearance_level
-    if past_performance_summary is not None:
-        partner.past_performance_summary = past_performance_summary
-    if website is not None:
-        partner.website = website
-    if company_duns is not None:
-        partner.company_duns = company_duns
-    if cage_code is not None:
-        partner.cage_code = cage_code
-
-    partner.updated_at = datetime.utcnow()
-
-    await log_audit_event(
-        session,
-        user_id=current_user.id,
-        entity_type="teaming_partner",
-        entity_id=partner.id,
-        action="teaming.profile_updated",
-        metadata={"is_public": partner.is_public},
-    )
-    await session.commit()
-    await session.refresh(partner)
-
-    return TeamingPartnerExtended.model_validate(partner)
-
-
-# -----------------------------------------------------------------------------
-# Teaming Requests
-# -----------------------------------------------------------------------------
+router = APIRouter()
 
 
 @router.post("/requests", response_model=TeamingRequestRead)
@@ -830,142 +654,3 @@ async def update_teaming_request(
         created_at=request.created_at,
         updated_at=request.updated_at,
     )
-
-
-# -----------------------------------------------------------------------------
-# Capability Gap Analysis
-# -----------------------------------------------------------------------------
-
-
-@router.get("/gap-analysis/{rfp_id}", response_model=CapabilityGapResult)
-async def get_gap_analysis(
-    rfp_id: int,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> CapabilityGapResult:
-    """AI-powered capability gap analysis for an RFP."""
-    result = await analyze_capability_gaps(rfp_id, current_user.id, session)
-    return CapabilityGapResult(
-        rfp_id=result.rfp_id,
-        gaps=result.gaps,
-        recommended_partners=result.recommended_partners,
-        analysis_summary=result.analysis_summary,
-    )
-
-
-# -----------------------------------------------------------------------------
-# NDA Tracking
-# -----------------------------------------------------------------------------
-
-
-@router.post("/ndas", response_model=NDARead, status_code=201)
-async def create_nda(
-    payload: NDACreate,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> NDARead:
-    """Create an NDA record."""
-    nda = TeamingNDA(
-        user_id=current_user.id,
-        partner_id=payload.partner_id,
-        rfp_id=payload.rfp_id,
-        document_path=payload.document_path,
-        notes=payload.notes,
-    )
-    if payload.signed_date:
-        nda.signed_date = datetime.strptime(payload.signed_date, "%Y-%m-%d").date()
-    if payload.expiry_date:
-        nda.expiry_date = datetime.strptime(payload.expiry_date, "%Y-%m-%d").date()
-    session.add(nda)
-    await session.commit()
-    await session.refresh(nda)
-    return NDARead.model_validate(nda)
-
-
-@router.get("/ndas", response_model=list[NDARead])
-async def list_ndas(
-    partner_id: int | None = Query(None),
-    status: str | None = Query(None),
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> list[NDARead]:
-    """List NDAs for the current user."""
-    stmt = select(TeamingNDA).where(TeamingNDA.user_id == current_user.id)
-    if partner_id:
-        stmt = stmt.where(TeamingNDA.partner_id == partner_id)
-    if status:
-        stmt = stmt.where(TeamingNDA.status == NDAStatus(status))
-    stmt = stmt.order_by(TeamingNDA.created_at.desc())
-    result = await session.execute(stmt)
-    return [NDARead.model_validate(n) for n in result.scalars().all()]
-
-
-@router.patch("/ndas/{nda_id}", response_model=NDARead)
-async def update_nda(
-    nda_id: int,
-    payload: NDAUpdate,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> NDARead:
-    """Update NDA status or details."""
-    nda = await session.get(TeamingNDA, nda_id)
-    if not nda or nda.user_id != current_user.id:
-        raise HTTPException(404, "NDA not found")
-    if payload.status is not None:
-        nda.status = NDAStatus(payload.status)
-    if payload.signed_date is not None:
-        nda.signed_date = datetime.strptime(payload.signed_date, "%Y-%m-%d").date()
-    if payload.expiry_date is not None:
-        nda.expiry_date = datetime.strptime(payload.expiry_date, "%Y-%m-%d").date()
-    if payload.document_path is not None:
-        nda.document_path = payload.document_path
-    if payload.notes is not None:
-        nda.notes = payload.notes
-    nda.updated_at = datetime.utcnow()
-    session.add(nda)
-    await session.commit()
-    await session.refresh(nda)
-    return NDARead.model_validate(nda)
-
-
-# -----------------------------------------------------------------------------
-# Performance Ratings
-# -----------------------------------------------------------------------------
-
-
-@router.post("/ratings", response_model=PerformanceRatingRead, status_code=201)
-async def create_rating(
-    payload: PerformanceRatingCreate,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> PerformanceRatingRead:
-    """Rate a teaming partner's performance."""
-    rating = TeamingPerformanceRating(
-        user_id=current_user.id,
-        partner_id=payload.partner_id,
-        rfp_id=payload.rfp_id,
-        rating=payload.rating,
-        responsiveness=payload.responsiveness,
-        quality=payload.quality,
-        timeliness=payload.timeliness,
-        comment=payload.comment,
-    )
-    session.add(rating)
-    await session.commit()
-    await session.refresh(rating)
-    return PerformanceRatingRead.model_validate(rating)
-
-
-@router.get("/partners/{partner_id}/ratings", response_model=list[PerformanceRatingRead])
-async def list_partner_ratings(
-    partner_id: int,
-    current_user: UserAuth = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> list[PerformanceRatingRead]:
-    """List performance ratings for a partner."""
-    result = await session.execute(
-        select(TeamingPerformanceRating)
-        .where(TeamingPerformanceRating.partner_id == partner_id)
-        .order_by(TeamingPerformanceRating.created_at.desc())
-    )
-    return [PerformanceRatingRead.model_validate(r) for r in result.scalars().all()]
