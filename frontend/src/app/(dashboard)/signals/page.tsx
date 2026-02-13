@@ -1,12 +1,17 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { signalApi } from "@/lib/api";
-import type { MarketSignal, SignalSubscription, SignalType } from "@/types/signals";
+import type { SignalType } from "@/types/signals";
+import {
+  useSignalFeed,
+  useSignalSubscription,
+  useMarkSignalRead,
+  useUpsertSubscription,
+} from "@/hooks/use-signals";
 
 const SIGNAL_TYPE_LABELS: Record<SignalType, string> = {
   budget: "Budget",
@@ -25,50 +30,39 @@ const SIGNAL_TYPE_COLORS: Record<SignalType, string> = {
 };
 
 export default function SignalsPage() {
-  const [signals, setSignals] = useState<MarketSignal[]>([]);
-  const [total, setTotal] = useState(0);
-  const [subscription, setSubscription] = useState<SignalSubscription | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<SignalType | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
   const [keywords, setKeywords] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [feedRes, sub] = await Promise.all([
-        signalApi.feed({ signal_type: filter, limit: 50 }),
-        signalApi.getSubscription(),
-      ]);
-      setSignals(feedRes.signals);
-      setTotal(feedRes.total);
-      setSubscription(sub);
-      if (sub?.keywords) setKeywords(sub.keywords.join(", "));
-    } catch {
-      setError("Failed to load signals.");
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
+  const feedParams = useMemo(
+    () => ({ signal_type: filter, limit: 50 }),
+    [filter]
+  );
+  const { data: feedData, isLoading: loading } = useSignalFeed(feedParams);
+  const { data: subscription } = useSignalSubscription();
+  const markRead = useMarkSignalRead();
+  const upsertSub = useUpsertSubscription();
 
+  const signals = feedData?.signals ?? [];
+  const total = feedData?.total ?? 0;
+
+  // Sync keywords from subscription on first load
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const handleMarkRead = async (id: number) => {
-    try {
-      await signalApi.markRead(id);
-      setSignals((prev) => prev.map((s) => (s.id === id ? { ...s, is_read: true } : s)));
-    } catch {
-      setError("Failed to mark signal as read.");
+    if (subscription?.keywords) {
+      setKeywords(subscription.keywords.join(", "));
     }
+  }, [subscription]);
+
+  const handleMarkRead = (id: number) => {
+    markRead.mutate(id, {
+      onError: () => setError("Failed to mark signal as read."),
+    });
   };
 
-  const handleSaveSubscription = async () => {
-    try {
-      const sub = await signalApi.upsertSubscription({
+  const handleSaveSubscription = () => {
+    upsertSub.mutate(
+      {
         agencies: subscription?.agencies ?? [],
         naics_codes: subscription?.naics_codes ?? [],
         keywords: keywords
@@ -77,12 +71,12 @@ export default function SignalsPage() {
           .filter(Boolean),
         email_digest_enabled: subscription?.email_digest_enabled ?? false,
         digest_frequency: subscription?.digest_frequency ?? "daily",
-      });
-      setSubscription(sub);
-      setShowSettings(false);
-    } catch {
-      setError("Failed to save subscription.");
-    }
+      },
+      {
+        onSuccess: () => setShowSettings(false),
+        onError: () => setError("Failed to save subscription."),
+      }
+    );
   };
 
   return (

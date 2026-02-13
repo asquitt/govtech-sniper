@@ -1,21 +1,16 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { contractApi, documentApi } from "@/lib/api";
-import type {
-  ContractAward,
-  ContractDeliverable,
-  ContractTask,
-  CPARSReview,
-  ContractStatusReport,
-  CPARSEvidence,
-  ContractModification,
-  ContractCLIN,
-  KnowledgeBaseDocument,
-} from "@/types";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useContracts,
+  useContractDocuments,
+  useContractDetails,
+  useCPARSEvidence,
+} from "@/hooks/use-contracts";
 import { ContractCreationForm } from "./_components/contract-creation-form";
 import { DeliverablesTasksPanel } from "./_components/deliverables-tasks-panel";
 import { ModificationsPanel } from "./_components/modifications-panel";
@@ -24,86 +19,40 @@ import { CPARSEvidencePanel } from "./_components/cpars-evidence-panel";
 import { StatusReportsPanel } from "./_components/status-reports-panel";
 
 export default function ContractsPage() {
-  const [contracts, setContracts] = useState<ContractAward[]>([]);
-  const [deliverables, setDeliverables] = useState<ContractDeliverable[]>([]);
-  const [tasks, setTasks] = useState<ContractTask[]>([]);
-  const [modifications, setModifications] = useState<ContractModification[]>([]);
-  const [clins, setClins] = useState<ContractCLIN[]>([]);
-  const [cpars, setCpars] = useState<CPARSReview[]>([]);
-  const [statusReports, setStatusReports] = useState<ContractStatusReport[]>([]);
-  const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
-  const [selectedCparsId, setSelectedCparsId] = useState<number | null>(null);
-  const [cparsEvidence, setCparsEvidence] = useState<CPARSEvidence[]>([]);
+  const queryClient = useQueryClient();
+  const { data: contractsData } = useContracts();
+  const { data: documents = [] } = useContractDocuments();
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
+  const [selectedCparsId, setSelectedCparsId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchContracts = useCallback(async () => {
-    try {
-      const [{ contracts: list }, docs] = await Promise.all([
-        contractApi.list(),
-        documentApi.list({ ready_only: true }),
-      ]);
-      setContracts(list);
-      setDocuments(docs);
-      if (!selectedContractId && list.length > 0) {
-        setSelectedContractId(list[0].id);
-      }
-    } catch (err) {
-      console.error("Failed to load contracts", err);
-      setError("Failed to load contracts.");
+  const contracts = contractsData?.contracts ?? [];
+
+  // Auto-select first contract
+  React.useEffect(() => {
+    if (contracts.length > 0 && !selectedContractId) {
+      setSelectedContractId(contracts[0].id);
     }
-  }, [selectedContractId]);
+  }, [contracts, selectedContractId]);
 
-  useEffect(() => {
-    fetchContracts();
-  }, [fetchContracts]);
+  const { data: details } = useContractDetails(selectedContractId);
+  const { data: cparsEvidence = [] } = useCPARSEvidence(selectedContractId, selectedCparsId);
 
-  useEffect(() => {
-    const fetchDetails = async () => {
-      if (!selectedContractId) return;
-      try {
-        const list = await contractApi.listDeliverables(selectedContractId);
-        setDeliverables(list);
-        const [taskList, modList, clinList, cparsList, reportList] = await Promise.all([
-          contractApi.listTasks(selectedContractId),
-          contractApi.listModifications(selectedContractId),
-          contractApi.listCLINs(selectedContractId),
-          contractApi.listCPARS(selectedContractId),
-          contractApi.listStatusReports(selectedContractId),
-        ]);
-        setTasks(taskList);
-        setModifications(modList);
-        setClins(clinList);
-        setCpars(cparsList);
-        if (cparsList.length === 0) {
-          setSelectedCparsId(null);
-          setCparsEvidence([]);
-        } else if (!selectedCparsId || !cparsList.some((item) => item.id === selectedCparsId)) {
-          setSelectedCparsId(cparsList[0].id);
-        }
-        setStatusReports(reportList);
-      } catch (err) {
-        console.error("Failed to load deliverables", err);
-      }
-    };
-    fetchDetails();
-  }, [selectedContractId, selectedCparsId]);
+  const deliverables = details?.deliverables ?? [];
+  const tasks = details?.tasks ?? [];
+  const modifications = details?.modifications ?? [];
+  const clins = details?.clins ?? [];
+  const cpars = details?.cpars ?? [];
+  const statusReports = details?.statusReports ?? [];
 
-  useEffect(() => {
-    const fetchEvidence = async () => {
-      if (!selectedContractId || !selectedCparsId) return;
-      try {
-        const list = await contractApi.listCPARSEvidence(
-          selectedContractId,
-          selectedCparsId
-        );
-        setCparsEvidence(list);
-      } catch (err) {
-        console.error("Failed to load CPARS evidence", err);
-      }
-    };
-    fetchEvidence();
-  }, [selectedContractId, selectedCparsId]);
+  // Auto-select first CPARS review
+  React.useEffect(() => {
+    if (cpars.length === 0) {
+      setSelectedCparsId(null);
+    } else if (!selectedCparsId || !cpars.some((item) => item.id === selectedCparsId)) {
+      setSelectedCparsId(cpars[0].id);
+    }
+  }, [cpars, selectedCparsId]);
 
   const selectedContract = useMemo(
     () => contracts.find((c) => c.id === selectedContractId) || null,
@@ -113,6 +62,12 @@ export default function ContractsPage() {
     () => new Map(contracts.map((contract) => [contract.id, contract])),
     [contracts]
   );
+
+  const refreshContracts = () => queryClient.invalidateQueries({ queryKey: ["contracts"] });
+  const refreshDetails = () =>
+    queryClient.invalidateQueries({ queryKey: ["contract-details", selectedContractId] });
+  const refreshEvidence = () =>
+    queryClient.invalidateQueries({ queryKey: ["cpars-evidence", selectedContractId, selectedCparsId] });
 
   return (
     <div className="flex flex-col h-full">
@@ -126,7 +81,7 @@ export default function ContractsPage() {
 
         <ContractCreationForm
           contracts={contracts}
-          onCreated={fetchContracts}
+          onCreated={refreshContracts}
           onError={setError}
         />
 
@@ -179,22 +134,22 @@ export default function ContractsPage() {
                 deliverables={deliverables}
                 tasks={tasks}
                 contracts={contracts}
-                onDeliverablesChange={setDeliverables}
-                onTasksChange={setTasks}
+                onDeliverablesChange={() => refreshDetails()}
+                onTasksChange={() => refreshDetails()}
                 onError={setError}
               />
 
               <ModificationsPanel
                 selectedContractId={selectedContractId}
                 modifications={modifications}
-                onModificationsChange={setModifications}
+                onModificationsChange={() => refreshDetails()}
                 onError={setError}
               />
 
               <CLINManagementPanel
                 selectedContractId={selectedContractId}
                 clins={clins}
-                onClinsChange={setClins}
+                onClinsChange={() => refreshDetails()}
                 onError={setError}
               />
 
@@ -204,16 +159,16 @@ export default function ContractsPage() {
                 selectedCparsId={selectedCparsId}
                 cparsEvidence={cparsEvidence}
                 documents={documents}
-                onCparsChange={setCpars}
+                onCparsChange={() => refreshDetails()}
                 onSelectedCparsIdChange={setSelectedCparsId}
-                onCparsEvidenceChange={setCparsEvidence}
+                onCparsEvidenceChange={() => refreshEvidence()}
                 onError={setError}
               />
 
               <StatusReportsPanel
                 selectedContractId={selectedContractId}
                 statusReports={statusReports}
-                onStatusReportsChange={setStatusReports}
+                onStatusReportsChange={() => refreshDetails()}
                 onError={setError}
               />
             </CardContent>
