@@ -24,6 +24,7 @@ celery_app = Celery(
         "app.tasks.maintenance_tasks",
         "app.tasks.sharepoint_sync_tasks",
         "app.tasks.email_ingest_tasks",
+        "app.tasks.signal_tasks",
     ],
 )
 
@@ -94,6 +95,18 @@ celery_app.conf.update(
         "daily-opportunity-digest": {
             "task": "app.tasks.ingest_tasks.send_daily_digest",
             "schedule": crontab(minute=0, hour=7),
+            "options": {"queue": "periodic"},
+        },
+        # Poll RSS feeds for market signals every 4 hours
+        "poll-signal-feeds": {
+            "task": "app.tasks.signal_tasks.poll_signal_feeds",
+            "schedule": crontab(minute=0, hour="*/4"),
+            "options": {"queue": "periodic"},
+        },
+        # Send signal digest at 7:30 AM UTC daily
+        "send-signal-digest": {
+            "task": "app.tasks.signal_tasks.send_signal_digest",
+            "schedule": crontab(minute=30, hour=7),
             "options": {"queue": "periodic"},
         },
         # Poll IMAP inboxes every 15 minutes for forwarded RFPs
