@@ -113,6 +113,8 @@ export interface ProposalSection {
   created_at: string;
   updated_at: string;
   generated_at?: string;
+  assigned_to_user_id: number | null;
+  assigned_at: string | null;
 }
 
 export interface SectionEvidence {
@@ -200,6 +202,8 @@ export interface Proposal {
   updated_at: string;
   submitted_at?: string;
   completion_percentage: number;
+  docx_export_path: string | null;
+  pdf_export_path: string | null;
 }
 
 // -----------------------------------------------------------------------------

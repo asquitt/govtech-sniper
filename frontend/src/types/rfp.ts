@@ -54,6 +54,9 @@ export interface RFP {
   created_at: string;
   updated_at: string;
   analyzed_at?: string;
+  match_score: number | null;
+  match_reasoning: string | null;
+  match_details: Record<string, unknown> | null;
 }
 
 export interface RFPListItem {
