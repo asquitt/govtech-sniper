@@ -11,7 +11,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rfpsniper}:${POSTGRES_PASSWORD:-rfpsniper_secret}@postgres:5432/${POSTGRES_DB:-rfpsniper_db}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -64,7 +64,7 @@ services:
     container_name: rfp_sniper_celery
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rfpsniper}:${POSTGRES_PASSWORD:-rfpsniper_secret}@postgres:5432/${POSTGRES_DB:-rfpsniper_db}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -115,7 +115,7 @@ services:
     container_name: rfp_sniper_beat
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://rfpsniper:rfpsniper_secret@postgres:5432/rfpsniper_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-rfpsniper}:${POSTGRES_PASSWORD:-rfpsniper_secret}@postgres:5432/${POSTGRES_DB:-rfpsniper_db}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
@@ -155,15 +155,15 @@ services:
     container_name: rfp_sniper_postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=rfpsniper
-      - POSTGRES_PASSWORD=rfpsniper_secret
-      - POSTGRES_DB=rfpsniper_db
+      - POSTGRES_USER=${POSTGRES_USER:-rfpsniper}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-rfpsniper_secret}
+      - POSTGRES_DB=${POSTGRES_DB:-rfpsniper_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U rfpsniper -d rfpsniper_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rfpsniper} -d ${POSTGRES_DB:-rfpsniper_db}"]
       interval: 5s
       timeout: 5s
       retries: 5

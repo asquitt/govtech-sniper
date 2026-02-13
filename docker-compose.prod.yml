@@ -1,0 +1,57 @@
+# =============================================================================
+# Production Overrides
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# =============================================================================
+
+services:
+  api:
+    environment:
+      - DEBUG=false
+    volumes:
+      - uploads:/app/uploads
+    # Remove dev source bind mounts — image contains built code
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    ports: !reset []
+    expose:
+      - "8000"
+
+  celery_worker:
+    volumes:
+      - uploads:/app/uploads
+    command: celery -A app.tasks.celery_app worker --loglevel=warning --concurrency=2 -Q celery,ingest,analysis,generation,documents,periodic,maintenance
+
+  celery_beat:
+    volumes: !reset []
+    command: celery -A app.tasks.celery_app beat --loglevel=warning
+
+  postgres:
+    ports: !reset []
+    expose:
+      - "5432"
+
+  redis:
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports: !reset []
+    expose:
+      - "6379"
+
+  flower:
+    ports: !reset []
+    expose:
+      - "5555"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    volumes: !reset []
+    command: node server.js
+    ports: !reset []
+    expose:
+      - "3000"
+
+volumes:
+  uploads:
