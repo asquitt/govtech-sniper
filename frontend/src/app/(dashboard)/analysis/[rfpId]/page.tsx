@@ -2,36 +2,26 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import {
-  ArrowLeft,
-  Download,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  FileText,
-  List,
-  Grid3X3,
-  Plus,
-  Pencil,
-  Trash2,
-} from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { ComplianceMatrix } from "@/components/analysis/compliance-matrix";
 import { DraftPreview } from "@/components/analysis/draft-preview";
 import { rfpApi, analysisApi, draftApi, exportApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api/error";
 import type { ComplianceRequirement, GeneratedContent, RFP } from "@/types";
+import { AnalysisHeader } from "./_components/analysis-header";
+import { StatusBar } from "./_components/status-bar";
+import { EditRequirementForm, initEditForm } from "./_components/edit-requirement-form";
+import { CreateRequirementForm } from "./_components/create-requirement-form";
+import { ShredView } from "./_components/shred-view";
 
 export default function AnalysisPage() {
   const params = useParams();
   const rfpId = parseInt(params.rfpId as string);
 
-  // State
   const [rfp, setRfp] = useState<RFP | null>(null);
   const [requirements, setRequirements] = useState<ComplianceRequirement[]>([]);
   const [selectedRequirement, setSelectedRequirement] = useState<ComplianceRequirement | undefined>();
@@ -45,33 +35,7 @@ export default function AnalysisPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "shred">("list");
   const [isEditingRequirement, setIsEditingRequirement] = useState(false);
-  const [isSavingRequirement, setIsSavingRequirement] = useState(false);
   const [showCreateRequirement, setShowCreateRequirement] = useState(false);
-  const [editForm, setEditForm] = useState({
-    section: "",
-    requirement_text: "",
-    importance: "mandatory",
-    category: "",
-    notes: "",
-    is_addressed: false,
-    page_reference: "",
-    keywords: "",
-    status: "open",
-    assigned_to: "",
-    tags: "",
-  });
-  const [newRequirement, setNewRequirement] = useState({
-    section: "",
-    requirement_text: "",
-    importance: "mandatory",
-    category: "",
-    notes: "",
-    page_reference: "",
-    keywords: "",
-    status: "open",
-    assigned_to: "",
-    tags: "",
-  });
   const [snapshotDiff, setSnapshotDiff] = useState<{
     from_snapshot_id: number;
     to_snapshot_id: number;
@@ -80,28 +44,21 @@ export default function AnalysisPage() {
     summary_to: Record<string, unknown>;
   } | null>(null);
 
-  // Fetch RFP and requirements
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
       setLoadError(null);
-
       const rfpData = await rfpApi.get(rfpId);
-
       setRfp(rfpData);
       setRequirements([]);
       setSnapshotDiff(null);
 
-      const matrixData = await analysisApi
-        .getComplianceMatrix(rfpId)
-        .catch(() => null);
+      const matrixData = await analysisApi.getComplianceMatrix(rfpId).catch(() => null);
       if (matrixData?.requirements) {
         setRequirements(matrixData.requirements);
       }
 
-      const snapshots = await rfpApi
-        .getSnapshots(rfpId, { limit: 2 })
-        .catch(() => []);
+      const snapshots = await rfpApi.getSnapshots(rfpId, { limit: 2 }).catch(() => []);
       if (snapshots.length >= 2) {
         try {
           const diff = await rfpApi.getSnapshotDiff(rfpId);
@@ -124,20 +81,6 @@ export default function AnalysisPage() {
 
   const handleSelectRequirement = (requirement: ComplianceRequirement) => {
     setSelectedRequirement(requirement);
-    setEditForm({
-      section: requirement.section,
-      requirement_text: requirement.requirement_text,
-      importance: requirement.importance,
-      category: requirement.category || "",
-      notes: requirement.notes || "",
-      is_addressed: requirement.is_addressed,
-      page_reference: requirement.page_reference ? String(requirement.page_reference) : "",
-      keywords: requirement.keywords?.join(", ") || "",
-      status: requirement.status || (requirement.is_addressed ? "addressed" : "open"),
-      assigned_to: requirement.assigned_to || "",
-      tags: requirement.tags?.join(", ") || "",
-    });
-    // If already addressed, fetch the generated content
     if (requirement.is_addressed && requirement.generated_content) {
       setGeneratedContent(requirement.generated_content as GeneratedContent);
     } else {
@@ -183,7 +126,6 @@ export default function AnalysisPage() {
             return;
           }
         }
-
         const refreshedSections = await draftApi.listSections(proposal.id);
         const generatedSection = refreshedSections.find(
           (section) => section.requirement_id === requirement.id
@@ -198,7 +140,6 @@ export default function AnalysisPage() {
         return;
       }
 
-      // Poll for completion
       let completed = false;
       let pollCount = 0;
       const maxPolls = 30;
@@ -206,7 +147,6 @@ export default function AnalysisPage() {
         await new Promise(resolve => setTimeout(resolve, 2000));
         const status = await draftApi.getGenerationStatus(result.task_id);
         pollCount += 1;
-
         if (status.status === "completed") {
           completed = true;
           await refreshGeneratedResult();
@@ -230,9 +170,7 @@ export default function AnalysisPage() {
   };
 
   const handleRegenerate = () => {
-    if (selectedRequirement) {
-      handleGenerate(selectedRequirement);
-    }
+    if (selectedRequirement) handleGenerate(selectedRequirement);
   };
 
   const handleApprove = async () => {
@@ -249,117 +187,8 @@ export default function AnalysisPage() {
     }
   };
 
-  const handleEditRequirement = () => {
-    if (!selectedRequirement) return;
-    setIsEditingRequirement(true);
-  };
-
-  const handleSaveRequirement = async () => {
-    if (!selectedRequirement) return;
-    try {
-      setIsSavingRequirement(true);
-      const payload = {
-        section: editForm.section,
-        requirement_text: editForm.requirement_text,
-        importance: editForm.importance as ComplianceRequirement["importance"],
-        category: editForm.category || undefined,
-        notes: editForm.notes || undefined,
-        is_addressed: editForm.is_addressed,
-        page_reference: editForm.page_reference
-          ? parseInt(editForm.page_reference, 10)
-          : undefined,
-        keywords: editForm.keywords
-          ? editForm.keywords.split(",").map((k) => k.trim()).filter(Boolean)
-          : [],
-        status: editForm.status as ComplianceRequirement["status"],
-        assigned_to: editForm.assigned_to || undefined,
-        tags: editForm.tags
-          ? editForm.tags.split(",").map((k) => k.trim()).filter(Boolean)
-          : [],
-      } satisfies Partial<ComplianceRequirement>;
-      const updated = await analysisApi.updateRequirement(
-        rfpId,
-        selectedRequirement.id,
-        payload
-      );
-      setRequirements(updated.requirements);
-      const refreshed = updated.requirements.find(
-        (req) => req.id === selectedRequirement.id
-      );
-      if (refreshed) {
-        setSelectedRequirement(refreshed);
-      }
-      setIsEditingRequirement(false);
-    } catch (err) {
-      console.error("Failed to save requirement", err);
-      setActionError("Failed to save requirement changes.");
-    } finally {
-      setIsSavingRequirement(false);
-    }
-  };
-
-  const handleDeleteRequirement = async () => {
-    if (!selectedRequirement) return;
-    try {
-      await analysisApi.deleteRequirement(rfpId, selectedRequirement.id);
-      setRequirements((prev) =>
-        prev.filter((req) => req.id !== selectedRequirement.id)
-      );
-      setSelectedRequirement(undefined);
-      setIsEditingRequirement(false);
-    } catch (err) {
-      console.error("Failed to delete requirement", err);
-      setActionError("Failed to delete requirement.");
-    }
-  };
-
-  const handleCreateRequirement = async () => {
-    try {
-      setIsSavingRequirement(true);
-      const payload = {
-        section: newRequirement.section,
-        requirement_text: newRequirement.requirement_text,
-        importance: newRequirement.importance as ComplianceRequirement["importance"],
-        category: newRequirement.category || undefined,
-        notes: newRequirement.notes || undefined,
-        page_reference: newRequirement.page_reference
-          ? parseInt(newRequirement.page_reference, 10)
-          : undefined,
-        keywords: newRequirement.keywords
-          ? newRequirement.keywords.split(",").map((k) => k.trim()).filter(Boolean)
-          : [],
-        status: newRequirement.status as ComplianceRequirement["status"],
-        assigned_to: newRequirement.assigned_to || undefined,
-        tags: newRequirement.tags
-          ? newRequirement.tags.split(",").map((k) => k.trim()).filter(Boolean)
-          : [],
-      } satisfies Partial<ComplianceRequirement>;
-      const updated = await analysisApi.addRequirement(rfpId, payload);
-      setRequirements(updated.requirements);
-      setShowCreateRequirement(false);
-      setNewRequirement({
-        section: "",
-        requirement_text: "",
-        importance: "mandatory",
-        category: "",
-        notes: "",
-        page_reference: "",
-        keywords: "",
-        status: "open",
-        assigned_to: "",
-        tags: "",
-      });
-    } catch (err) {
-      console.error("Failed to create requirement", err);
-      setActionError("Failed to add requirement.");
-    } finally {
-      setIsSavingRequirement(false);
-    }
-  };
-
-  const handleExport = async (format: "docx" | "pdf") => {
+  const handleExport = async () => {
     if (!rfp) return;
-
     try {
       setIsExporting(true);
       setActionError(null);
@@ -372,16 +201,11 @@ export default function AnalysisPage() {
         setActionError("Create a proposal draft before exporting.");
         return;
       }
-
-      const blob = format === "docx"
-        ? await exportApi.exportProposalDocx(proposalId)
-        : await exportApi.exportProposalPdf(proposalId);
-
-      // Create download link
+      const blob = await exportApi.exportProposalDocx(proposalId);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `proposal_${rfp.solicitation_number || rfp.id}.${format}`;
+      a.download = `proposal_${rfp.solicitation_number || rfp.id}.docx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -393,25 +217,6 @@ export default function AnalysisPage() {
       setIsExporting(false);
     }
   };
-
-  // Calculate stats
-  const stats = {
-    addressed: requirements.filter(r => r.is_addressed).length,
-    total: requirements.length,
-    mandatory: requirements.filter(r => r.importance === "mandatory").length,
-    mandatoryAddressed: requirements.filter(
-      r => r.importance === "mandatory" && r.is_addressed
-    ).length,
-  };
-  const completionPercent = stats.total > 0 ? (stats.addressed / stats.total) * 100 : 0;
-
-  // Group requirements for shred view
-  const groupedRequirements = requirements.reduce((acc, req) => {
-    const category = req.category || "Other";
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(req);
-    return acc;
-  }, {} as Record<string, ComplianceRequirement[]>);
 
   if (isLoading) {
     return (
@@ -443,93 +248,16 @@ export default function AnalysisPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <Header
-        title={rfp.title}
-        description={`${rfp.solicitation_number} • ${rfp.agency}`}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" asChild>
-              <Link href="/opportunities">
-                <ArrowLeft className="w-4 h-4" />
-                Back
-              </Link>
-            </Button>
-            <div className="flex items-center border border-border rounded-lg">
-              <Button
-                variant={viewMode === "list" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className="rounded-r-none"
-              >
-                <List className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === "shred" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("shred")}
-                className="rounded-l-none"
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </Button>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => setShowCreateRequirement(true)}
-            >
-              <Plus className="w-4 h-4" />
-              Add Requirement
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleExport("docx")}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              Export
-            </Button>
-          </div>
-        }
+      <AnalysisHeader
+        rfp={rfp}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        onAddRequirement={() => setShowCreateRequirement(true)}
+        onExport={handleExport}
+        isExporting={isExporting}
       />
 
-      {/* Status Bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card/30">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            {rfp.is_qualified ? (
-              <CheckCircle2 className="w-5 h-5 text-accent" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-warning" />
-            )}
-            <span className="text-sm font-medium">
-              {rfp.is_qualified
-                ? `Qualified (${rfp.qualification_score}% match)`
-                : "Pending Qualification"}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {rfp.set_aside && <Badge variant="outline">{rfp.set_aside}</Badge>}
-            {rfp.naics_code && <Badge variant="outline">NAICS {rfp.naics_code}</Badge>}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Proposal Completion</p>
-            <p className="text-sm font-medium">
-              {stats.addressed}/{stats.total} requirements
-            </p>
-          </div>
-          <div className="w-32">
-            <Progress value={completionPercent} />
-          </div>
-        </div>
-      </div>
+      <StatusBar rfp={rfp} requirements={requirements} />
 
       {actionError && (
         <div className="px-6 pt-4">
@@ -552,7 +280,7 @@ export default function AnalysisPage() {
                     Latest Opportunity Changes
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Comparing snapshots {snapshotDiff.from_snapshot_id} → {snapshotDiff.to_snapshot_id}
+                    Comparing snapshots {snapshotDiff.from_snapshot_id} &rarr; {snapshotDiff.to_snapshot_id}
                   </p>
                 </div>
               </div>
@@ -567,11 +295,11 @@ export default function AnalysisPage() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Before</p>
-                      <p className="text-foreground">{change.before || "—"}</p>
+                      <p className="text-foreground">{change.before || "\u2014"}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">After</p>
-                      <p className="text-foreground">{change.after || "—"}</p>
+                      <p className="text-foreground">{change.after || "\u2014"}</p>
                     </div>
                   </div>
                 ))}
@@ -582,337 +310,41 @@ export default function AnalysisPage() {
       )}
 
       {isEditingRequirement && selectedRequirement && (
-        <div className="px-6 pt-4">
-          <Card className="border border-border">
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Edit Requirement {selectedRequirement.id}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Update compliance metadata and notes
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditingRequirement(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDeleteRequirement}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </Button>
-                  <Button onClick={handleSaveRequirement} disabled={isSavingRequirement}>
-                    <Pencil className="w-4 h-4" />
-                    Save
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground">Section</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.section}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, section: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Importance</label>
-                  <select
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.importance}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, importance: e.target.value }))
-                    }
-                  >
-                    <option value="mandatory">Mandatory</option>
-                    <option value="evaluated">Evaluated</option>
-                    <option value="optional">Optional</option>
-                    <option value="informational">Informational</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Category</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.category}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, category: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Status</label>
-                  <select
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.status}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, status: e.target.value }))
-                    }
-                  >
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="blocked">Blocked</option>
-                    <option value="addressed">Addressed</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Assigned To</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.assigned_to}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, assigned_to: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Page Reference</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.page_reference}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        page_reference: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs text-muted-foreground">Requirement Text</label>
-                  <textarea
-                    className="mt-1 w-full min-h-[120px] rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.requirement_text}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        requirement_text: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Keywords (comma separated)</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.keywords}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, keywords: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Tags (comma separated)</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.tags}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, tags: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Notes</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={editForm.notes}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({ ...prev, notes: e.target.value }))
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={editForm.is_addressed}
-                    onChange={(e) =>
-                      setEditForm((prev) => ({
-                        ...prev,
-                        is_addressed: e.target.checked,
-                        status: e.target.checked
-                          ? "addressed"
-                          : prev.status === "addressed"
-                          ? "open"
-                          : prev.status,
-                      }))
-                    }
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    Mark as addressed
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <EditRequirementForm
+          rfpId={rfpId}
+          requirement={selectedRequirement}
+          initialForm={initEditForm(selectedRequirement)}
+          onSaved={(reqs, refreshed) => {
+            setRequirements(reqs);
+            if (refreshed) setSelectedRequirement(refreshed);
+            setIsEditingRequirement(false);
+          }}
+          onDeleted={() => {
+            setRequirements((prev) =>
+              prev.filter((r) => r.id !== selectedRequirement.id)
+            );
+            setSelectedRequirement(undefined);
+            setIsEditingRequirement(false);
+          }}
+          onCancel={() => setIsEditingRequirement(false)}
+          onError={(msg) => setActionError(msg)}
+        />
       )}
 
       {showCreateRequirement && (
-        <div className="px-6 pt-4">
-          <Card className="border border-border">
-            <CardContent className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">
-                    Add Requirement
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Insert a new requirement into the matrix
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCreateRequirement(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateRequirement} disabled={isSavingRequirement}>
-                    <Plus className="w-4 h-4" />
-                    Add
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-muted-foreground">Section</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.section}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, section: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Importance</label>
-                  <select
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.importance}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, importance: e.target.value }))
-                    }
-                  >
-                    <option value="mandatory">Mandatory</option>
-                    <option value="evaluated">Evaluated</option>
-                    <option value="optional">Optional</option>
-                    <option value="informational">Informational</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Category</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.category}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, category: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Status</label>
-                  <select
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.status}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, status: e.target.value }))
-                    }
-                  >
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="blocked">Blocked</option>
-                    <option value="addressed">Addressed</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Assigned To</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.assigned_to}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, assigned_to: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Page Reference</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.page_reference}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({
-                        ...prev,
-                        page_reference: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs text-muted-foreground">Requirement Text</label>
-                  <textarea
-                    className="mt-1 w-full min-h-[120px] rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.requirement_text}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({
-                        ...prev,
-                        requirement_text: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Keywords (comma separated)</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.keywords}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, keywords: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Tags (comma separated)</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.tags}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, tags: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Notes</label>
-                  <input
-                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    value={newRequirement.notes}
-                    onChange={(e) =>
-                      setNewRequirement((prev) => ({ ...prev, notes: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <CreateRequirementForm
+          rfpId={rfpId}
+          onCreated={(reqs) => {
+            setRequirements(reqs);
+            setShowCreateRequirement(false);
+          }}
+          onCancel={() => setShowCreateRequirement(false)}
+          onError={(msg) => setActionError(msg)}
+        />
       )}
 
-      {/* Content - Different views */}
       {viewMode === "list" ? (
-        /* Split Screen View */
         <div className="flex-1 flex overflow-hidden">
-          {/* Left Panel - Compliance Matrix */}
           <div className="w-1/2 border-r border-border">
             <ComplianceMatrix
               requirements={requirements}
@@ -923,8 +355,6 @@ export default function AnalysisPage() {
               generatingId={generatingId}
             />
           </div>
-
-          {/* Right Panel - Draft Preview */}
           <div className="w-1/2">
             <DraftPreview
               requirement={selectedRequirement}
@@ -932,99 +362,21 @@ export default function AnalysisPage() {
               isGenerating={isGenerating}
               onRegenerate={handleRegenerate}
               onApprove={handleApprove}
-              onEdit={handleEditRequirement}
+              onEdit={() => {
+                if (selectedRequirement) setIsEditingRequirement(true);
+              }}
             />
           </div>
         </div>
       ) : (
-        /* Shred View - Categorized Requirements */
-        <div className="flex-1 overflow-auto p-6">
-          <div className="max-w-6xl mx-auto space-y-8">
-            {Object.entries(groupedRequirements).map(([category, reqs]) => (
-              <div key={category}>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">{category}</h2>
-                  <Badge variant="outline">
-                    {reqs.filter(r => r.is_addressed).length}/{reqs.length} addressed
-                  </Badge>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {reqs.map((req) => (
-                    <div
-                      key={req.id}
-                      className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                        req.is_addressed
-                          ? "border-accent/30 bg-accent/5"
-                          : "border-border hover:border-primary/30"
-                      }`}
-                      onClick={() => {
-                        handleSelectRequirement(req);
-                        setViewMode("list");
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <Badge
-                          variant={
-                            req.importance === "mandatory"
-                              ? "destructive"
-                              : req.importance === "evaluated"
-                              ? "default"
-                              : "secondary"
-                          }
-                          className="text-xs"
-                        >
-                          {req.importance}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground font-mono">
-                          {req.section}
-                        </span>
-                      </div>
-
-                      <p className="text-sm line-clamp-3 mb-3">
-                        {req.requirement_text}
-                      </p>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          {req.is_addressed ? (
-                            <>
-                              <CheckCircle2 className="w-4 h-4 text-accent" />
-                              <span className="text-xs text-accent">Addressed</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileText className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">Pending</span>
-                            </>
-                          )}
-                        </div>
-
-                        {!req.is_addressed && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleGenerate(req);
-                            }}
-                            disabled={isGenerating && generatingId === req.id}
-                          >
-                            {isGenerating && generatingId === req.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              "Generate"
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <ShredView
+          requirements={requirements}
+          isGenerating={isGenerating}
+          generatingId={generatingId}
+          onSelectRequirement={handleSelectRequirement}
+          onGenerate={handleGenerate}
+          onSwitchToList={() => setViewMode("list")}
+        />
       )}
     </div>
   );

@@ -2,16 +2,12 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { contractApi, documentApi } from "@/lib/api";
-import { cn } from "@/lib/utils";
 import type {
   ContractAward,
   ContractDeliverable,
-  ContractStatus,
-  ContractType,
   ContractTask,
   CPARSReview,
   ContractStatusReport,
@@ -20,13 +16,12 @@ import type {
   ContractCLIN,
   KnowledgeBaseDocument,
 } from "@/types";
-
-const statusOptions: { value: ContractStatus; label: string }[] = [
-  { value: "active", label: "Active" },
-  { value: "at_risk", label: "At Risk" },
-  { value: "completed", label: "Completed" },
-  { value: "on_hold", label: "On Hold" },
-];
+import { ContractCreationForm } from "./_components/contract-creation-form";
+import { DeliverablesTasksPanel } from "./_components/deliverables-tasks-panel";
+import { ModificationsPanel } from "./_components/modifications-panel";
+import { CLINManagementPanel } from "./_components/clin-management-panel";
+import { CPARSEvidencePanel } from "./_components/cpars-evidence-panel";
+import { StatusReportsPanel } from "./_components/status-reports-panel";
 
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<ContractAward[]>([]);
@@ -40,38 +35,6 @@ export default function ContractsPage() {
   const [selectedCparsId, setSelectedCparsId] = useState<number | null>(null);
   const [cparsEvidence, setCparsEvidence] = useState<CPARSEvidence[]>([]);
   const [selectedContractId, setSelectedContractId] = useState<number | null>(null);
-  const [title, setTitle] = useState("");
-  const [number, setNumber] = useState("");
-  const [agency, setAgency] = useState("");
-  const [contractType, setContractType] = useState<ContractType>("prime");
-  const [parentContractId, setParentContractId] = useState("");
-  const [status, setStatus] = useState<ContractStatus>("active");
-  const [deliverableTitle, setDeliverableTitle] = useState("");
-  const [taskTitle, setTaskTitle] = useState("");
-  const [modNumber, setModNumber] = useState("");
-  const [modType, setModType] = useState("");
-  const [modDescription, setModDescription] = useState("");
-  const [modEffectiveDate, setModEffectiveDate] = useState("");
-  const [modValueChange, setModValueChange] = useState("");
-  const [clinNumber, setClinNumber] = useState("");
-  const [clinDescription, setClinDescription] = useState("");
-  const [clinType, setClinType] = useState("");
-  const [clinQuantity, setClinQuantity] = useState("");
-  const [clinUnitPrice, setClinUnitPrice] = useState("");
-  const [clinFundedAmount, setClinFundedAmount] = useState("");
-  const [clinEditingId, setClinEditingId] = useState<number | null>(null);
-  const [editingQuantity, setEditingQuantity] = useState("");
-  const [editingFundedAmount, setEditingFundedAmount] = useState("");
-  const [cparsRating, setCparsRating] = useState("");
-  const [cparsNotes, setCparsNotes] = useState("");
-  const [evidenceDocumentId, setEvidenceDocumentId] = useState<number | null>(null);
-  const [evidenceCitation, setEvidenceCitation] = useState("");
-  const [evidenceNotes, setEvidenceNotes] = useState("");
-  const [reportSummary, setReportSummary] = useState("");
-  const [reportRisks, setReportRisks] = useState("");
-  const [reportNextSteps, setReportNextSteps] = useState("");
-  const [reportStart, setReportStart] = useState("");
-  const [reportEnd, setReportEnd] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const fetchContracts = useCallback(async () => {
@@ -96,7 +59,7 @@ export default function ContractsPage() {
   }, [fetchContracts]);
 
   useEffect(() => {
-    const fetchDeliverables = async () => {
+    const fetchDetails = async () => {
       if (!selectedContractId) return;
       try {
         const list = await contractApi.listDeliverables(selectedContractId);
@@ -123,7 +86,7 @@ export default function ContractsPage() {
         console.error("Failed to load deliverables", err);
       }
     };
-    fetchDeliverables();
+    fetchDetails();
   }, [selectedContractId, selectedCparsId]);
 
   useEffect(() => {
@@ -142,254 +105,6 @@ export default function ContractsPage() {
     fetchEvidence();
   }, [selectedContractId, selectedCparsId]);
 
-  const handleCreateContract = async () => {
-    if (!title.trim() || !number.trim()) return;
-    try {
-      await contractApi.create({
-        contract_number: number.trim(),
-        title: title.trim(),
-        agency: agency.trim() || undefined,
-        parent_contract_id: parentContractId
-          ? Number.parseInt(parentContractId, 10)
-          : undefined,
-        contract_type: contractType,
-        status,
-      });
-      setTitle("");
-      setNumber("");
-      setAgency("");
-      setContractType("prime");
-      setParentContractId("");
-      await fetchContracts();
-    } catch (err) {
-      console.error("Failed to create contract", err);
-      setError("Failed to create contract.");
-    }
-  };
-
-  const handleCreateDeliverable = async () => {
-    if (!selectedContractId || !deliverableTitle.trim()) return;
-    try {
-      await contractApi.createDeliverable(selectedContractId, {
-        title: deliverableTitle.trim(),
-      });
-      setDeliverableTitle("");
-      const list = await contractApi.listDeliverables(selectedContractId);
-      setDeliverables(list);
-    } catch (err) {
-      console.error("Failed to create deliverable", err);
-      setError("Failed to create deliverable.");
-    }
-  };
-
-  const handleCreateTask = async () => {
-    if (!selectedContractId || !taskTitle.trim()) return;
-    try {
-      await contractApi.createTask(selectedContractId, { title: taskTitle.trim() });
-      setTaskTitle("");
-      const list = await contractApi.listTasks(selectedContractId);
-      setTasks(list);
-    } catch (err) {
-      console.error("Failed to create task", err);
-      setError("Failed to create task.");
-    }
-  };
-
-  const handleCreateModification = async () => {
-    if (!selectedContractId || !modNumber.trim()) return;
-    try {
-      await contractApi.createModification(selectedContractId, {
-        modification_number: modNumber.trim(),
-        mod_type: modType.trim() || undefined,
-        description: modDescription.trim() || undefined,
-        effective_date: modEffectiveDate || undefined,
-        value_change: modValueChange ? Number.parseFloat(modValueChange) : undefined,
-      });
-      setModNumber("");
-      setModType("");
-      setModDescription("");
-      setModEffectiveDate("");
-      setModValueChange("");
-      const modList = await contractApi.listModifications(selectedContractId);
-      setModifications(modList);
-    } catch (err) {
-      console.error("Failed to create modification", err);
-      setError("Failed to create modification.");
-    }
-  };
-
-  const handleDeleteModification = async (modId: number) => {
-    if (!selectedContractId) return;
-    try {
-      await contractApi.deleteModification(selectedContractId, modId);
-      const modList = await contractApi.listModifications(selectedContractId);
-      setModifications(modList);
-    } catch (err) {
-      console.error("Failed to delete modification", err);
-      setError("Failed to delete modification.");
-    }
-  };
-
-  const handleCreateCLIN = async () => {
-    if (!selectedContractId || !clinNumber.trim()) return;
-    const quantity = clinQuantity ? Number.parseInt(clinQuantity, 10) : undefined;
-    const unitPrice = clinUnitPrice ? Number.parseFloat(clinUnitPrice) : undefined;
-    const fundedAmount = clinFundedAmount
-      ? Number.parseFloat(clinFundedAmount)
-      : undefined;
-    const totalValue =
-      quantity !== undefined && unitPrice !== undefined
-        ? quantity * unitPrice
-        : undefined;
-
-    try {
-      await contractApi.createCLIN(selectedContractId, {
-        clin_number: clinNumber.trim(),
-        description: clinDescription.trim() || undefined,
-        clin_type: clinType.trim() || undefined,
-        quantity,
-        unit_price: unitPrice,
-        funded_amount: fundedAmount,
-        total_value: totalValue,
-      });
-      setClinNumber("");
-      setClinDescription("");
-      setClinType("");
-      setClinQuantity("");
-      setClinUnitPrice("");
-      setClinFundedAmount("");
-      const clinList = await contractApi.listCLINs(selectedContractId);
-      setClins(clinList);
-    } catch (err) {
-      console.error("Failed to create CLIN", err);
-      setError("Failed to create CLIN.");
-    }
-  };
-
-  const handleSaveCLIN = async (clinId: number) => {
-    if (!selectedContractId) return;
-    const quantity = editingQuantity ? Number.parseInt(editingQuantity, 10) : undefined;
-    const fundedAmount = editingFundedAmount
-      ? Number.parseFloat(editingFundedAmount)
-      : undefined;
-    const target = clins.find((item) => item.id === clinId);
-    const unitPrice = target?.unit_price ?? undefined;
-    const totalValue =
-      quantity !== undefined && unitPrice !== undefined
-        ? quantity * unitPrice
-        : target?.total_value ?? undefined;
-
-    try {
-      await contractApi.updateCLIN(selectedContractId, clinId, {
-        quantity,
-        funded_amount: fundedAmount,
-        total_value: totalValue,
-      });
-      const clinList = await contractApi.listCLINs(selectedContractId);
-      setClins(clinList);
-      setClinEditingId(null);
-      setEditingQuantity("");
-      setEditingFundedAmount("");
-    } catch (err) {
-      console.error("Failed to update CLIN", err);
-      setError("Failed to update CLIN.");
-    }
-  };
-
-  const handleDeleteCLIN = async (clinId: number) => {
-    if (!selectedContractId) return;
-    try {
-      await contractApi.deleteCLIN(selectedContractId, clinId);
-      const clinList = await contractApi.listCLINs(selectedContractId);
-      setClins(clinList);
-    } catch (err) {
-      console.error("Failed to delete CLIN", err);
-      setError("Failed to delete CLIN.");
-    }
-  };
-
-  const handleCreateCPARS = async () => {
-    if (!selectedContractId) return;
-    try {
-      const created = await contractApi.createCPARS(selectedContractId, {
-        overall_rating: cparsRating.trim() || undefined,
-        notes: cparsNotes.trim() || undefined,
-      });
-      setCparsRating("");
-      setCparsNotes("");
-      const list = await contractApi.listCPARS(selectedContractId);
-      setCpars(list);
-      setSelectedCparsId(created.id);
-    } catch (err) {
-      console.error("Failed to create CPARS review", err);
-      setError("Failed to create CPARS review.");
-    }
-  };
-
-  const handleAddEvidence = async () => {
-    if (!selectedContractId || !selectedCparsId || !evidenceDocumentId) return;
-    try {
-      await contractApi.addCPARSEvidence(selectedContractId, selectedCparsId, {
-        document_id: evidenceDocumentId,
-        citation: evidenceCitation.trim() || undefined,
-        notes: evidenceNotes.trim() || undefined,
-      });
-      setEvidenceDocumentId(null);
-      setEvidenceCitation("");
-      setEvidenceNotes("");
-      const list = await contractApi.listCPARSEvidence(
-        selectedContractId,
-        selectedCparsId
-      );
-      setCparsEvidence(list);
-    } catch (err) {
-      console.error("Failed to add CPARS evidence", err);
-      setError("Failed to add CPARS evidence.");
-    }
-  };
-
-  const handleDeleteEvidence = async (evidenceId: number) => {
-    if (!selectedContractId || !selectedCparsId) return;
-    try {
-      await contractApi.deleteCPARSEvidence(
-        selectedContractId,
-        selectedCparsId,
-        evidenceId
-      );
-      const list = await contractApi.listCPARSEvidence(
-        selectedContractId,
-        selectedCparsId
-      );
-      setCparsEvidence(list);
-    } catch (err) {
-      console.error("Failed to delete CPARS evidence", err);
-      setError("Failed to delete CPARS evidence.");
-    }
-  };
-
-  const handleCreateStatusReport = async () => {
-    if (!selectedContractId) return;
-    try {
-      await contractApi.createStatusReport(selectedContractId, {
-        period_start: reportStart || undefined,
-        period_end: reportEnd || undefined,
-        summary: reportSummary.trim() || undefined,
-        risks: reportRisks.trim() || undefined,
-        next_steps: reportNextSteps.trim() || undefined,
-      });
-      setReportSummary("");
-      setReportRisks("");
-      setReportNextSteps("");
-      setReportStart("");
-      setReportEnd("");
-      const list = await contractApi.listStatusReports(selectedContractId);
-      setStatusReports(list);
-    } catch (err) {
-      console.error("Failed to create status report", err);
-      setError("Failed to create status report.");
-    }
-  };
-
   const selectedContract = useMemo(
     () => contracts.find((c) => c.id === selectedContractId) || null,
     [contracts, selectedContractId]
@@ -398,16 +113,6 @@ export default function ContractsPage() {
     () => new Map(contracts.map((contract) => [contract.id, contract])),
     [contracts]
   );
-  const selectedParentContract = useMemo(() => {
-    if (!selectedContract?.parent_contract_id) return null;
-    return contractsById.get(selectedContract.parent_contract_id) || null;
-  }, [contractsById, selectedContract]);
-  const childContracts = useMemo(() => {
-    if (!selectedContract) return [];
-    return contracts.filter(
-      (contract) => contract.parent_contract_id === selectedContract.id
-    );
-  }, [contracts, selectedContract]);
 
   return (
     <div className="flex flex-col h-full">
@@ -419,69 +124,11 @@ export default function ContractsPage() {
       <div className="flex-1 p-6 overflow-auto space-y-6">
         {error && <p className="text-destructive">{error}</p>}
 
-        <Card className="border border-border">
-          <CardContent className="p-4 space-y-3">
-            <p className="text-sm font-medium">New Contract</p>
-            <div className="grid grid-cols-6 gap-3">
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Contract #"
-                value={number}
-                onChange={(e) => setNumber(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-              <input
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                placeholder="Agency"
-                value={agency}
-                onChange={(e) => setAgency(e.target.value)}
-              />
-              <select
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                aria-label="Contract status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ContractStatus)}
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                aria-label="Contract type"
-                value={contractType}
-                onChange={(e) => setContractType(e.target.value as ContractType)}
-              >
-                <option value="prime">Prime</option>
-                <option value="subcontract">Subcontract</option>
-                <option value="idiq">IDIQ</option>
-                <option value="task_order">Task Order</option>
-                <option value="bpa">BPA</option>
-              </select>
-              <select
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                aria-label="Parent contract"
-                value={parentContractId}
-                onChange={(e) => setParentContractId(e.target.value)}
-              >
-                <option value="">Top-level contract</option>
-                {contracts.map((contract) => (
-                  <option key={contract.id} value={contract.id}>
-                    {contract.contract_number}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button onClick={handleCreateContract}>Create Contract</Button>
-          </CardContent>
-        </Card>
+        <ContractCreationForm
+          contracts={contracts}
+          onCreated={fetchContracts}
+          onError={setError}
+        />
 
         <div className="grid grid-cols-3 gap-4">
           <Card className="col-span-1 border border-border">
@@ -526,565 +173,49 @@ export default function ContractsPage() {
 
           <Card className="col-span-2 border border-border">
             <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Deliverables</p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedContract?.title || "Select a contract"}
-                  </p>
-                </div>
-                {selectedContract && (
-                  <Badge variant="outline">{selectedContract.status}</Badge>
-                )}
-              </div>
+              <DeliverablesTasksPanel
+                selectedContractId={selectedContractId}
+                selectedContract={selectedContract}
+                deliverables={deliverables}
+                tasks={tasks}
+                contracts={contracts}
+                onDeliverablesChange={setDeliverables}
+                onTasksChange={setTasks}
+                onError={setError}
+              />
 
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                  placeholder="Deliverable title"
-                  value={deliverableTitle}
-                  onChange={(e) => setDeliverableTitle(e.target.value)}
-                />
-                <Button onClick={handleCreateDeliverable}>
-                  Add Deliverable
-                </Button>
-              </div>
+              <ModificationsPanel
+                selectedContractId={selectedContractId}
+                modifications={modifications}
+                onModificationsChange={setModifications}
+                onError={setError}
+              />
 
-              <div className="space-y-2">
-                {deliverables.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No deliverables yet.
-                  </p>
-                ) : (
-                  deliverables.map((deliverable) => (
-                    <div
-                      key={deliverable.id}
-                      className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                    >
-                      <span>{deliverable.title}</span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{deliverable.status}</Badge>
-                        {deliverable.risk_flag && (
-                          <Badge
-                            variant={
-                              deliverable.risk_flag === "overdue"
-                                ? "destructive"
-                                : deliverable.risk_flag === "due_soon"
-                                ? "warning"
-                                : "outline"
-                            }
-                          >
-                            {deliverable.risk_flag.replace("_", " ")}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <CLINManagementPanel
+                selectedContractId={selectedContractId}
+                clins={clins}
+                onClinsChange={setClins}
+                onError={setError}
+              />
 
-              <div className="mt-6 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">Tasks</p>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Task title"
-                    value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)}
-                  />
-                  <Button onClick={handleCreateTask}>Add Task</Button>
-                </div>
-                <div className="space-y-2">
-                  {tasks.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No tasks yet.</p>
-                  ) : (
-                    tasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                      >
-                        <span>{task.title}</span>
-                        <Badge variant="outline">
-                          {task.is_complete ? "Complete" : "Open"}
-                        </Badge>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <CPARSEvidencePanel
+                selectedContractId={selectedContractId}
+                cpars={cpars}
+                selectedCparsId={selectedCparsId}
+                cparsEvidence={cparsEvidence}
+                documents={documents}
+                onCparsChange={setCpars}
+                onSelectedCparsIdChange={setSelectedCparsId}
+                onCparsEvidenceChange={setCparsEvidence}
+                onError={setError}
+              />
 
-              <div className="mt-6 space-y-3">
-                <p className="text-sm font-medium">Hierarchy</p>
-                {!selectedContract ? (
-                  <p className="text-sm text-muted-foreground">
-                    Select a contract to manage hierarchy.
-                  </p>
-                ) : (
-                  <>
-                    <div className="rounded-md border border-border px-3 py-2 text-sm">
-                      <p className="font-medium">Parent Contract</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedParentContract
-                          ? `${selectedParentContract.contract_number} - ${selectedParentContract.title}`
-                          : "Top-level contract"}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border px-3 py-2 text-sm space-y-2">
-                      <p className="font-medium">Child Orders</p>
-                      {childContracts.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          No child orders linked.
-                        </p>
-                      ) : (
-                        childContracts.map((childContract) => (
-                          <div
-                            key={childContract.id}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <span>
-                              {childContract.contract_number} - {childContract.title}
-                            </span>
-                            <Badge variant="outline">
-                              {childContract.contract_type || "task_order"}
-                            </Badge>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <p className="text-sm font-medium">Contract Modifications</p>
-                <div className="grid grid-cols-5 gap-2">
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Mod #"
-                    value={modNumber}
-                    onChange={(e) => setModNumber(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Modification type"
-                    value={modType}
-                    onChange={(e) => setModType(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    aria-label="Modification effective date"
-                    type="date"
-                    value={modEffectiveDate}
-                    onChange={(e) => setModEffectiveDate(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    type="number"
-                    step="0.01"
-                    placeholder="Value change"
-                    value={modValueChange}
-                    onChange={(e) => setModValueChange(e.target.value)}
-                  />
-                  <Button onClick={handleCreateModification}>Add Mod</Button>
-                </div>
-                <input
-                  className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                  placeholder="Modification description"
-                  value={modDescription}
-                  onChange={(e) => setModDescription(e.target.value)}
-                />
-                <div className="space-y-2">
-                  {modifications.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No modifications yet.</p>
-                  ) : (
-                    modifications.map((mod) => (
-                      <div
-                        key={mod.id}
-                        className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                      >
-                        <div>
-                          <p className="font-medium">{mod.modification_number}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {[mod.mod_type || "type n/a", mod.effective_date || "date n/a"]
-                              .filter(Boolean)
-                              .join(" • ")}
-                          </p>
-                          {mod.description && (
-                            <p className="text-xs text-muted-foreground">{mod.description}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {mod.value_change != null && (
-                            <Badge variant="outline">
-                              {mod.value_change >= 0 ? "+" : ""}
-                              {mod.value_change.toLocaleString(undefined, {
-                                style: "currency",
-                                currency: "USD",
-                                maximumFractionDigits: 0,
-                              })}
-                            </Badge>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteModification(mod.id)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <p className="text-sm font-medium">CLIN Management</p>
-                <div className="grid grid-cols-6 gap-2">
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="CLIN #"
-                    value={clinNumber}
-                    onChange={(e) => setClinNumber(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="CLIN description"
-                    value={clinDescription}
-                    onChange={(e) => setClinDescription(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="CLIN type"
-                    value={clinType}
-                    onChange={(e) => setClinType(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    type="number"
-                    placeholder="Qty"
-                    value={clinQuantity}
-                    onChange={(e) => setClinQuantity(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    type="number"
-                    step="0.01"
-                    placeholder="Unit price"
-                    value={clinUnitPrice}
-                    onChange={(e) => setClinUnitPrice(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    type="number"
-                    step="0.01"
-                    placeholder="Funded"
-                    value={clinFundedAmount}
-                    onChange={(e) => setClinFundedAmount(e.target.value)}
-                  />
-                </div>
-                <Button onClick={handleCreateCLIN}>Add CLIN</Button>
-                <div className="space-y-2">
-                  {clins.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No CLINs yet.</p>
-                  ) : (
-                    clins.map((clin) => (
-                      <div
-                        key={clin.id}
-                        className="rounded-md border border-border px-3 py-2 text-sm space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{clin.clin_number}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {clin.description || "No description"}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline">{clin.clin_type || "type n/a"}</Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteCLIN(clin.id)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground">
-                          <span>Qty: {clin.quantity ?? "n/a"}</span>
-                          <span>
-                            Unit:{" "}
-                            {clin.unit_price != null
-                              ? clin.unit_price.toLocaleString(undefined, {
-                                  style: "currency",
-                                  currency: "USD",
-                                  maximumFractionDigits: 0,
-                                })
-                              : "n/a"}
-                          </span>
-                          <span>
-                            Total:{" "}
-                            {clin.total_value != null
-                              ? clin.total_value.toLocaleString(undefined, {
-                                  style: "currency",
-                                  currency: "USD",
-                                  maximumFractionDigits: 0,
-                                })
-                              : "n/a"}
-                          </span>
-                          <span>
-                            Funded:{" "}
-                            {clin.funded_amount != null
-                              ? clin.funded_amount.toLocaleString(undefined, {
-                                  style: "currency",
-                                  currency: "USD",
-                                  maximumFractionDigits: 0,
-                                })
-                              : "n/a"}
-                          </span>
-                        </div>
-                        {clinEditingId === clin.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                              type="number"
-                              placeholder="Qty"
-                              value={editingQuantity}
-                              onChange={(e) => setEditingQuantity(e.target.value)}
-                            />
-                            <input
-                              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                              type="number"
-                              step="0.01"
-                              placeholder="Funded amount"
-                              value={editingFundedAmount}
-                              onChange={(e) => setEditingFundedAmount(e.target.value)}
-                            />
-                            <Button size="sm" onClick={() => handleSaveCLIN(clin.id)}>
-                              Save
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setClinEditingId(null);
-                                setEditingQuantity("");
-                                setEditingFundedAmount("");
-                              }}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setClinEditingId(clin.id);
-                              setEditingQuantity(
-                                clin.quantity != null ? String(clin.quantity) : ""
-                              );
-                              setEditingFundedAmount(
-                                clin.funded_amount != null ? String(clin.funded_amount) : ""
-                              );
-                            }}
-                          >
-                            Edit Quantity/Funded
-                          </Button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <p className="text-sm font-medium">CPARS Reviews</p>
-                <div className="flex gap-2">
-                  <input
-                    className="w-40 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Rating"
-                    value={cparsRating}
-                    onChange={(e) => setCparsRating(e.target.value)}
-                  />
-                  <input
-                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Notes"
-                    value={cparsNotes}
-                    onChange={(e) => setCparsNotes(e.target.value)}
-                  />
-                  <Button onClick={handleCreateCPARS}>Add Review</Button>
-                </div>
-                <div className="space-y-2">
-                  {cpars.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No CPARS reviews yet.
-                    </p>
-                  ) : (
-                    cpars.map((review) => {
-                      const isSelected = review.id === selectedCparsId;
-                      return (
-                        <div
-                          key={review.id}
-                          className={cn(
-                            "flex items-center justify-between rounded-md border px-3 py-2 text-sm cursor-pointer",
-                            isSelected
-                              ? "border-primary/50 bg-primary/10"
-                              : "border-border hover:border-primary/30"
-                          )}
-                          onClick={() => setSelectedCparsId(review.id)}
-                        >
-                          <span>{review.overall_rating || "Unrated"}</span>
-                          <Badge variant="outline">{review.created_at.slice(0, 10)}</Badge>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <p className="text-sm font-medium">CPARS Evidence</p>
-                {!selectedCparsId ? (
-                  <p className="text-sm text-muted-foreground">
-                    Select a CPARS review to link evidence.
-                  </p>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-3 gap-2">
-                      <select
-                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                        value={evidenceDocumentId ?? ""}
-                        onChange={(e) =>
-                          setEvidenceDocumentId(
-                            e.target.value ? Number(e.target.value) : null
-                          )
-                        }
-                      >
-                        <option value="">Select document</option>
-                        {documents.map((doc) => (
-                          <option key={doc.id} value={doc.id}>
-                            {doc.title}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                        placeholder="Citation"
-                        value={evidenceCitation}
-                        onChange={(e) => setEvidenceCitation(e.target.value)}
-                      />
-                      <input
-                        className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                        placeholder="Notes"
-                        value={evidenceNotes}
-                        onChange={(e) => setEvidenceNotes(e.target.value)}
-                      />
-                    </div>
-                    <Button onClick={handleAddEvidence}>Add Evidence</Button>
-                    <div className="space-y-2">
-                      {cparsEvidence.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          No evidence linked yet.
-                        </p>
-                      ) : (
-                        cparsEvidence.map((evidence) => (
-                          <div
-                            key={evidence.id}
-                            className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-                          >
-                            <div>
-                              <p className="font-medium">
-                                {evidence.document_title || `Document ${evidence.document_id}`}
-                              </p>
-                              {evidence.citation && (
-                                <p className="text-xs text-muted-foreground">
-                                  {evidence.citation}
-                                </p>
-                              )}
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteEvidence(evidence.id)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <p className="text-sm font-medium">Status Reports</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Period start (YYYY-MM-DD)"
-                    value={reportStart}
-                    onChange={(e) => setReportStart(e.target.value)}
-                  />
-                  <input
-                    className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Period end (YYYY-MM-DD)"
-                    value={reportEnd}
-                    onChange={(e) => setReportEnd(e.target.value)}
-                  />
-                  <input
-                    className="col-span-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Summary"
-                    value={reportSummary}
-                    onChange={(e) => setReportSummary(e.target.value)}
-                  />
-                  <input
-                    className="col-span-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Risks"
-                    value={reportRisks}
-                    onChange={(e) => setReportRisks(e.target.value)}
-                  />
-                  <input
-                    className="col-span-2 rounded-md border border-border bg-background px-2 py-1 text-sm"
-                    placeholder="Next steps"
-                    value={reportNextSteps}
-                    onChange={(e) => setReportNextSteps(e.target.value)}
-                  />
-                </div>
-                <Button onClick={handleCreateStatusReport}>Add Status Report</Button>
-                <div className="space-y-2">
-                  {statusReports.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No status reports yet.
-                    </p>
-                  ) : (
-                    statusReports.map((report) => (
-                      <div
-                        key={report.id}
-                        className="rounded-md border border-border px-3 py-2 text-sm space-y-1"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span>
-                            {report.period_start || "Period"} - {report.period_end || "End"}
-                          </span>
-                          <Badge variant="outline">
-                            {report.created_at.slice(0, 10)}
-                          </Badge>
-                        </div>
-                        {report.summary && (
-                          <p className="text-xs text-muted-foreground">
-                            {report.summary}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <StatusReportsPanel
+                selectedContractId={selectedContractId}
+                statusReports={statusReports}
+                onStatusReportsChange={setStatusReports}
+                onError={setError}
+              />
             </CardContent>
           </Card>
         </div>
