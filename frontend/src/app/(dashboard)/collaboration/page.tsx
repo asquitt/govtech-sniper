@@ -1,47 +1,38 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Share2, Activity } from "lucide-react";
-import { collaborationApi } from "@/lib/api";
-import type { SharedWorkspace } from "@/types";
 import { ActivityFeed } from "@/components/collaboration/activity-feed";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspaces, useCreateWorkspace } from "@/hooks/use-collaboration";
 import { WorkspaceList } from "./_components/workspace-list";
 import { WorkspaceDetail } from "./_components/workspace-detail";
 import { WorkspaceCreateModal } from "./_components/workspace-create-modal";
 
 export default function CollaborationPage() {
   const searchParams = useSearchParams();
-  const [workspaces, setWorkspaces] = useState<SharedWorkspace[]>([]);
+  const queryClient = useQueryClient();
+  const { data: workspaces = [], isLoading: loading } = useWorkspaces();
+  const createWorkspace = useCreateWorkspace();
+  const refreshWorkspaces = () => queryClient.invalidateQueries({ queryKey: ["workspaces"] });
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [showFeed, setShowFeed] = useState(false);
   const [feedProposalId, setFeedProposalId] = useState<number | null>(null);
 
-  const loadWorkspaces = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await collaborationApi.listWorkspaces();
-      setWorkspaces(data);
-      if (data.length > 0 && !selectedId) {
-        setSelectedId(data[0].id);
-      }
-    } catch {
-      /* handled */
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedId]);
-
+  // Auto-select first workspace
   useEffect(() => {
-    loadWorkspaces();
-  }, [loadWorkspaces]);
+    if (workspaces.length > 0 && !selectedId) {
+      setSelectedId(workspaces[0].id);
+    }
+  }, [workspaces, selectedId]);
 
+  // Handle workspace query param
   useEffect(() => {
     const rawWorkspaceId = searchParams.get("workspace");
     if (!rawWorkspaceId) return;
@@ -54,19 +45,14 @@ export default function CollaborationPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
-    try {
-      const ws = await collaborationApi.createWorkspace({
-        name: newName.trim(),
-        description: newDesc.trim() || null,
-      });
-      setWorkspaces((prev) => [...prev, ws]);
-      setSelectedId(ws.id);
-      setShowCreate(false);
-      setNewName("");
-      setNewDesc("");
-    } catch {
-      /* handled */
-    }
+    const ws = await createWorkspace.mutateAsync({
+      name: newName.trim(),
+      description: newDesc.trim() || null,
+    });
+    setSelectedId(ws.id);
+    setShowCreate(false);
+    setNewName("");
+    setNewDesc("");
   };
 
   const selectedWorkspace = workspaces.find((w) => w.id === selectedId) || null;
@@ -130,7 +116,7 @@ export default function CollaborationPage() {
                 {selectedWorkspace ? (
                   <WorkspaceDetail
                     workspace={selectedWorkspace}
-                    onRefresh={loadWorkspaces}
+                    onRefresh={refreshWorkspaces}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
