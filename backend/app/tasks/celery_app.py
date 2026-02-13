@@ -23,6 +23,7 @@ celery_app = Celery(
         "app.tasks.document_tasks",
         "app.tasks.maintenance_tasks",
         "app.tasks.sharepoint_sync_tasks",
+        "app.tasks.email_ingest_tasks",
     ],
 )
 
@@ -94,6 +95,18 @@ celery_app.conf.update(
             "task": "app.tasks.ingest_tasks.send_daily_digest",
             "schedule": crontab(minute=0, hour=7),
             "options": {"queue": "periodic"},
+        },
+        # Poll IMAP inboxes every 15 minutes for forwarded RFPs
+        "poll-email-inboxes": {
+            "task": "app.tasks.email_ingest_tasks.poll_email_inboxes",
+            "schedule": crontab(minute="*/15"),
+            "options": {"queue": "ingest"},
+        },
+        # Process pending ingested emails every 15 minutes (offset by 5 min)
+        "process-ingested-emails": {
+            "task": "app.tasks.email_ingest_tasks.process_ingested_emails",
+            "schedule": crontab(minute="5,20,35,50"),
+            "options": {"queue": "ingest"},
         },
         # Send deadline reminders at 8 AM UTC daily
         "send-deadline-reminders": {
