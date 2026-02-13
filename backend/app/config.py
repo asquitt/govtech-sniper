@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # Email (Resend)
     # -------------------------------------------------------------------------
     resend_api_key: str | None = Field(default=None)
-    email_from: str = Field(default="Orbitr <notifications@orbitr.io>")
+    email_from: str = Field(default="RFP Sniper <notifications@rfpsniper.com>")
     email_enabled: bool = Field(default=False)
 
     # -------------------------------------------------------------------------

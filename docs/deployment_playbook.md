@@ -1,6 +1,6 @@
 # Deployment Playbook
 
-Production deployment guide for the Orbitr (GovTech Sniper) platform.
+Production deployment guide for the RFP Sniper platform.
 
 ---
 
@@ -43,7 +43,7 @@ Edit `.env` and set these values. **The stack will not run safely without them.*
 | `SECRET_KEY` | `openssl rand -hex 32` |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 16` |
 | `FLOWER_PASSWORD` | Pick a strong password |
-| `DOMAIN` | Your domain, e.g. `app.orbitr.io` |
+| `DOMAIN` | Your domain, e.g. `app.rfpsniper.com` |
 
 ---
 

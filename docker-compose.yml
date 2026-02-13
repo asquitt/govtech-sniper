@@ -28,7 +28,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
       - RESEND_API_KEY=${RESEND_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM:-Orbitr <notifications@orbitr.io>}
+      - EMAIL_FROM=${EMAIL_FROM:-RFP Sniper <notifications@rfpsniper.com>}
       - DEBUG=${DEBUG:-true}
     volumes:
       - ./backend/app:/app/app
@@ -81,7 +81,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - EMAIL_ENABLED=${EMAIL_ENABLED:-false}
       - RESEND_API_KEY=${RESEND_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM:-Orbitr <notifications@orbitr.io>}
+      - EMAIL_FROM=${EMAIL_FROM:-RFP Sniper <notifications@rfpsniper.com>}
     volumes:
       - ./backend/app:/app/app
       - ./fixtures:/app/fixtures:ro
@@ -143,7 +143,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 256M
     networks:
       - rfp_network
 

@@ -143,7 +143,7 @@ def send_signal_digest() -> dict:
                 <html>
                 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                     <div style="background: #1a365d; color: white; padding: 20px; text-align: center;">
-                        <h1 style="margin: 0;">Orbitr — Market Signals</h1>
+                        <h1 style="margin: 0;">RFP Sniper — Market Signals</h1>
                     </div>
                     <div style="padding: 20px;">
                         <h2>Your Daily Signal Digest</h2>
@@ -175,7 +175,7 @@ def send_signal_digest() -> dict:
                 if not user or not user.email:
                     continue
 
-                subject = f"Orbitr Signal Digest — {len(signals)} new signals"
+                subject = f"RFP Sniper Signal Digest — {len(signals)} new signals"
                 await email_service.send_email(user.email, subject, html)
                 sent += 1
 

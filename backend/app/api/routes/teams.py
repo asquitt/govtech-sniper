@@ -668,16 +668,16 @@ async def _send_invitation_email(team: Team, to_email: str, token: str) -> None:
     """Send a team invitation email via Resend."""
     accept_url = f"{settings.app_url}/teams/accept?token={token}"
 
-    subject = f"You've been invited to join {team.name} on Orbitr"
+    subject = f"You've been invited to join {team.name} on RFP Sniper"
     html = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #1a365d; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0;">Orbitr</h1>
+            <h1 style="margin: 0;">RFP Sniper</h1>
         </div>
         <div style="padding: 20px;">
             <h2>Team Invitation</h2>
-            <p>You've been invited to join <strong>{team.name}</strong> on Orbitr.</p>
+            <p>You've been invited to join <strong>{team.name}</strong> on RFP Sniper.</p>
             {f"<p>{team.description}</p>" if team.description else ""}
             <p>
                 <a href="{accept_url}"
@@ -689,13 +689,13 @@ async def _send_invitation_email(team: Team, to_email: str, token: str) -> None:
             <p style="font-size: 12px; color: #666;">This invitation expires in 7 days.</p>
         </div>
         <div style="background: #f7f7f7; padding: 15px; text-align: center; font-size: 12px; color: #666;">
-            <p>Orbitr - Government Proposal Automation</p>
+            <p>RFP Sniper - Government Proposal Automation</p>
         </div>
     </body>
     </html>
     """
     text = (
-        f"You've been invited to join {team.name} on Orbitr.\n\n"
+        f"You've been invited to join {team.name} on RFP Sniper.\n\n"
         f"Accept invitation: {accept_url}\n\n"
         f"This invitation expires in 7 days."
     )

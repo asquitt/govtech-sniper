@@ -5,7 +5,7 @@ export default function AIDataPrivacyPage() {
         AI & Data Privacy
       </h1>
       <p className="text-muted-foreground mb-8">
-        How Orbitr handles your data with AI services
+        How RFP Sniper handles your data with AI services
       </p>
 
       <div className="space-y-8">
@@ -14,7 +14,7 @@ export default function AIDataPrivacyPage() {
             Your Data Is Never Used to Train AI Models
           </h2>
           <p className="text-muted-foreground leading-relaxed">
-            Orbitr uses Google Gemini API in ephemeral mode for all AI operations.
+            RFP Sniper uses Google Gemini API in ephemeral mode for all AI operations.
             Your proposals, RFPs, knowledge base documents, and compliance matrices
             are processed for your request only and are never retained by the AI
             provider for model training or improvement purposes.
@@ -87,8 +87,8 @@ export default function AIDataPrivacyPage() {
           </h2>
           <p className="text-muted-foreground">
             Contact our security team at{" "}
-            <a href="mailto:security@orbitr.io" className="text-primary hover:underline">
-              security@orbitr.io
+            <a href="mailto:security@rfpsniper.com" className="text-primary hover:underline">
+              security@rfpsniper.com
             </a>{" "}
             for security assessments, data processing agreements, or compliance documentation.
           </p>

@@ -39,7 +39,7 @@ const FEATURES = [
     icon: SplitSquareHorizontal,
     title: "Section Sync",
     description:
-      "Pull proposal sections from Orbitr into Word or push edits back. Keep your Word document and Orbitr workspace in sync without copy-pasting.",
+      "Pull proposal sections from RFP Sniper into Word or push edits back. Keep your Word document and RFP Sniper workspace in sync without copy-pasting.",
   },
 ] as const;
 
@@ -47,14 +47,14 @@ const INSTALL_STEPS = [
   "Download the manifest XML file using the button below.",
   'In Word, go to Insert > My Add-ins > Upload My Add-in.',
   "Browse to the downloaded manifest file and click OK.",
-  'The Orbitr tab will appear in the Word ribbon with AI Draft, Compliance Check, and Insert Section buttons.',
+  'The RFP Sniper tab will appear in the Word ribbon with AI Draft, Compliance Check, and Insert Section buttons.',
 ] as const;
 
 export default function WordAddinPage() {
   const handleDownloadManifest = () => {
     const link = document.createElement("a");
     link.href = "/word-addin-manifest.xml";
-    link.download = "orbitr-word-addin-manifest.xml";
+    link.download = "rfpsniper-word-addin-manifest.xml";
     link.click();
   };
 
@@ -151,7 +151,7 @@ export default function WordAddinPage() {
           <ul className="space-y-1.5 text-sm text-muted-foreground">
             <li>Microsoft Word 2016 or later (Desktop or Web)</li>
             <li>WordApi requirement set 1.3 or higher</li>
-            <li>Active Orbitr account with at least one proposal</li>
+            <li>Active RFP Sniper account with at least one proposal</li>
           </ul>
         </CardContent>
       </Card>
