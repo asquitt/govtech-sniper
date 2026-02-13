@@ -26,7 +26,7 @@ class SLEDBidNetProvider(DataSourceProvider):
     display_name = "SLED (BidNet)"
     description = "State, local, and education solicitations from BidNet Direct"
     is_active = True
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {

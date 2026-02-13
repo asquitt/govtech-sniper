@@ -28,7 +28,7 @@ class DIBBSProvider(DataSourceProvider):
     display_name = "DIBBS"
     description = "Defense Logistics Agency procurement opportunities"
     is_active = True
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {

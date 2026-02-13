@@ -28,7 +28,7 @@ class GSAEbuyProvider(DataSourceProvider):
     display_name = "GSA eBuy"
     description = "GSA eBuy quotes and RFQs for Schedule holders"
     is_active = True
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         api_key = getattr(settings, "sam_gov_api_key", None)

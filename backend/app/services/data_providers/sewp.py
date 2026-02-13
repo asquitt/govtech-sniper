@@ -29,7 +29,7 @@ class SEWPProvider(DataSourceProvider):
     display_name = "NASA SEWP V"
     description = "NASA SEWP V IT hardware, software, and services procurements"
     is_active = True
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {

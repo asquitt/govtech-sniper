@@ -26,7 +26,7 @@ class CanadaBuyAndSellProvider(DataSourceProvider):
     display_name = "Canada Buy & Sell"
     description = "Canadian federal procurement opportunities from buyandsell.gc.ca"
     is_active = True
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         query_params: dict = {

@@ -27,7 +27,7 @@ class GrantsGovProvider(DataSourceProvider):
     display_name = "Grants.gov"
     description = "Federal grants and cooperative agreements"
     is_active = True
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         payload: dict = {
@@ -102,7 +102,7 @@ def _map_grant_to_raw(item: dict) -> RawOpportunity:
         posted_date=posted,
         response_deadline=deadline,
         estimated_value=estimated,
-        naics_code=cfda,
+        naics_code=cfda,  # CFDA number (not NAICS) — grants use Assistance Listings
         source_url=url,
         source_type="grants_gov",
         raw_data=item,

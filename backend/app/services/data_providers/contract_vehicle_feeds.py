@@ -52,7 +52,7 @@ class _SAMVehicleProvider(DataSourceProvider):
 
     organization_id: str = ""
     vehicle_keyword: str = ""
-    maturity = ProviderMaturity.SAMPLE
+    maturity = ProviderMaturity.HYBRID
 
     async def search(self, params: SearchParams) -> list[RawOpportunity]:
         api_key = getattr(settings, "sam_gov_api_key", None)
