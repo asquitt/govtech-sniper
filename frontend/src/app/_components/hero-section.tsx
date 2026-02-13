@@ -87,10 +87,10 @@ export function HeroSection() {
               </div>
               {/* Simulated rows */}
               {[
-                { title: "DoD Cloud Migration", badge: "New", color: "primary" },
-                { title: "VA Health Records Modernization", badge: "Analyzing", color: "warning" },
-                { title: "USAF Cybersecurity Support", badge: "Ready", color: "accent" },
-                { title: "GSA IT Professional Services", badge: "Drafting", color: "primary" },
+                { title: "DoD Cloud Migration", badge: "New", cls: "bg-primary/20 text-primary border-primary/30" },
+                { title: "VA Health Records Modernization", badge: "Analyzing", cls: "bg-warning/20 text-warning border-warning/30" },
+                { title: "USAF Cybersecurity Support", badge: "Ready", cls: "bg-accent/20 text-accent border-accent/30" },
+                { title: "GSA IT Professional Services", badge: "Drafting", cls: "bg-primary/20 text-primary border-primary/30" },
               ].map((row) => (
                 <div
                   key={row.title}
@@ -98,7 +98,7 @@ export function HeroSection() {
                 >
                   <span className="text-sm text-foreground">{row.title}</span>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full bg-${row.color}/20 text-${row.color} border border-${row.color}/30`}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${row.cls}`}
                   >
                     {row.badge}
                   </span>
