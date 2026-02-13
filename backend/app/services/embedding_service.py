@@ -1,10 +1,10 @@
 """Embedding generation and semantic search service.
 
 Uses Gemini text-embedding-004 for production-quality semantic vectors.
+Stores and queries via pgvector for efficient approximate nearest neighbor search.
 Falls back to hash-based embeddings when GEMINI_API_KEY is not configured.
 """
 
-import json
 import math
 
 import structlog
@@ -108,18 +108,6 @@ def _fallback_embedding(text: str) -> list[float]:
     return embedding
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Compute cosine similarity between two vectors."""
-    if len(a) != len(b):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
-    mag_a = math.sqrt(sum(x * x for x in a))
-    mag_b = math.sqrt(sum(x * x for x in b))
-    if mag_a == 0 or mag_b == 0:
-        return 0.0
-    return dot / (mag_a * mag_b)
-
-
 async def index_entity(
     session: AsyncSession,
     entity_type: str,
@@ -144,13 +132,13 @@ async def index_entity(
     # Batch embed all chunks
     embeddings = await _gemini_embed(chunks)
 
-    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=False)):
+    for i, (chunk, emb_vector) in enumerate(zip(chunks, embeddings, strict=False)):
         doc_emb = DocumentEmbedding(
             entity_type=entity_type,
             entity_id=entity_id,
             chunk_text=chunk,
             chunk_index=i,
-            embedding_json=json.dumps(embedding),
+            embedding=emb_vector,
         )
         session.add(doc_emb)
 
@@ -164,31 +152,33 @@ async def search(
     entity_types: list[str] | None = None,
     limit: int = 10,
 ) -> list[dict]:
-    """Semantic search across indexed entities."""
+    """Semantic search across indexed entities using pgvector cosine distance."""
     query_embedding = await _gemini_embed_query(query)
 
-    stmt = select(DocumentEmbedding)
+    # Use pgvector cosine distance operator for efficient ANN search
+    stmt = select(
+        DocumentEmbedding.entity_type,
+        DocumentEmbedding.entity_id,
+        DocumentEmbedding.chunk_text,
+        DocumentEmbedding.chunk_index,
+        DocumentEmbedding.embedding.cosine_distance(query_embedding).label("distance"),
+    ).where(DocumentEmbedding.embedding != None)
+
     if entity_types:
         stmt = stmt.where(DocumentEmbedding.entity_type.in_(entity_types))
 
+    stmt = stmt.order_by("distance").limit(limit)
+
     result = await session.execute(stmt)
-    all_embeddings = result.scalars().all()
+    rows = result.all()
 
-    scored: list[dict] = []
-    for emb in all_embeddings:
-        if not emb.embedding_json:
-            continue
-        doc_embedding = json.loads(emb.embedding_json)
-        score = _cosine_similarity(query_embedding, doc_embedding)
-        scored.append(
-            {
-                "entity_type": emb.entity_type,
-                "entity_id": emb.entity_id,
-                "chunk_text": emb.chunk_text,
-                "score": round(score, 4),
-                "chunk_index": emb.chunk_index,
-            }
-        )
-
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[:limit]
+    return [
+        {
+            "entity_type": row.entity_type,
+            "entity_id": row.entity_id,
+            "chunk_text": row.chunk_text,
+            "score": round(1.0 - row.distance, 4),  # Convert distance to similarity
+            "chunk_index": row.chunk_index,
+        }
+        for row in rows
+    ]

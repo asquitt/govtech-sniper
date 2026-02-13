@@ -1,16 +1,14 @@
-"""Document embeddings for semantic search."""
+"""Document embeddings for semantic search using pgvector."""
 
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column as SAColumn
 from sqlmodel import Column, Field, SQLModel, Text
 
 
 class DocumentEmbedding(SQLModel, table=True):
-    """Vector embedding for semantic search.
-
-    NOTE: Uses JSON array instead of pgvector for MVP simplicity.
-    Can migrate to pgvector extension later for performance.
-    """
+    """Vector embedding for semantic search using pgvector HNSW index."""
 
     __tablename__ = "document_embeddings"
 
@@ -19,5 +17,8 @@ class DocumentEmbedding(SQLModel, table=True):
     entity_id: int = Field(index=True)
     chunk_text: str = Field(sa_column=Column(Text))
     chunk_index: int = Field(default=0)
-    embedding_json: str | None = Field(default=None, sa_column=Column(Text))
+    embedding: list[float] | None = Field(
+        default=None,
+        sa_column=SAColumn(Vector(768)),
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)
