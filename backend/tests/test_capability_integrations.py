@@ -54,6 +54,12 @@ class TestCapabilityIntegrations:
         )
         assert create_org.status_code == 200
 
+        org_response = await client.get("/api/v1/admin/organization", headers=auth_headers)
+        assert org_response.status_code == 200
+        org_payload = org_response.json()
+        assert "require_step_up_for_sensitive_exports" in org_payload
+        assert "require_step_up_for_sensitive_shares" in org_payload
+
         response = await client.get("/api/v1/admin/capability-health", headers=auth_headers)
         assert response.status_code == 200
         payload = response.json()

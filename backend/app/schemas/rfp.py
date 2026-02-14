@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from app.models.proposal import DataClassification
 from app.models.rfp import ImportanceLevel, RequirementStatus, RFPStatus, RFPType
 
 # =============================================================================
@@ -106,6 +107,50 @@ class SAMOpportunitySnapshotDiff(BaseModel):
     summary_to: SAMOpportunitySnapshotSummary
 
 
+class AmendmentImpactSignal(BaseModel):
+    """Single amendment change signal annotated for impact classification."""
+
+    field: str
+    from_value: Any | None = None
+    to_value: Any | None = None
+    impact_area: str
+    severity: str
+    recommended_actions: list[str] = []
+
+
+class AmendmentSectionRemediation(BaseModel):
+    """Section-level remediation recommendation for amendment handling."""
+
+    proposal_id: int
+    proposal_title: str
+    section_id: int
+    section_number: str | None = None
+    section_title: str
+    section_status: str
+    impact_score: float
+    impact_level: str
+    matched_change_fields: list[str] = []
+    rationale: str
+    proposed_patch: str
+    recommended_actions: list[str] = []
+    approval_required: bool = True
+
+
+class SAMOpportunityAmendmentImpact(BaseModel):
+    """Autopilot impact map for snapshot amendments."""
+
+    rfp_id: int
+    from_snapshot_id: int
+    to_snapshot_id: int
+    generated_at: datetime
+    amendment_risk_level: str
+    changed_fields: list[str]
+    signals: list[AmendmentImpactSignal]
+    impacted_sections: list[AmendmentSectionRemediation]
+    summary: dict[str, int | str]
+    approval_workflow: list[str]
+
+
 # =============================================================================
 # RFP Schemas
 # =============================================================================
@@ -131,9 +176,17 @@ class RFPCreate(BaseModel):
             return v.replace(tzinfo=None)
         return v
 
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: str | None) -> str:
+        if not value:
+            return "USD"
+        return value.upper()
+
     source_url: str | None = None
     description: str | None = None
     estimated_value: int | None = None
+    currency: str = Field(default="USD", max_length=10)
     place_of_performance: str | None = None
     source_type: str | None = None
     jurisdiction: str | None = None
@@ -145,6 +198,7 @@ class RFPCreate(BaseModel):
     budget_estimate: int | None = None
     competitive_landscape: str | None = None
     intel_notes: str | None = None
+    classification: DataClassification = DataClassification.INTERNAL
 
 
 class RFPRead(BaseModel):
@@ -152,6 +206,7 @@ class RFPRead(BaseModel):
 
     id: int
     user_id: int
+    classification: DataClassification
     title: str
     solicitation_number: str
     agency: str
@@ -170,6 +225,7 @@ class RFPRead(BaseModel):
     qualification_reason: str | None
     qualification_score: float | None
     estimated_value: int | None
+    currency: str
     place_of_performance: str | None
     source_type: str | None
     jurisdiction: str | None
@@ -202,6 +258,7 @@ class RFPUpdate(BaseModel):
     qualification_reason: str | None = None
     qualification_score: float | None = None
     estimated_value: int | None = None
+    currency: str | None = Field(default=None, max_length=10)
     place_of_performance: str | None = None
     source_type: str | None = None
     jurisdiction: str | None = None
@@ -213,6 +270,14 @@ class RFPUpdate(BaseModel):
     budget_estimate: int | None = None
     competitive_landscape: str | None = None
     intel_notes: str | None = None
+    classification: DataClassification | None = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.upper()
 
 
 class RFPListItem(BaseModel):
@@ -223,9 +288,13 @@ class RFPListItem(BaseModel):
     solicitation_number: str
     agency: str
     status: RFPStatus
+    classification: DataClassification = DataClassification.INTERNAL
     is_qualified: bool | None
     qualification_score: float | None
     match_score: float | None = None
+    source_type: str | None = None
+    jurisdiction: str | None = None
+    currency: str = "USD"
     response_deadline: datetime | None
     created_at: datetime
 

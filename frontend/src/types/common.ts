@@ -183,6 +183,33 @@ export interface WebSocketDiagnosticsSnapshot {
   };
 }
 
+export interface WebSocketDiagnosticsThresholds {
+  max_avg_status_latency_ms: number;
+  max_p95_status_latency_ms: number;
+  max_reconnect_count: number;
+  max_disconnect_ratio: number;
+  min_outbound_events_per_minute: number;
+  min_active_connection_count: number;
+}
+
+export interface WebSocketDiagnosticsAlert {
+  code: string;
+  severity: "info" | "warning" | "critical";
+  message: string;
+  metric: string;
+  actual: number;
+  threshold: number;
+  breached: boolean;
+}
+
+export interface WebSocketDiagnosticsAlertSnapshot {
+  timestamp: string;
+  thresholds: WebSocketDiagnosticsThresholds;
+  alerts: WebSocketDiagnosticsAlert[];
+  breached_count: number;
+  telemetry: WebSocketDiagnosticsSnapshot;
+}
+
 export interface SAMSearchParams {
   keywords: string;
   days_back?: number;

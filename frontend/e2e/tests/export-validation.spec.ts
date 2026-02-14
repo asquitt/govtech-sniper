@@ -204,6 +204,32 @@ test.describe("Export Validation", () => {
     expect(body[1]).toBe(0x4b);
   });
 
+  test("exports evaluator evidence bundle zip and validates response", async ({
+    authenticatedPage: page,
+  }) => {
+    const token = await getAccessToken(page);
+    const nonce = Date.now();
+    const { proposal } = await setupProposalWithContent(page, token, nonce);
+
+    const exportResponse = await page.request.get(
+      `/api/export/proposals/${proposal.id}/compliance-package/zip`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(exportResponse.ok()).toBeTruthy();
+
+    const contentType = exportResponse.headers()["content-type"];
+    expect(contentType).toContain("application/zip");
+
+    const disposition = exportResponse.headers()["content-disposition"];
+    expect(disposition).toContain("attachment");
+    expect(disposition).toContain(".zip");
+
+    const body = await exportResponse.body();
+    expect(body.length).toBeGreaterThan(100);
+    expect(body[0]).toBe(0x50);
+    expect(body[1]).toBe(0x4b);
+  });
+
   test("export buttons visible on proposal workspace page", async ({
     authenticatedPage: page,
   }) => {
@@ -216,6 +242,9 @@ test.describe("Export Validation", () => {
       timeout: 15_000,
     });
     await expect(page.getByRole("button", { name: "Export PDF" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Export Evidence Bundle" })
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "SharePoint Export" })
     ).toBeVisible();

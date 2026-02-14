@@ -10,12 +10,16 @@ from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.collaboration import (
     ComplianceDigestChannel,
+    ComplianceDigestDeliveryStatus,
     ComplianceDigestFrequency,
+    ComplianceDigestRecipientRole,
     SharedDataPermission,
+    WorkspaceComplianceDigestDelivery,
     WorkspaceComplianceDigestSchedule,
     WorkspaceRole,
 )
 from app.schemas.collaboration import (
+    ComplianceDigestDeliveryListRead,
     ComplianceDigestPreviewRead,
     ComplianceDigestScheduleRead,
     ComplianceDigestScheduleUpdate,
@@ -23,13 +27,20 @@ from app.schemas.collaboration import (
 from app.services.auth_service import UserAuth
 
 from .helpers import (
+    _calculate_digest_recipient_count,
     _calculate_governance_anomalies,
     _calculate_governance_summary,
     _calculate_governance_trends,
+    _get_digest_delivery_summary,
+    _get_latest_digest_delivery,
+    _list_digest_deliveries,
     _parse_compliance_channel,
     _parse_compliance_frequency,
+    _parse_compliance_recipient_role,
     _require_member_role,
+    _serialize_digest_delivery,
     _serialize_digest_schedule,
+    _summarize_digest_deliveries,
 )
 
 router = APIRouter()
@@ -62,6 +73,7 @@ async def get_workspace_compliance_digest_schedule(
             hour_utc=13,
             minute_utc=0,
             channel=ComplianceDigestChannel.IN_APP,
+            recipient_role=ComplianceDigestRecipientRole.ALL,
             anomalies_only=False,
             is_enabled=True,
         )
@@ -108,6 +120,7 @@ async def update_workspace_compliance_digest_schedule(
     schedule.hour_utc = payload.hour_utc
     schedule.minute_utc = payload.minute_utc
     schedule.channel = _parse_compliance_channel(payload.channel)
+    schedule.recipient_role = _parse_compliance_recipient_role(payload.recipient_role)
     schedule.anomalies_only = payload.anomalies_only
     schedule.is_enabled = payload.is_enabled
     schedule.updated_at = datetime.utcnow()
@@ -155,14 +168,27 @@ async def get_workspace_compliance_digest_preview(
     )
     if schedule.anomalies_only:
         anomalies = [item for item in anomalies if item.code != "healthy"]
+    recipient_count = await _calculate_digest_recipient_count(
+        workspace_id,
+        _parse_compliance_recipient_role(schedule.recipient_role),
+        session,
+    )
+    delivery_summary = await _get_digest_delivery_summary(
+        workspace_id,
+        current_user.id,
+        session,
+    )
 
     return ComplianceDigestPreviewRead(
         workspace_id=workspace_id,
         generated_at=datetime.utcnow(),
+        recipient_role=schedule.recipient_role,
+        recipient_count=recipient_count,
         summary=summary,
         trends=trends,
         anomalies=anomalies,
         schedule=schedule,
+        delivery_summary=delivery_summary,
     )
 
 
@@ -206,12 +232,6 @@ async def send_workspace_compliance_digest(
     if not schedule_row.is_enabled:
         raise HTTPException(400, "Compliance digest schedule is disabled")
 
-    schedule_row.last_sent_at = datetime.utcnow()
-    schedule_row.updated_at = datetime.utcnow()
-    session.add(schedule_row)
-    await session.commit()
-    await session.refresh(schedule_row)
-
     permissions = (
         (
             await session.execute(
@@ -233,12 +253,106 @@ async def send_workspace_compliance_digest(
     anomalies = _calculate_governance_anomalies(summary, trends)
     if schedule_row.anomalies_only:
         anomalies = [item for item in anomalies if item.code != "healthy"]
+    recipient_role = _parse_compliance_recipient_role(
+        schedule_row.recipient_role.value
+        if hasattr(schedule_row.recipient_role, "value")
+        else str(schedule_row.recipient_role)
+    )
+    recipient_count = await _calculate_digest_recipient_count(
+        workspace_id,
+        recipient_role,
+        session,
+    )
+    generated_at = datetime.utcnow()
+    last_delivery = await _get_latest_digest_delivery(workspace_id, current_user.id, session)
+    retry_of_delivery_id: int | None = None
+    attempt_number = 1
+    if (
+        last_delivery
+        and (
+            last_delivery.status.value
+            if hasattr(last_delivery.status, "value")
+            else str(last_delivery.status)
+        )
+        == ComplianceDigestDeliveryStatus.FAILED.value
+    ):
+        retry_of_delivery_id = last_delivery.id
+        attempt_number = last_delivery.attempt_number + 1
+
+    failure_reason: str | None = None
+    if recipient_count <= 0:
+        failure_reason = "No recipients found for configured digest role"
+
+    delivery_row = WorkspaceComplianceDigestDelivery(
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        schedule_id=schedule_row.id,
+        status=(
+            ComplianceDigestDeliveryStatus.FAILED
+            if failure_reason
+            else ComplianceDigestDeliveryStatus.SUCCESS
+        ),
+        attempt_number=attempt_number,
+        retry_of_delivery_id=retry_of_delivery_id,
+        channel=schedule_row.channel,
+        recipient_role=recipient_role,
+        recipient_count=recipient_count,
+        anomalies_count=len(anomalies),
+        failure_reason=failure_reason,
+        generated_at=generated_at,
+    )
+    session.add(delivery_row)
+
+    if failure_reason:
+        schedule_row.updated_at = generated_at
+        session.add(schedule_row)
+        await session.commit()
+        raise HTTPException(400, failure_reason)
+
+    schedule_row.last_sent_at = generated_at
+    schedule_row.updated_at = generated_at
+    session.add(schedule_row)
+    await session.commit()
+    await session.refresh(schedule_row)
+    delivery_summary = await _get_digest_delivery_summary(
+        workspace_id,
+        current_user.id,
+        session,
+    )
 
     return ComplianceDigestPreviewRead(
         workspace_id=workspace_id,
-        generated_at=datetime.utcnow(),
+        generated_at=generated_at,
+        recipient_role=recipient_role.value,
+        recipient_count=recipient_count,
         summary=summary,
         trends=trends,
         anomalies=anomalies,
         schedule=_serialize_digest_schedule(schedule_row),
+        delivery_summary=delivery_summary,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/compliance-digest-deliveries",
+    response_model=ComplianceDigestDeliveryListRead,
+)
+async def list_workspace_compliance_digest_deliveries(
+    workspace_id: int,
+    limit: int = Query(20, ge=1, le=200),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceDigestDeliveryListRead:
+    await _require_member_role(workspace_id, current_user.id, WorkspaceRole.ADMIN, session)
+    deliveries = await _list_digest_deliveries(
+        workspace_id,
+        current_user.id,
+        session,
+        limit=limit,
+    )
+    return ComplianceDigestDeliveryListRead(
+        workspace_id=workspace_id,
+        user_id=current_user.id,
+        summary=_summarize_digest_deliveries(deliveries),
+        items=[_serialize_digest_delivery(row) for row in deliveries],
     )

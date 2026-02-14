@@ -25,6 +25,7 @@ export const documentApi = {
       title: string;
       document_type: string;
       description?: string;
+      classification?: string;
     }
   ): Promise<KnowledgeBaseDocument> => {
     const formData = new FormData();
@@ -33,6 +34,9 @@ export const documentApi = {
     formData.append("document_type", metadata.document_type);
     if (metadata.description) {
       formData.append("description", metadata.description);
+    }
+    if (metadata.classification) {
+      formData.append("classification", metadata.classification);
     }
 
     const { data } = await api.post("/documents", formData, {
@@ -64,17 +68,39 @@ export const documentApi = {
 // =============================================================================
 
 export const exportApi = {
-  exportProposalDocx: async (proposalId: number): Promise<Blob> => {
+  exportProposalDocx: async (
+    proposalId: number,
+    stepUpCode?: string
+  ): Promise<Blob> => {
     const { data } = await api.get(`/export/proposals/${proposalId}/docx`, {
+      headers: stepUpCode ? { "X-Step-Up-Code": stepUpCode } : undefined,
       responseType: "blob",
     });
     return data;
   },
 
-  exportProposalPdf: async (proposalId: number): Promise<Blob> => {
+  exportProposalPdf: async (
+    proposalId: number,
+    stepUpCode?: string
+  ): Promise<Blob> => {
     const { data } = await api.get(`/export/proposals/${proposalId}/pdf`, {
+      headers: stepUpCode ? { "X-Step-Up-Code": stepUpCode } : undefined,
       responseType: "blob",
     });
+    return data;
+  },
+
+  exportCompliancePackage: async (
+    proposalId: number,
+    stepUpCode?: string
+  ): Promise<Blob> => {
+    const { data } = await api.get(
+      `/export/proposals/${proposalId}/compliance-package/zip`,
+      {
+        headers: stepUpCode ? { "X-Step-Up-Code": stepUpCode } : undefined,
+        responseType: "blob",
+      }
+    );
     return data;
   },
 

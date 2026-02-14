@@ -21,6 +21,7 @@ interface ShareDataFormProps {
   selectedPresetKey: string;
   selectedPartnerUserId: string;
   expirationDays: string;
+  stepUpCode: string;
   requiresApproval: boolean;
   isSharing: boolean;
   isApplyingPreset: boolean;
@@ -30,6 +31,7 @@ interface ShareDataFormProps {
   onSelectedPresetKeyChange: (key: string) => void;
   onSelectedPartnerUserIdChange: (id: string) => void;
   onExpirationDaysChange: (days: string) => void;
+  onStepUpCodeChange: (code: string) => void;
   onRequiresApprovalChange: (required: boolean) => void;
   onSharingChange: (sharing: boolean) => void;
   onApplyingPresetChange: (applying: boolean) => void;
@@ -47,6 +49,7 @@ export function ShareDataForm({
   selectedPresetKey,
   selectedPartnerUserId,
   expirationDays,
+  stepUpCode,
   requiresApproval,
   isSharing,
   isApplyingPreset,
@@ -56,6 +59,7 @@ export function ShareDataForm({
   onSelectedPresetKeyChange,
   onSelectedPartnerUserIdChange,
   onExpirationDaysChange,
+  onStepUpCodeChange,
   onRequiresApprovalChange,
   onSharingChange,
   onApplyingPresetChange,
@@ -108,7 +112,8 @@ export function ShareDataForm({
               try {
                 await collaborationApi.applyContractFeedPreset(
                   workspaceId,
-                  selectedPresetKey
+                  selectedPresetKey,
+                  stepUpCode || undefined
                 );
                 await onDataChanged();
               } catch {
@@ -227,6 +232,18 @@ export function ShareDataForm({
             />
             Require approval
           </label>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Step-up code</label>
+            <input
+              aria-label="Step-up code"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
+              value={stepUpCode}
+              onChange={(event) => onStepUpCodeChange(event.target.value)}
+              placeholder="123456"
+            />
+          </div>
           <Button
             size="sm"
             disabled={
@@ -256,6 +273,7 @@ export function ShareDataForm({
                     ? Number.parseInt(selectedPartnerUserId, 10)
                     : null,
                   expires_at: expiresAt?.toISOString() ?? null,
+                  step_up_code: stepUpCode || null,
                 });
                 onShareEntityIdChange("");
                 onExpirationDaysChange("");

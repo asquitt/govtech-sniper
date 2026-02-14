@@ -37,6 +37,10 @@ from app.schemas.review import (
     ReviewComplete,
     ReviewCreate,
     ReviewDashboardItem,
+    ReviewPacketActionItem,
+    ReviewPacketChecklistSummary,
+    ReviewPacketRead,
+    ReviewPacketRiskSummary,
     ReviewRead,
     ScoringSummary,
 )
@@ -423,6 +427,205 @@ async def get_scoring_summary(
         resolution_rate=round(resolution_rate, 1),
         total_comments=total_comments,
         resolved_comments=resolved_comments,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Review Packet
+# ---------------------------------------------------------------------------
+
+
+def _review_packet_action_recommendation(severity: str, status: str) -> str:
+    if status in {"closed", "verified", "rejected"}:
+        return "No immediate action required. Confirm closure evidence is retained in packet."
+    if severity == "critical":
+        return "Assign immediate owner and patch before next review gate."
+    if severity == "major":
+        return "Address in next draft cycle and verify fix with reviewer."
+    if severity == "minor":
+        return "Apply cleanup edits before final quality review."
+    return "Consider if this improves discriminator strength; apply if low effort/high value."
+
+
+def _review_packet_exit_criteria(
+    review_type: str,
+    checklist_pass_rate: float,
+    open_critical: int,
+    open_major: int,
+) -> list[str]:
+    if review_type == "pink":
+        return [
+            f"Open critical findings at pink exit must be 0 (current: {open_critical}).",
+            f"Checklist pass-rate target for pink is >= 75% (current: {checklist_pass_rate:.1f}%).",
+            "Solution narrative gaps should be resolved before red-team scheduling.",
+        ]
+    if review_type == "red":
+        return [
+            f"Open critical findings at red exit must be 0 (current: {open_critical}).",
+            f"Open major findings at red exit should be <= 2 (current: {open_major}).",
+            f"Checklist pass-rate target for red is >= 85% (current: {checklist_pass_rate:.1f}%).",
+        ]
+    return [
+        f"Open critical findings at gold exit must be 0 (current: {open_critical}).",
+        f"Open major findings at gold exit must be 0 (current: {open_major}).",
+        f"Checklist pass-rate target for gold is >= 95% (current: {checklist_pass_rate:.1f}%).",
+        "Go/No-Go decision must be documented in review closeout.",
+    ]
+
+
+@router.get("/{review_id}/packet", response_model=ReviewPacketRead)
+async def get_review_packet(
+    review_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ReviewPacketRead:
+    """Generate a review packet with a risk-ranked action queue."""
+    review = await get_or_404(session, ProposalReview, review_id, "Review not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(
+            Proposal.id == review.proposal_id,
+            Proposal.user_id == current_user.id,
+        )
+    )
+    proposal = proposal_result.scalar_one_or_none()
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    comments_result = await session.execute(
+        select(ReviewComment)
+        .where(ReviewComment.review_id == review_id)
+        .order_by(ReviewComment.created_at.asc())
+    )
+    comments = comments_result.scalars().all()
+
+    checklist_result = await session.execute(
+        select(ReviewChecklistItem).where(ReviewChecklistItem.review_id == review_id)
+    )
+    checklist_items = checklist_result.scalars().all()
+
+    checklist_status = [
+        item.status.value if hasattr(item.status, "value") else str(item.status)
+        for item in checklist_items
+    ]
+    total_items = len(checklist_status)
+    pass_count = sum(1 for status in checklist_status if status == ChecklistItemStatus.PASS.value)
+    fail_count = sum(1 for status in checklist_status if status == ChecklistItemStatus.FAIL.value)
+    pending_count = sum(
+        1 for status in checklist_status if status == ChecklistItemStatus.PENDING.value
+    )
+    na_count = sum(1 for status in checklist_status if status == ChecklistItemStatus.NA.value)
+    pass_rate = round((pass_count / total_items * 100) if total_items else 0.0, 1)
+
+    severity_weights = {"critical": 100.0, "major": 75.0, "minor": 45.0, "suggestion": 20.0}
+    status_multipliers = {
+        "open": 1.0,
+        "assigned": 0.85,
+        "addressed": 0.55,
+        "verified": 0.25,
+        "closed": 0.1,
+        "rejected": 0.1,
+    }
+    actionable_statuses = {"open", "assigned", "addressed"}
+
+    action_queue: list[ReviewPacketActionItem] = []
+    unresolved_comments = 0
+    open_critical = 0
+    open_major = 0
+    highest_risk = 0.0
+
+    now = datetime.utcnow()
+    for comment in comments:
+        severity = (
+            comment.severity.value if hasattr(comment.severity, "value") else str(comment.severity)
+        )
+        status = comment.status.value if hasattr(comment.status, "value") else str(comment.status)
+        if status not in actionable_statuses:
+            continue
+
+        unresolved_comments += 1
+        if severity == CommentSeverity.CRITICAL.value:
+            open_critical += 1
+        if severity == CommentSeverity.MAJOR.value:
+            open_major += 1
+
+        age_days = max((now - comment.created_at).days, 0)
+        age_boost = min(age_days * 1.5, 20.0)
+        risk_score = round(
+            (severity_weights.get(severity, 30.0) * status_multipliers.get(status, 1.0))
+            + age_boost,
+            1,
+        )
+        highest_risk = max(highest_risk, risk_score)
+
+        recommendation = _review_packet_action_recommendation(severity=severity, status=status)
+        action_queue.append(
+            ReviewPacketActionItem(
+                rank=0,  # populated after sorting
+                comment_id=comment.id,  # type: ignore[arg-type]
+                section_id=comment.section_id,
+                severity=severity,
+                status=status,
+                risk_score=risk_score,
+                age_days=age_days,
+                assigned_to_user_id=comment.assigned_to_user_id,
+                recommended_action=recommendation,
+                rationale=(
+                    f"{severity.title()} severity with {status.replace('_', ' ')} status "
+                    f"and age {age_days}d."
+                ),
+            )
+        )
+
+    action_queue.sort(key=lambda item: (-item.risk_score, item.age_days, item.comment_id))
+    for index, item in enumerate(action_queue, start=1):
+        item.rank = index
+
+    if open_critical > 0 or highest_risk >= 85:
+        risk_level = "high"
+    elif open_major > 0 or unresolved_comments > 0:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    review_type_val = (
+        review.review_type.value
+        if isinstance(review.review_type, ReviewType)
+        else review.review_type
+    )
+    review_status_val = (
+        review.status.value if isinstance(review.status, ReviewStatus) else review.status
+    )
+
+    return ReviewPacketRead(
+        review_id=review.id,  # type: ignore[arg-type]
+        proposal_id=proposal.id,  # type: ignore[arg-type]
+        proposal_title=proposal.title,
+        review_type=review_type_val,
+        review_status=review_status_val,
+        generated_at=datetime.utcnow(),
+        checklist_summary=ReviewPacketChecklistSummary(
+            total_items=total_items,
+            pass_count=pass_count,
+            fail_count=fail_count,
+            pending_count=pending_count,
+            na_count=na_count,
+            pass_rate=pass_rate,
+        ),
+        risk_summary=ReviewPacketRiskSummary(
+            open_critical=open_critical,
+            open_major=open_major,
+            unresolved_comments=unresolved_comments,
+            highest_risk_score=round(highest_risk, 1),
+            overall_risk_level=risk_level,
+        ),
+        action_queue=action_queue,
+        recommended_exit_criteria=_review_packet_exit_criteria(
+            review_type=review_type_val,
+            checklist_pass_rate=pass_rate,
+            open_critical=open_critical,
+            open_major=open_major,
+        ),
     )
 
 

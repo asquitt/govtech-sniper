@@ -1,5 +1,9 @@
 import api from "./client";
-import type { IndustryEvent } from "@/types";
+import type {
+  EventAlertResponse,
+  EventIngestResponse,
+  IndustryEvent,
+} from "@/types";
 
 export const eventApi = {
   list: async (archived = false): Promise<IndustryEvent[]> => {
@@ -16,6 +20,23 @@ export const eventApi = {
     const { data } = await api.get("/events/calendar", {
       params: { month, year },
     });
+    return data;
+  },
+
+  ingest: async (params?: {
+    days_ahead?: number;
+    include_curated?: boolean;
+  }): Promise<EventIngestResponse> => {
+    const { data } = await api.post("/events/ingest", null, { params });
+    return data;
+  },
+
+  alerts: async (params?: {
+    days?: number;
+    min_score?: number;
+    limit?: number;
+  }): Promise<EventAlertResponse> => {
+    const { data } = await api.get("/events/alerts", { params });
     return data;
   },
 

@@ -11,6 +11,7 @@ from app.services.data_providers.base import (
     SearchParams,
 )
 from app.services.data_providers.canada_buyandsell import CanadaBuyAndSellProvider
+from app.services.data_providers.canada_provincial import CanadaProvincialPortalsProvider
 from app.services.data_providers.contract_vehicle_feeds import (
     CioSpProvider,
     GsaMasProvider,
@@ -38,6 +39,7 @@ _PROVIDERS: dict[str, DataSourceProvider] = {
     "dibbs": DIBBSProvider(),
     "grants_gov": GrantsGovProvider(),
     "canada_buyandsell": CanadaBuyAndSellProvider(),
+    "canada_provincial": CanadaProvincialPortalsProvider(),
 }
 
 

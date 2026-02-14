@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -20,9 +20,9 @@ router = APIRouter()
 async def update_my_partner_profile(
     partner_id: int,
     is_public: bool | None = None,
-    naics_codes: list[str] | None = None,
-    set_asides: list[str] | None = None,
-    capabilities: list[str] | None = None,
+    naics_codes: list[str] | None = Query(default=None),
+    set_asides: list[str] | None = Query(default=None),
+    capabilities: list[str] | None = Query(default=None),
     clearance_level: str | None = None,
     past_performance_summary: str | None = None,
     website: str | None = None,

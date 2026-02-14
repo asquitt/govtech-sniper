@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { collaborationApi } from "@/lib/api";
 import type {
+  ComplianceDigestDeliveryList,
   ComplianceDigestPreview,
   ComplianceDigestSchedule,
   ContractFeedCatalogItem,
@@ -122,10 +123,13 @@ export function WorkspaceDetail({
   const [governanceAnomalies, setGovernanceAnomalies] = useState<GovernanceAnomaly[]>([]);
   const [digestSchedule, setDigestSchedule] = useState<ComplianceDigestSchedule | null>(null);
   const [digestPreview, setDigestPreview] = useState<ComplianceDigestPreview | null>(null);
+  const [digestDeliveries, setDigestDeliveries] =
+    useState<ComplianceDigestDeliveryList | null>(null);
   const [selectedContractFeedId, setSelectedContractFeedId] = useState("");
   const [selectedPresetKey, setSelectedPresetKey] = useState("");
   const [selectedPartnerUserId, setSelectedPartnerUserId] = useState("");
   const [expirationDays, setExpirationDays] = useState("");
+  const [stepUpCode, setStepUpCode] = useState("");
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isApplyingPreset, setIsApplyingPreset] = useState(false);
@@ -140,7 +144,7 @@ export function WorkspaceDetail({
     try {
       const [
         m, i, s, contractFeeds, presets,
-        governance, trends, anomalies, schedule, preview,
+        governance, trends, anomalies, schedule, preview, deliveryTelemetry,
       ] = await Promise.all([
         collaborationApi.listMembers(workspace.id),
         collaborationApi.listInvitations(workspace.id).catch(() => [] as WorkspaceInvitation[]),
@@ -152,6 +156,9 @@ export function WorkspaceDetail({
         collaborationApi.getGovernanceAnomalies(workspace.id).catch(() => [] as GovernanceAnomaly[]),
         collaborationApi.getComplianceDigestSchedule(workspace.id).catch(() => null as ComplianceDigestSchedule | null),
         collaborationApi.getComplianceDigestPreview(workspace.id).catch(() => null as ComplianceDigestPreview | null),
+        collaborationApi
+          .getComplianceDigestDeliveries(workspace.id, { limit: 10 })
+          .catch(() => null as ComplianceDigestDeliveryList | null),
       ]);
       setMembers(m);
       setInvitations(i);
@@ -163,6 +170,7 @@ export function WorkspaceDetail({
       setGovernanceAnomalies(anomalies);
       setDigestSchedule(schedule);
       setDigestPreview(preview);
+      setDigestDeliveries(deliveryTelemetry);
       if (contractFeeds.length > 0 && !selectedContractFeedId) {
         setSelectedContractFeedId(String(contractFeeds[0].id));
       }
@@ -202,6 +210,7 @@ export function WorkspaceDetail({
     try {
       const blob = await collaborationApi.exportShareAuditCsv(workspace.id, {
         days: governanceTrends?.days ?? 30,
+        step_up_code: stepUpCode || undefined,
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -362,6 +371,8 @@ export function WorkspaceDetail({
             governanceTrends={governanceTrends}
             governanceAnomalies={governanceAnomalies}
             isExportingAudit={isExportingAudit}
+            stepUpCode={stepUpCode}
+            onStepUpCodeChange={setStepUpCode}
             onExportAudit={handleExportAudit}
           />
 
@@ -369,11 +380,13 @@ export function WorkspaceDetail({
             workspaceId={workspace.id}
             digestSchedule={digestSchedule}
             digestPreview={digestPreview}
+            digestDeliveries={digestDeliveries}
             governanceTrends={governanceTrends}
             isSavingDigest={isSavingDigest}
             isSendingDigest={isSendingDigest}
             onDigestScheduleChange={setDigestSchedule}
             onDigestPreviewChange={setDigestPreview}
+            onDigestDeliveriesChange={setDigestDeliveries}
             onSavingDigestChange={setIsSavingDigest}
             onSendingDigestChange={setIsSendingDigest}
           />
@@ -389,6 +402,7 @@ export function WorkspaceDetail({
             selectedPresetKey={selectedPresetKey}
             selectedPartnerUserId={selectedPartnerUserId}
             expirationDays={expirationDays}
+            stepUpCode={stepUpCode}
             requiresApproval={requiresApproval}
             isSharing={isSharing}
             isApplyingPreset={isApplyingPreset}
@@ -398,6 +412,7 @@ export function WorkspaceDetail({
             onSelectedPresetKeyChange={setSelectedPresetKey}
             onSelectedPartnerUserIdChange={setSelectedPartnerUserId}
             onExpirationDaysChange={setExpirationDays}
+            onStepUpCodeChange={setStepUpCode}
             onRequiresApprovalChange={setRequiresApproval}
             onSharingChange={setIsSharing}
             onApplyingPresetChange={setIsApplyingPreset}

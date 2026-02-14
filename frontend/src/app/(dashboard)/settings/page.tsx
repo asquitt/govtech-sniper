@@ -25,6 +25,7 @@ const fallbackProviderOptions: { value: IntegrationProvider; label: string }[] =
   { value: "microsoft", label: "Microsoft" },
   { value: "sharepoint", label: "SharePoint" },
   { value: "salesforce", label: "Salesforce" },
+  { value: "unanet", label: "Unanet" },
   { value: "word_addin", label: "Word Add-in" },
   { value: "webhook", label: "Webhook" },
   { value: "slack", label: "Slack" },

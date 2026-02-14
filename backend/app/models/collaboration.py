@@ -47,6 +47,19 @@ class ComplianceDigestChannel(str, Enum):
     EMAIL = "email"
 
 
+class ComplianceDigestRecipientRole(str, Enum):
+    ALL = "all"
+    OWNER = "owner"
+    ADMIN = "admin"
+    CONTRIBUTOR = "contributor"
+    VIEWER = "viewer"
+
+
+class ComplianceDigestDeliveryStatus(str, Enum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
 class SharedWorkspace(SQLModel, table=True):
     """A collaboration workspace owned by a user, optionally tied to an RFP."""
 
@@ -124,9 +137,35 @@ class WorkspaceComplianceDigestSchedule(SQLModel, table=True):
     hour_utc: int = Field(default=13, ge=0, le=23)
     minute_utc: int = Field(default=0, ge=0, le=59)
     channel: ComplianceDigestChannel = Field(default=ComplianceDigestChannel.IN_APP)
+    recipient_role: ComplianceDigestRecipientRole = Field(default=ComplianceDigestRecipientRole.ALL)
     anomalies_only: bool = Field(default=False)
     is_enabled: bool = Field(default=True)
     last_sent_at: datetime | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WorkspaceComplianceDigestDelivery(SQLModel, table=True):
+    """Delivery attempts for workspace compliance digests (success/failure + retries)."""
+
+    __tablename__ = "workspace_compliance_digest_deliveries"
+
+    id: int | None = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="shared_workspaces.id", index=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    schedule_id: int | None = Field(
+        default=None, foreign_key="workspace_compliance_digest_schedules.id", index=True
+    )
+    status: ComplianceDigestDeliveryStatus = Field(default=ComplianceDigestDeliveryStatus.SUCCESS)
+    attempt_number: int = Field(default=1, ge=1)
+    retry_of_delivery_id: int | None = Field(
+        default=None, foreign_key="workspace_compliance_digest_deliveries.id"
+    )
+    channel: ComplianceDigestChannel = Field(default=ComplianceDigestChannel.IN_APP)
+    recipient_role: ComplianceDigestRecipientRole = Field(default=ComplianceDigestRecipientRole.ALL)
+    recipient_count: int = Field(default=0, ge=0)
+    anomalies_count: int = Field(default=0, ge=0)
+    failure_reason: str | None = Field(default=None, max_length=255)
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)

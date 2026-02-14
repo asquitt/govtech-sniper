@@ -4,6 +4,7 @@ Draft Routes - Section CRUD
 
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,9 +30,11 @@ from app.schemas.proposal import (
 from app.services.activity_service import log_activity
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
+from app.services.embedding_service import compose_proposal_section_text, index_entity
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
 
 @router.post("/proposals/{proposal_id}/sections", response_model=ProposalSectionRead)
@@ -67,6 +70,32 @@ async def create_section(
     # Update proposal section count
     proposal.total_sections += 1
 
+    await session.flush()
+    try:
+        await index_entity(
+            session,
+            user_id=proposal.user_id,
+            entity_type="proposal_section",
+            entity_id=new_section.id,
+            text=compose_proposal_section_text(
+                title=new_section.title,
+                section_number=new_section.section_number,
+                requirement_text=new_section.requirement_text,
+                final_content=new_section.final_content,
+                generated_content_clean_text=(
+                    (new_section.generated_content or {}).get("clean_text")
+                    if isinstance(new_section.generated_content, dict)
+                    else None
+                ),
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Proposal section semantic index update failed",
+            section_id=new_section.id,
+            proposal_id=proposal_id,
+            error=str(exc),
+        )
     await session.commit()
     await session.refresh(new_section)
 
@@ -216,6 +245,32 @@ async def update_section(
     )
     proposal.completed_sections = len(completed_result.scalars().all())
     proposal.updated_at = datetime.utcnow()
+
+    try:
+        await index_entity(
+            session,
+            user_id=proposal.user_id,
+            entity_type="proposal_section",
+            entity_id=section.id,
+            text=compose_proposal_section_text(
+                title=section.title,
+                section_number=section.section_number,
+                requirement_text=section.requirement_text,
+                final_content=section.final_content,
+                generated_content_clean_text=(
+                    (section.generated_content or {}).get("clean_text")
+                    if isinstance(section.generated_content, dict)
+                    else None
+                ),
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Proposal section semantic reindex failed",
+            section_id=section.id,
+            proposal_id=proposal.id,
+            error=str(exc),
+        )
 
     # Version tracking
     if "final_content" in update_data or "status" in update_data:

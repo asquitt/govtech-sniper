@@ -57,12 +57,42 @@ test.describe("Reviews Workflow", () => {
       }
     );
     expect(scheduleReview.ok()).toBeTruthy();
+    const review = (await scheduleReview.json()) as { id: number };
+
+    const createChecklist = await page.request.post(
+      `/api/reviews/${review.id}/checklist`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        data: {
+          review_type: "red",
+        },
+      }
+    );
+    expect(createChecklist.ok()).toBeTruthy();
+
+    const addComment = await page.request.post(`/api/reviews/${review.id}/comments`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        comment_text: "Critical compliance issue requires remediation.",
+        severity: "critical",
+      },
+    });
+    expect(addComment.ok()).toBeTruthy();
 
     await page.goto("/reviews");
-    await expect(page.getByText(proposalTitle)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: proposalTitle })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Review Packet Builder")).toBeVisible();
+    await expect(page.getByText("Risk-Ranked Action Queue")).toBeVisible();
+    await expect(page.getByText("Assign immediate owner and patch before next review gate.")).toBeVisible();
 
     await page.getByRole("button", { name: "RED Team" }).click();
     await page.getByRole("button", { name: "Scheduled" }).click();
-    await expect(page.getByText(proposalTitle)).toBeVisible();
+    await expect(page.getByRole("link", { name: proposalTitle })).toBeVisible();
   });
 });

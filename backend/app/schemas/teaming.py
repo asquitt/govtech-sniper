@@ -114,6 +114,23 @@ class TeamingPartnerTrendDrilldownResponse(BaseModel):
     partners: list[PartnerTrendDrilldownRead]
 
 
+class TeamingCohortDrilldownRead(BaseModel):
+    cohort_value: str
+    partner_count: int
+    sent_count: int
+    accepted_count: int
+    declined_count: int
+    pending_count: int
+    acceptance_rate: float
+
+
+class TeamingPartnerCohortDrilldownResponse(BaseModel):
+    days: int
+    total_sent: int
+    naics_cohorts: list[TeamingCohortDrilldownRead]
+    set_aside_cohorts: list[TeamingCohortDrilldownRead]
+
+
 class TeamingDigestScheduleRead(BaseModel):
     frequency: str
     day_of_week: int | None = None

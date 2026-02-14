@@ -7,6 +7,7 @@ import { teamingBoardApi } from "@/lib/api";
 import type {
   TeamingDigestPreview,
   TeamingDigestSchedule,
+  TeamingPartnerCohortDrilldownResponse,
   TeamingPartnerTrendDrilldownResponse,
   TeamingRequestTrend,
 } from "@/types";
@@ -16,6 +17,7 @@ interface RequestInsightsPanelProps {
   direction: "sent" | "received" | "all";
   requestFitTrends: TeamingRequestTrend | null;
   partnerDrilldowns: TeamingPartnerTrendDrilldownResponse | null;
+  partnerCohorts: TeamingPartnerCohortDrilldownResponse | null;
   digestSchedule: TeamingDigestSchedule | null;
   digestPreview: TeamingDigestPreview | null;
   onDigestScheduleChange: (schedule: TeamingDigestSchedule | null) => void;
@@ -27,6 +29,7 @@ export function RequestInsightsPanel({
   direction,
   requestFitTrends,
   partnerDrilldowns,
+  partnerCohorts,
   digestSchedule,
   digestPreview,
   onDigestScheduleChange,
@@ -136,6 +139,43 @@ export function RequestInsightsPanel({
             </div>
           ) : (
             <p>No partner drilldown data yet.</p>
+          )}
+        </div>
+        <div className="rounded border border-border p-2 text-[11px] text-muted-foreground">
+          <p className="mb-1 font-medium text-foreground">Cohort Drilldowns</p>
+          {partnerCohorts &&
+          (partnerCohorts.naics_cohorts.length > 0 ||
+            partnerCohorts.set_aside_cohorts.length > 0) ? (
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">NAICS Cohorts</p>
+                {partnerCohorts.naics_cohorts.slice(0, 5).map((cohort) => (
+                  <div
+                    key={`naics-${cohort.cohort_value}`}
+                    className="rounded border border-border/60 px-2 py-1"
+                    data-testid={`cohort-naics-${cohort.cohort_value.replace(/[^a-zA-Z0-9_-]/g, "-")}`}
+                  >
+                    {cohort.cohort_value}: sent {cohort.sent_count} / accepted{" "}
+                    {cohort.accepted_count} / rate {cohort.acceptance_rate}%
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Set-Aside Cohorts</p>
+                {partnerCohorts.set_aside_cohorts.slice(0, 5).map((cohort) => (
+                  <div
+                    key={`set-aside-${cohort.cohort_value}`}
+                    className="rounded border border-border/60 px-2 py-1"
+                    data-testid={`cohort-setaside-${cohort.cohort_value.replace(/[^a-zA-Z0-9_-]/g, "-")}`}
+                  >
+                    {cohort.cohort_value}: sent {cohort.sent_count} / accepted{" "}
+                    {cohort.accepted_count} / rate {cohort.acceptance_rate}%
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p>Cohort drilldowns unavailable for this period.</p>
           )}
         </div>
         <DigestScheduleSection

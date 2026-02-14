@@ -4,6 +4,7 @@ import type {
   ContractDeliverable,
   ContractStatus,
   ContractType,
+  DataClassification,
   DeliverableStatus,
   ContractTask,
   CPARSReview,
@@ -30,6 +31,7 @@ export const contractApi = {
     parent_contract_id?: number | null;
     contract_type?: ContractType | null;
     status?: ContractStatus;
+    classification?: DataClassification;
     value?: number | null;
   }): Promise<ContractAward> => {
     const { data } = await api.post("/contracts", payload);
@@ -44,6 +46,7 @@ export const contractApi = {
       parent_contract_id: number | null;
       contract_type: ContractType | null;
       status: ContractStatus;
+      classification: DataClassification;
       value: number | null;
     }>
   ): Promise<ContractAward> => {

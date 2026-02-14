@@ -19,7 +19,9 @@ import type {
   ConversionRatesData,
   ProposalTurnaroundData,
   NAICSPerformanceData,
+  WebSocketDiagnosticsAlertSnapshot,
   WebSocketDiagnosticsSnapshot,
+  WebSocketDiagnosticsThresholds,
 } from "@/types";
 
 // =============================================================================
@@ -651,6 +653,27 @@ export const healthApi = {
 export const diagnosticsApi = {
   getWebsocketTelemetry: async (): Promise<WebSocketDiagnosticsSnapshot> => {
     const { data } = await api.get("/ws/diagnostics");
+    return data;
+  },
+
+  getWebsocketAlerts: async (
+    params?: Partial<WebSocketDiagnosticsThresholds> & { include_all?: boolean }
+  ): Promise<WebSocketDiagnosticsAlertSnapshot> => {
+    const { data } = await api.get("/ws/diagnostics/alerts", { params });
+    return data;
+  },
+
+  exportWebsocketTelemetryCsv: async (
+    params?: Partial<WebSocketDiagnosticsThresholds> & { include_alerts?: boolean }
+  ): Promise<Blob> => {
+    const { data } = await api.get("/ws/diagnostics/export", {
+      params: {
+        ...(params ?? {}),
+        format: "csv",
+      },
+      responseType: "blob",
+      headers: { Accept: "text/csv" },
+    });
     return data;
   },
 };

@@ -71,7 +71,12 @@ test.describe("Teaming Workflow", () => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        params: { is_public: true },
+        params: {
+          is_public: true,
+          naics_codes: ["541512"],
+          set_asides: ["8a"],
+          capabilities: ["Cloud migration"],
+        },
       }
     );
     expect(makePublic.ok()).toBeTruthy();
@@ -107,6 +112,10 @@ test.describe("Teaming Workflow", () => {
     await expect(page.locator("[data-testid^='partner-drilldown-']").first()).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page.getByText("NAICS Cohorts")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/541512:/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Set-Aside Cohorts")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/8a:/i)).toBeVisible({ timeout: 15_000 });
     await page.getByLabel("Teaming digest include declined").check();
     await page.getByRole("button", { name: "Save Schedule" }).click();
     await page.getByRole("button", { name: "Send Digest" }).click();

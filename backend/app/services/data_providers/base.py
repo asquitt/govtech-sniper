@@ -38,6 +38,8 @@ class RawOpportunity(BaseModel):
     posted_date: str | None = None
     response_deadline: str | None = None
     estimated_value: float | None = None
+    currency: str | None = None
+    jurisdiction: str | None = None
     naics_code: str | None = None
     source_url: str | None = None
     source_type: str

@@ -121,6 +121,7 @@ class RFPBase(SQLModel):
 
     # Contract Details
     estimated_value: int | None = None  # In dollars
+    currency: str = Field(default="USD", max_length=10)
     place_of_performance: str | None = Field(default=None, max_length=255)
 
     # Market Intelligence (GovDash/Govly parity fields)

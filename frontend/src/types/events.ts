@@ -21,3 +21,24 @@ export interface EventListResponse {
   events: IndustryEvent[];
   total: number;
 }
+
+export interface EventIngestResponse {
+  created: number;
+  existing: number;
+  candidates: number;
+  created_event_ids: number[];
+  source_breakdown: Record<string, number>;
+}
+
+export interface EventAlert {
+  event: IndustryEvent;
+  relevance_score: number;
+  match_reasons: string[];
+  days_until_event: number;
+}
+
+export interface EventAlertResponse {
+  alerts: EventAlert[];
+  total: number;
+  evaluated: number;
+}

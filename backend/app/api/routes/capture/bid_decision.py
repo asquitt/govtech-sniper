@@ -5,11 +5,11 @@ AI-powered and human bid/no-bid scoring endpoints.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user_optional
+from app.api.deps import get_current_user, get_current_user_optional
 from app.database import get_session
 from app.models.capture import (
     BidScorecard,
@@ -29,6 +29,22 @@ class HumanVoteRequest(BaseModel):
     overall_score: float
     recommendation: BidScorecardRecommendation
     reasoning: str | None = None
+
+
+class ScenarioAdjustmentRequest(BaseModel):
+    criterion: str = Field(..., min_length=1)
+    delta: float = Field(..., ge=-100, le=100)
+    reason: str | None = None
+
+
+class ScenarioDefinitionRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    notes: str | None = Field(default=None, max_length=500)
+    adjustments: list[ScenarioAdjustmentRequest] = Field(default_factory=list)
+
+
+class BidScenarioSimulationRequest(BaseModel):
+    scenarios: list[ScenarioDefinitionRequest] = Field(default_factory=list)
 
 
 class ScorecardResponse(BaseModel):
@@ -106,7 +122,7 @@ async def submit_human_vote(
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
-    scorer_id = current_user.user_id if current_user else None
+    scorer_id = current_user.id if current_user else None
 
     scorecard = BidScorecard(
         rfp_id=rfp_id,
@@ -221,3 +237,66 @@ async def get_bid_summary(
         "no_bid_count": no_bid_count,
         "conditional_count": conditional_count,
     }
+
+
+@router.post("/scorecards/{rfp_id}/scenario-simulator")
+async def simulate_bid_scenarios(
+    payload: BidScenarioSimulationRequest,
+    rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    Run deterministic stress-test scenarios against the latest scorecard.
+    Returns calibrated confidence, recommendation shift, and explainable drivers.
+    """
+    from app.services.bid_scenario_service import (
+        BidScenarioService,
+        ScenarioAdjustment,
+        ScenarioDefinition,
+    )
+
+    rfp_result = await session.execute(
+        select(RFP).where(RFP.id == rfp_id, RFP.user_id == current_user.id)
+    )
+    rfp = rfp_result.scalar_one_or_none()
+    if not rfp:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
+    scorecard_result = await session.execute(
+        select(BidScorecard)
+        .where(BidScorecard.rfp_id == rfp_id, BidScorecard.user_id == current_user.id)
+        .order_by(BidScorecard.created_at.desc())
+    )
+    scorecards = scorecard_result.scalars().all()
+    if not scorecards:
+        raise HTTPException(
+            status_code=404,
+            detail="No bid scorecard found. Run AI evaluation or submit a human vote first.",
+        )
+
+    baseline_scorecard = next((card for card in scorecards if card.criteria_scores), scorecards[0])
+    simulator = BidScenarioService()
+
+    scenario_defs: list[ScenarioDefinition] = []
+    for scenario in payload.scenarios:
+        adjustments = [
+            ScenarioAdjustment(
+                criterion=adjustment.criterion,
+                delta=adjustment.delta,
+                reason=adjustment.reason,
+            )
+            for adjustment in scenario.adjustments
+        ]
+        scenario_defs.append(
+            ScenarioDefinition(
+                name=scenario.name,
+                notes=scenario.notes,
+                adjustments=adjustments,
+            )
+        )
+
+    return simulator.simulate(
+        scorecard=baseline_scorecard,
+        scenarios=scenario_defs if scenario_defs else None,
+    )

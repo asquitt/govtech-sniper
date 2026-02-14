@@ -7,6 +7,7 @@ import socket
 from datetime import datetime
 from urllib.parse import urlparse
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from kombu.exceptions import OperationalError
 from sqlalchemy import desc
@@ -28,6 +29,7 @@ from app.schemas.proposal import (
     SectionScoreRead,
 )
 from app.services.auth_service import UserAuth
+from app.services.embedding_service import compose_proposal_section_text, index_entity
 from app.tasks.generation_tasks import (
     generate_all_sections,
     generate_proposal_section,
@@ -35,6 +37,7 @@ from app.tasks.generation_tasks import (
 )
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 _SYNC_GENERATION_RESULTS: dict[str, dict] = {}
 _GEMINI_RETRY_PATTERN = re.compile(
     r"retry in(?:\s+about)?\s+([0-9]+(?:\.[0-9]+)?)(?:\s*seconds|\s*s)?",
@@ -296,6 +299,28 @@ async def rewrite_section(
     section.quality_score = scores["overall_score"]
     section.quality_breakdown = scores
 
+    try:
+        await index_entity(
+            session,
+            user_id=proposal.user_id,
+            entity_type="proposal_section",
+            entity_id=section.id,
+            text=compose_proposal_section_text(
+                title=section.title,
+                section_number=section.section_number,
+                requirement_text=section.requirement_text,
+                final_content=section.final_content,
+                generated_content_clean_text=generated.clean_text,
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Proposal section semantic reindex failed after rewrite",
+            section_id=section.id,
+            proposal_id=proposal.id,
+            error=str(exc),
+        )
+
     await session.commit()
     await session.refresh(section)
     return ProposalSectionRead.model_validate(section)
@@ -354,6 +379,28 @@ async def expand_section(
     scores = scorer.score_content(generated.clean_text, section.requirement_text)
     section.quality_score = scores["overall_score"]
     section.quality_breakdown = scores
+
+    try:
+        await index_entity(
+            session,
+            user_id=proposal.user_id,
+            entity_type="proposal_section",
+            entity_id=section.id,
+            text=compose_proposal_section_text(
+                title=section.title,
+                section_number=section.section_number,
+                requirement_text=section.requirement_text,
+                final_content=section.final_content,
+                generated_content_clean_text=generated.clean_text,
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Proposal section semantic reindex failed after expand",
+            section_id=section.id,
+            proposal_id=proposal.id,
+            error=str(exc),
+        )
 
     await session.commit()
     await session.refresh(section)

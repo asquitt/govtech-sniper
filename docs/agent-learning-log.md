@@ -219,6 +219,27 @@ Format:
 - Prevention checklist: For command palettes/modals, implement `Escape` handling on a global key listener (not only focused input handlers) and include a browser test that verifies close behavior.
 - Verification added: Added global `Escape` handler in `global-search.tsx` and validated with Playwright `search-plg-workflow.spec.ts` plus `global-search.test.tsx`.
 
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Email-ingest duplicate detection keyed only on `message_id`, which caused cross-config/cross-user collisions and dropped valid messages.
+- Root cause: Deduplication and DB uniqueness were implemented globally rather than tenant/config scoped.
+- Prevention checklist: For ingestion dedupe, enforce uniqueness at the correct tenancy boundary (config/user scope) in both app logic and DB constraints; add regression coverage for same external IDs across users.
+- Verification added: Updated ingest dedupe query + model/migration to `config_id + message_id` and added regression in `backend/tests/test_email_ingest.py`.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Updated signals/events Playwright flow failed due strict-mode selector collisions after adding new automation/calendar controls (`Budget` matched `Analyze Budget Docs`; event titles appeared in alerts + calendar + list rows).
+- Root cause: Assertions/actions used broad text/role selectors in views with intentionally repeated labels.
+- Prevention checklist: For multi-surface pages (alerts + calendars + list cards), add stable `data-testid` hooks per container/row and use scoped or `exact: true` selectors in Playwright before adding new similarly named controls.
+- Verification added: Added `event-list-row` and `event-alert-row` test IDs, hardened exact/scoped locators in `signals-events-workflow.spec.ts`, and reran targeted Playwright workflow (`2/2` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Playwright auth fixture failed during targeted email-ingest validation because requests were sent to `/api/v1/api/v1/*`.
+- Root cause: Local frontend startup used `NEXT_PUBLIC_API_URL` with an already-versioned path (`.../api/v1`), while Next rewrites also append `/api/v1`, causing a double-prefix contract miss.
+- Prevention checklist: For local E2E stacks, keep `NEXT_PUBLIC_API_URL` at backend origin only (no version path) and verify first auth request paths before debugging feature code.
+- Verification added: Restarted frontend with corrected `NEXT_PUBLIC_API_URL=http://127.0.0.1:8010`, reran Playwright `email-ingest-workflow.spec.ts`, and confirmed pass.
+
 ### 2026-02-10
 - Date: 2026-02-10
 - Mistake: Opportunities view hard-locked into a retry-only screen after SAM sync failures, hiding primary actions.
@@ -337,3 +358,94 @@ Format:
 - Root cause: `_ensure_system_templates` used `scalar_one_or_none()` on system-template names; legacy duplicate rows triggered `MultipleResultsFound` and broke request handling.
 - Prevention checklist: For seed/sync paths that can encounter historical duplicates, always use duplicate-tolerant fetches (`scalars().first()`) unless a DB uniqueness constraint is guaranteed.
 - Verification added: Updated `templates.py` synchronization lookup to `scalars().first()`, reran backend template/report/support integration tests, and revalidated affected Playwright workflows (`analytics-reports-intelligence-workflow.spec.ts`, `templates-reports-help-onboarding-workflow.spec.ts`).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Admin Playwright workflow timed out waiting for resend/revoke responses despite UI interactions succeeding.
+- Root cause: Response matcher assumed backend direct paths (`/api/v1/...`) while browser traffic uses frontend proxy paths (`/api/...`), so the matcher never observed the request.
+- Prevention checklist: In Playwright, match API responses by stable suffix/patterns (for example `"/member-invitations/" + "/resend"`) instead of hardcoding backend-prefixed URLs when a proxy rewrite layer is present.
+- Verification added: Updated `admin-org-workflow.spec.ts` response predicates to proxy-aware URL matching and reran targeted admin workflow successfully.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Activation assertion in admin workflow was flaky because it depended on post-refresh row text timing.
+- Root cause: Assertion waited for UI text mutation (`activated`) after multiple async calls (`activate` then full admin refetch), which drifted under dev-mode latency.
+- Prevention checklist: For mutation steps in E2E, assert the mutation response contract first (HTTP `200` + payload status) and keep UI text checks secondary/optional when they depend on slower aggregate refreshes.
+- Verification added: Updated `admin-org-workflow.spec.ts` to assert `/activate` response payload status and reran the targeted admin Playwright workflow (`1/1` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Collaboration digest recipient counts over-reported viewers in live Playwright even when only one invited partner existed.
+- Root cause: `workspace_members` can contain duplicate rows for the same user in dev-mode invitation-accept flows, and recipient counting for `viewer`/`contributor` used raw row counts instead of unique user IDs.
+- Prevention checklist: Treat membership-derived metrics as user-unique aggregates (`distinct user_id`) and add regression coverage for duplicate membership rows on role-scoped counts.
+- Verification added: Updated digest recipient counting to dedupe by `user_id` for viewer/contributor roles, added duplicate-row regression in `test_collaboration.py`, and reran targeted collaboration Playwright workflow (`1/1` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Initial targeted Playwright rerun produced false workflow failures (workspace create timing + teaming API assertions) because local SQLite schema was stale.
+- Root cause: Backend was started against an existing dev SQLite file that predated newer columns (for example onboarding `step_timestamps`), causing intermittent `500` responses and misleading UI-level test symptoms.
+- Prevention checklist: For deterministic local Playwright validation on SQLite, always start with a fresh DB file (or run migrations) and verify no schema-drift errors in backend logs before interpreting UI failures.
+- Verification added: Re-ran targeted Playwright workflows on a fresh SQLite DB (`DATABASE_URL=sqlite+aiosqlite:///./e2e_fresh.db`) with `DEBUG=true` and `MOCK_AI=true`; collaboration/diagnostics/teaming workflows passed.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Policy-based step-up disable test initially failed because the test helper created organization membership rows but did not set `users.organization_id`, so org security settings were ignored by policy lookup.
+- Root cause: Security policy resolution reads organization settings from `user.organization_id`; membership-only setup left users in default-policy path.
+- Prevention checklist: In multi-tenant tests, always set both `organization_members` and `users.organization_id` whenever org-scoped policy behavior is under test.
+- Verification added: Updated policy test helper to sync `user.organization_id`, then re-ran targeted backend suites (`test_policy_enforcement.py`, `test_admin_roles.py`, `test_capability_integrations.py`, `test_collaboration.py`) with `27/27` passing.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Capture bid-vote endpoint raised `500` when creating human scorecards in the new stress-test workflow.
+- Root cause: `submit_human_vote` referenced `current_user.user_id` even though `UserAuth` exposes `id`; the path was under-tested and slipped through until scenario-simulator integration.
+- Prevention checklist: For every auth-bearing route, add regression coverage that executes the endpoint under authenticated context and validates principal field usage (`id` vs legacy aliases).
+- Verification added: Fixed scorer attribution to `current_user.id` in `capture/bid_decision.py` and validated via backend integration (`test_capture.py`, `test_capability_integrations.py`).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Initial Playwright assertion for capture stress-test results failed with strict-mode locator ambiguity on duplicated scenario names.
+- Root cause: E2E checks used global text matchers while scenario labels intentionally appear in both config controls and results cards.
+- Prevention checklist: In high-density pages, scope text assertions to the target container (`card`/`panel`) and semantic element type (`p.font-medium`, heading role) before adding new assertions.
+- Verification added: Scoped capture workflow assertions to the `Scenario Results` card and reran targeted Playwright (`capture-workflow.spec.ts`, passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Reviews Playwright workflow failed after packet-builder UI expansion due ambiguous proposal-title text assertions.
+- Root cause: Proposal title appeared in both packet selector options and review-card links, and global `getByText` assertions violated strict mode.
+- Prevention checklist: For list+selector pages, anchor assertions to semantic roles (`link`, `combobox`, scoped container) instead of global text selectors when labels are intentionally reused.
+- Verification added: Updated `reviews-workflow.spec.ts` to assert proposal visibility via link role and reran targeted Playwright (`capture-workflow.spec.ts`, `reviews-workflow.spec.ts`, `2/2` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Initial detached startup commands for deterministic Playwright validation returned process IDs but no live backend/frontend services.
+- Root cause: Background launch was treated as successful without immediate liveness checks (`lsof`/health), so dead-on-start processes were not detected before test execution.
+- Prevention checklist: After detached service start, always validate listener ports and explicit health endpoints before running Playwright; if either check fails, relaunch in foreground sessions and capture startup output.
+- Verification added: Relaunched deterministic stack with explicit health checks and completed `export-validation.spec.ts` (`4/5` passing, PDF dependency skip expected).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: New opportunities E2E for amendment autopilot failed with `Cannot read properties of undefined (reading 'length')`.
+- Root cause: A broad Playwright route mock (`/snapshots**`) intercepted both `/snapshots/diff` and `/snapshots/amendment-impact`, returning the wrong payload shape to the diff/impact handlers.
+- Prevention checklist: In Playwright API mocking, use exact/regex route patterns for list endpoints and register generic routes so they cannot shadow more specific subpaths.
+- Verification added: Replaced snapshot list matcher with exact regex (`/snapshots(?:\\?.*)?$`) and reran `opportunities.spec.ts` (`4/4` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Proposal rewrite track-changes state appeared and then disappeared, causing `AI Suggestions` workflow checks to fail.
+- Root cause: Proposal workspace hydrated editor content from section updates on every `sections` refresh; rewrite responses updated `generated_content` but left `final_content`, so hydration overwrote suggestion-marked editor content with stale final text.
+- Prevention checklist: For editor surfaces, only hydrate content on explicit section selection changes (or hard reset actions), not on every metadata refresh; add regression tests for rewrite/expand flows where backend returns generated text while final text remains unchanged.
+- Verification added: Added section-selection-scoped hydration guard in proposal workspace, introduced stable suggestion-toolbar test id, added regression test for rewrite persistence, and revalidated via unit tests plus live Playwright MCP rewrite flow.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Semantic search used global embeddings without explicit tenant scoping and depended on pgvector-only cosine SQL operators.
+- Root cause: `document_embeddings` lacked `user_id`, and search executed `<=>` distance in all environments; on SQLite this causes SQL syntax failure and on shared stores it risks cross-tenant result leakage.
+- Prevention checklist: Treat vector stores as tenant-scoped data by schema (`user_id` + filter in every query), and always provide a deterministic non-pgvector search path for SQLite/local test stacks used in CI and dev.
+- Verification added: Added `user_id` to embeddings with migration backfill, implemented SQLite cosine fallback in `embedding_service.search`, wired auto-index hooks across core entities, and added regression coverage in `test_semantic_search.py`.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Targeted backend suites intermittently failed with `sqlite3.OperationalError: database is locked` and teardown table-drop errors.
+- Root cause: Test harness hardcoded `sqlite+aiosqlite:///./test.db`, which collided with concurrently running local processes using the same file.
+- Prevention checklist: Use an isolated per-run SQLite file for backend tests (or explicit `TEST_DB_PATH`) and clean DB artifacts on session teardown to avoid cross-process lock contention.
+- Verification added: Updated `backend/tests/conftest.py` to allocate a unique temp DB path and cleanup `-journal/-wal/-shm` artifacts; reran targeted backend suites (`test_rfps.py`, `test_saved_searches.py`, `test_data_sources.py`, `test_semantic_search.py`) successfully.

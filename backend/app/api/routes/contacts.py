@@ -6,6 +6,7 @@ CRUD for opportunity contacts, AI extraction, and agency directory.
 
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func
@@ -19,8 +20,14 @@ from app.models.rfp import RFP
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
 from app.services.contact_extractor import extract_contacts_from_text
+from app.services.embedding_service import (
+    compose_contact_text,
+    delete_entity_embeddings,
+    index_entity,
+)
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
+logger = structlog.get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +307,27 @@ async def create_contact(
             action="contact.linked",
             metadata={"rfp_id": payload.rfp_id, "name": existing.name},
         )
+        try:
+            await index_entity(
+                session,
+                user_id=current_user.id,
+                entity_type="contact",
+                entity_id=existing.id,
+                text=compose_contact_text(
+                    name=existing.name,
+                    role=existing.role,
+                    organization=existing.organization,
+                    agency=existing.agency,
+                    title=existing.title,
+                    department=existing.department,
+                    location=existing.location,
+                    notes=existing.notes,
+                ),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Contact semantic reindex failed", contact_id=existing.id, error=str(exc)
+            )
         await session.commit()
         await session.refresh(existing)
         return ContactResponse.model_validate(existing)
@@ -331,6 +359,25 @@ async def create_contact(
         action="contact.created",
         metadata={"rfp_id": contact.rfp_id, "name": contact.name},
     )
+    try:
+        await index_entity(
+            session,
+            user_id=current_user.id,
+            entity_type="contact",
+            entity_id=contact.id,
+            text=compose_contact_text(
+                name=contact.name,
+                role=contact.role,
+                organization=contact.organization,
+                agency=contact.agency,
+                title=contact.title,
+                department=contact.department,
+                location=contact.location,
+                notes=contact.notes,
+            ),
+        )
+    except Exception as exc:
+        logger.warning("Contact semantic indexing failed", contact_id=contact.id, error=str(exc))
     await session.commit()
     await session.refresh(contact)
 
@@ -367,6 +414,25 @@ async def update_contact(
         action="contact.updated",
         metadata={"updated_fields": list(update_data.keys())},
     )
+    try:
+        await index_entity(
+            session,
+            user_id=current_user.id,
+            entity_type="contact",
+            entity_id=contact.id,
+            text=compose_contact_text(
+                name=contact.name,
+                role=contact.role,
+                organization=contact.organization,
+                agency=contact.agency,
+                title=contact.title,
+                department=contact.department,
+                location=contact.location,
+                notes=contact.notes,
+            ),
+        )
+    except Exception as exc:
+        logger.warning("Contact semantic reindex failed", contact_id=contact.id, error=str(exc))
     await session.commit()
     await session.refresh(contact)
 
@@ -397,6 +463,15 @@ async def delete_contact(
         action="contact.deleted",
         metadata={"name": contact.name},
     )
+    try:
+        await delete_entity_embeddings(
+            session,
+            user_id=current_user.id,
+            entity_type="contact",
+            entity_id=contact.id,
+        )
+    except Exception as exc:
+        logger.warning("Contact embedding cleanup failed", contact_id=contact.id, error=str(exc))
     await session.delete(contact)
     await session.commit()
 
@@ -429,6 +504,7 @@ async def extract_contacts(
         raise HTTPException(status_code=400, detail="RFP has no text content to extract from")
 
     extracted = await extract_contacts_from_text(text)
+    indexed_contact_ids: set[int] = set()
     if auto_link and extracted:
         for item in extracted:
             existing = await _find_existing_contact_for_linking(
@@ -469,6 +545,7 @@ async def extract_contacts(
                     agency_name=existing.agency,
                     primary_contact_id=existing.id,
                 )
+                indexed_contact_ids.add(existing.id)
                 continue
 
             linked_contact = OpportunityContact(
@@ -500,6 +577,40 @@ async def extract_contacts(
                 agency_name=linked_contact.agency,
                 primary_contact_id=linked_contact.id,
             )
+            indexed_contact_ids.add(linked_contact.id)
+
+        if indexed_contact_ids:
+            result = await session.execute(
+                select(OpportunityContact).where(
+                    OpportunityContact.user_id == current_user.id,
+                    OpportunityContact.id.in_(indexed_contact_ids),
+                )
+            )
+            contacts_to_index = result.scalars().all()
+            for contact in contacts_to_index:
+                try:
+                    await index_entity(
+                        session,
+                        user_id=current_user.id,
+                        entity_type="contact",
+                        entity_id=contact.id,
+                        text=compose_contact_text(
+                            name=contact.name,
+                            role=contact.role,
+                            organization=contact.organization,
+                            agency=contact.agency,
+                            title=contact.title,
+                            department=contact.department,
+                            location=contact.location,
+                            notes=contact.notes,
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Contact semantic indexing failed during extraction",
+                        contact_id=contact.id,
+                        error=str(exc),
+                    )
 
         await session.commit()
 

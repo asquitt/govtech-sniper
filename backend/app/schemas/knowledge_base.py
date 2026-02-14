@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, computed_field
 
 from app.models.knowledge_base import DocumentType, ProcessingStatus
+from app.models.proposal import DataClassification
 
 # =============================================================================
 # Document Schemas
@@ -21,6 +22,7 @@ class DocumentCreate(BaseModel):
     title: str = Field(max_length=255)
     document_type: DocumentType = Field(default=DocumentType.OTHER)
     description: str | None = Field(default=None, max_length=1000)
+    classification: DataClassification = DataClassification.INTERNAL
     tags: list[str] = Field(default=[])
 
 
@@ -31,6 +33,7 @@ class DocumentRead(BaseModel):
     user_id: int
     title: str
     document_type: DocumentType
+    classification: DataClassification
     description: str | None
     original_filename: str
     file_size_bytes: int
@@ -59,6 +62,7 @@ class DocumentRead(BaseModel):
             "user_id": document.user_id,
             "title": document.title,
             "document_type": document.document_type,
+            "classification": document.classification,
             "description": document.description,
             "original_filename": document.original_filename,
             "file_size_bytes": document.file_size_bytes,
@@ -85,6 +89,7 @@ class DocumentUpdate(BaseModel):
 
     title: str | None = Field(default=None, max_length=255)
     document_type: DocumentType | None = None
+    classification: DataClassification | None = None
     description: str | None = Field(default=None, max_length=1000)
     tags: list[str] | None = None
 
@@ -106,6 +111,7 @@ class DocumentListItem(BaseModel):
     id: int
     title: str
     document_type: DocumentType
+    classification: DataClassification = DataClassification.INTERNAL
     description: str | None = None
     original_filename: str
     processing_status: ProcessingStatus

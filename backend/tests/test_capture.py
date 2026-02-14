@@ -220,3 +220,130 @@ class TestCapture:
         assert response.status_code == 200
         fields = response.json()["fields"]
         assert any(field["field"]["id"] == field_id for field in fields)
+
+    @pytest.mark.asyncio
+    async def test_bid_scenario_simulator_returns_default_stress_tests(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_rfp: RFP,
+    ):
+        criteria = [
+            {"name": "technical_capability", "weight": 15, "score": 78},
+            {"name": "past_performance", "weight": 12, "score": 75},
+            {"name": "price_competitiveness", "weight": 10, "score": 70},
+            {"name": "staffing_availability", "weight": 10, "score": 72},
+            {"name": "clearance_requirements", "weight": 10, "score": 80},
+            {"name": "set_aside_eligibility", "weight": 8, "score": 82},
+            {"name": "relationship_with_agency", "weight": 8, "score": 74},
+            {"name": "competitive_landscape", "weight": 7, "score": 68},
+            {"name": "geographic_fit", "weight": 5, "score": 79},
+            {"name": "contract_vehicle_access", "weight": 5, "score": 77},
+            {"name": "teaming_strength", "weight": 5, "score": 66},
+            {"name": "proposal_timeline", "weight": 5, "score": 71},
+        ]
+        vote_response = await client.post(
+            f"/api/v1/capture/scorecards/{test_rfp.id}/vote",
+            headers=auth_headers,
+            json={
+                "criteria_scores": criteria,
+                "overall_score": 74,
+                "recommendation": "bid",
+                "reasoning": "Strong baseline fit across core dimensions.",
+            },
+        )
+        assert vote_response.status_code == 200
+
+        response = await client.post(
+            f"/api/v1/capture/scorecards/{test_rfp.id}/scenario-simulator",
+            headers=auth_headers,
+            json={},
+        )
+        assert response.status_code == 200
+
+        payload = response.json()
+        assert payload["rfp_id"] == test_rfp.id
+        assert payload["baseline"]["recommendation"] == "bid"
+        assert payload["baseline"]["overall_score"] > 0
+        assert "FAR 15.305" in payload["baseline"]["scoring_method"]
+        assert len(payload["scenarios"]) >= 3
+        assert all("decision_risk" in item for item in payload["scenarios"])
+        assert all("driver_summary" in item for item in payload["scenarios"])
+        assert all("scoring_rationale" in item for item in payload["scenarios"])
+        assert all("criteria_scores" in item for item in payload["scenarios"])
+
+    @pytest.mark.asyncio
+    async def test_bid_scenario_simulator_supports_custom_adjustments_and_ignored_fields(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        test_rfp: RFP,
+    ):
+        criteria = [
+            {"name": "technical_capability", "weight": 15, "score": 80},
+            {"name": "past_performance", "weight": 12, "score": 80},
+            {"name": "price_competitiveness", "weight": 10, "score": 80},
+            {"name": "staffing_availability", "weight": 10, "score": 80},
+            {"name": "clearance_requirements", "weight": 10, "score": 80},
+            {"name": "set_aside_eligibility", "weight": 8, "score": 80},
+            {"name": "relationship_with_agency", "weight": 8, "score": 80},
+            {"name": "competitive_landscape", "weight": 7, "score": 80},
+            {"name": "geographic_fit", "weight": 5, "score": 80},
+            {"name": "contract_vehicle_access", "weight": 5, "score": 80},
+            {"name": "teaming_strength", "weight": 5, "score": 80},
+            {"name": "proposal_timeline", "weight": 5, "score": 80},
+        ]
+        vote_response = await client.post(
+            f"/api/v1/capture/scorecards/{test_rfp.id}/vote",
+            headers=auth_headers,
+            json={
+                "criteria_scores": criteria,
+                "overall_score": 80,
+                "recommendation": "bid",
+                "reasoning": "Baseline assumes strong pursuit conditions.",
+            },
+        )
+        assert vote_response.status_code == 200
+
+        response = await client.post(
+            f"/api/v1/capture/scorecards/{test_rfp.id}/scenario-simulator",
+            headers=auth_headers,
+            json={
+                "scenarios": [
+                    {
+                        "name": "Adversarial downside",
+                        "notes": "Severe downside case across evaluation factors.",
+                        "adjustments": [
+                            {"criterion": "technical_capability", "delta": -55},
+                            {"criterion": "past_performance", "delta": -55},
+                            {"criterion": "price_competitiveness", "delta": -55},
+                            {"criterion": "staffing_availability", "delta": -55},
+                            {"criterion": "clearance_requirements", "delta": -55},
+                            {"criterion": "set_aside_eligibility", "delta": -55},
+                            {"criterion": "relationship_with_agency", "delta": -55},
+                            {"criterion": "competitive_landscape", "delta": -55},
+                            {"criterion": "geographic_fit", "delta": -55},
+                            {"criterion": "contract_vehicle_access", "delta": -55},
+                            {"criterion": "teaming_strength", "delta": -55},
+                            {"criterion": "proposal_timeline", "delta": -55},
+                            {"criterion": "unknown_dimension", "delta": -25},
+                        ],
+                    }
+                ]
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert len(payload["scenarios"]) == 1
+        scenario = payload["scenarios"][0]
+        assert scenario["name"] == "Adversarial downside"
+        assert scenario["recommendation"] == "no_bid"
+        assert scenario["recommendation_changed"] is True
+        assert scenario["overall_score"] < 45
+        assert scenario["decision_risk"] in {"low", "medium", "high"}
+        assert len(scenario["ignored_adjustments"]) == 1
+        assert scenario["ignored_adjustments"][0]["criterion"] == "unknown_dimension"
+        assert "FAR 15.305" in scenario["scoring_rationale"]["method"]
+        assert scenario["scoring_rationale"]["dominant_factors"][0]["far_reference"].startswith(
+            "FAR"
+        )

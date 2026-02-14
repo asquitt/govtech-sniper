@@ -2,6 +2,7 @@ import api from "./client";
 import type {
   RFP,
   RFPListItem,
+  SnapshotAmendmentImpact,
   ComplianceMatrix,
   ComplianceRequirement,
   SavedSearch,
@@ -19,6 +20,9 @@ export const rfpApi = {
   list: async (params?: {
     status?: string;
     qualified_only?: boolean;
+    source_type?: string;
+    jurisdiction?: string;
+    currency?: string;
     skip?: number;
     limit?: number;
   }): Promise<RFPListItem[]> => {
@@ -78,6 +82,16 @@ export const rfpApi = {
         after: change.after ?? change.to_value ?? null,
       })),
     };
+  },
+
+  getSnapshotAmendmentImpact: async (
+    rfpId: number,
+    params?: { from_snapshot_id?: number; to_snapshot_id?: number; top_n?: number }
+  ): Promise<SnapshotAmendmentImpact> => {
+    const { data } = await api.get(`/rfps/${rfpId}/snapshots/amendment-impact`, {
+      params,
+    });
+    return data;
   },
 
   create: async (rfp: Partial<RFP>): Promise<RFP> => {

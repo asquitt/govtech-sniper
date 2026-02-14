@@ -37,6 +37,7 @@ class InvitationStatus(str, Enum):
     PENDING = "pending"
     ACTIVATED = "activated"
     EXPIRED = "expired"
+    REVOKED = "revoked"
 
 
 class Organization(SQLModel, table=True):

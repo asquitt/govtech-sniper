@@ -38,6 +38,7 @@ class TestDocumentList:
         data = response.json()
         assert data["total"] == 1
         assert data["documents"][0]["id"] == test_document.id
+        assert data["documents"][0]["classification"] == "internal"
 
     @pytest.mark.asyncio
     async def test_list_documents_filter_by_type(
@@ -77,6 +78,7 @@ class TestDocumentDetail:
         data = response.json()
         assert data["id"] == test_document.id
         assert data["title"] == test_document.title
+        assert data["classification"] == "internal"
 
     @pytest.mark.asyncio
     async def test_get_document_not_found(self, client: AsyncClient, auth_headers: dict):
@@ -120,10 +122,11 @@ class TestDocumentUpdate:
         response = await client.patch(
             f"/api/v1/documents/{test_document.id}",
             headers=auth_headers,
-            json={"document_type": "past_performance"},
+            json={"document_type": "past_performance", "classification": "fci"},
         )
         assert response.status_code == 200
         assert response.json()["document_type"] == "past_performance"
+        assert response.json()["classification"] == "fci"
 
 
 class TestDocumentDelete:

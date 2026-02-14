@@ -13,6 +13,7 @@ class DocumentEmbedding(SQLModel, table=True):
     __tablename__ = "document_embeddings"
 
     id: int | None = Field(default=None, primary_key=True)
+    user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
     entity_type: str = Field(max_length=50, index=True)
     entity_id: int = Field(index=True)
     chunk_text: str = Field(sa_column=Column(Text))

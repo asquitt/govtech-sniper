@@ -52,3 +52,24 @@ class EventRead(BaseModel):
 class EventListResponse(BaseModel):
     events: list[EventRead]
     total: int
+
+
+class EventIngestResponse(BaseModel):
+    created: int
+    existing: int
+    candidates: int
+    created_event_ids: list[int]
+    source_breakdown: dict[str, int]
+
+
+class EventAlertRead(BaseModel):
+    event: EventRead
+    relevance_score: float
+    match_reasons: list[str]
+    days_until_event: int
+
+
+class EventAlertResponse(BaseModel):
+    alerts: list[EventAlertRead]
+    total: int
+    evaluated: int

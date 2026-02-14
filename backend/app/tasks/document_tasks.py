@@ -19,6 +19,7 @@ from app.models.knowledge_base import (
     KnowledgeBaseDocument,
     ProcessingStatus,
 )
+from app.services.embedding_service import compose_knowledge_document_text, index_entity
 from app.services.pdf_processor import get_pdf_processor
 from app.tasks.celery_app import celery_app
 
@@ -186,6 +187,26 @@ def process_document(self, document_id: int) -> dict:
                 document.extracted_metadata = extracted_metadata
                 document.processing_status = ProcessingStatus.READY
                 document.processed_at = datetime.utcnow()
+
+                try:
+                    await index_entity(
+                        session,
+                        user_id=document.user_id,
+                        entity_type="knowledge_doc",
+                        entity_id=document.id,
+                        text=compose_knowledge_document_text(
+                            title=document.title,
+                            document_type=document.document_type.value,
+                            description=document.description,
+                            full_text=document.full_text,
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Knowledge document semantic indexing failed",
+                        document_id=document.id,
+                        error=str(exc),
+                    )
 
                 await session.commit()
 

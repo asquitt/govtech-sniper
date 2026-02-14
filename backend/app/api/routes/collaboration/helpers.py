@@ -9,17 +9,22 @@ from sqlmodel import func, select
 from app.api.utils import get_or_404
 from app.models.collaboration import (
     ComplianceDigestChannel,
+    ComplianceDigestDeliveryStatus,
     ComplianceDigestFrequency,
+    ComplianceDigestRecipientRole,
     GovernanceAnomalySeverity,
     ShareApprovalStatus,
     SharedDataPermission,
     SharedDataType,
     SharedWorkspace,
+    WorkspaceComplianceDigestDelivery,
     WorkspaceComplianceDigestSchedule,
     WorkspaceMember,
     WorkspaceRole,
 )
 from app.schemas.collaboration import (
+    ComplianceDigestDeliveryRead,
+    ComplianceDigestDeliverySummaryRead,
     ComplianceDigestScheduleRead,
     GovernanceAnomalyRead,
     SharedDataRead,
@@ -349,6 +354,7 @@ def _serialize_digest_schedule(
         hour_utc=schedule.hour_utc,
         minute_utc=schedule.minute_utc,
         channel=_enum_value(schedule.channel),
+        recipient_role=_enum_value(schedule.recipient_role),
         anomalies_only=schedule.anomalies_only,
         is_enabled=schedule.is_enabled,
         last_sent_at=schedule.last_sent_at,
@@ -367,3 +373,174 @@ def _parse_compliance_channel(value: str) -> ComplianceDigestChannel:
         return ComplianceDigestChannel(value)
     except ValueError as exc:
         raise HTTPException(400, "Invalid digest channel") from exc
+
+
+def _parse_compliance_recipient_role(value: str) -> ComplianceDigestRecipientRole:
+    try:
+        return ComplianceDigestRecipientRole(value)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid digest recipient role") from exc
+
+
+def _serialize_digest_delivery(
+    delivery: WorkspaceComplianceDigestDelivery,
+) -> ComplianceDigestDeliveryRead:
+    return ComplianceDigestDeliveryRead(
+        id=delivery.id,
+        workspace_id=delivery.workspace_id,
+        user_id=delivery.user_id,
+        schedule_id=delivery.schedule_id,
+        status=_enum_value(delivery.status),
+        attempt_number=delivery.attempt_number,
+        retry_of_delivery_id=delivery.retry_of_delivery_id,
+        channel=_enum_value(delivery.channel),
+        recipient_role=_enum_value(delivery.recipient_role),
+        recipient_count=delivery.recipient_count,
+        anomalies_count=delivery.anomalies_count,
+        failure_reason=delivery.failure_reason,
+        generated_at=delivery.generated_at,
+        created_at=delivery.created_at,
+    )
+
+
+async def _list_digest_deliveries(
+    workspace_id: int,
+    user_id: int,
+    session: AsyncSession,
+    *,
+    limit: int = 20,
+) -> list[WorkspaceComplianceDigestDelivery]:
+    return (
+        (
+            await session.execute(
+                select(WorkspaceComplianceDigestDelivery)
+                .where(
+                    WorkspaceComplianceDigestDelivery.workspace_id == workspace_id,
+                    WorkspaceComplianceDigestDelivery.user_id == user_id,
+                )
+                .order_by(WorkspaceComplianceDigestDelivery.created_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def _get_latest_digest_delivery(
+    workspace_id: int,
+    user_id: int,
+    session: AsyncSession,
+) -> WorkspaceComplianceDigestDelivery | None:
+    return (
+        await session.execute(
+            select(WorkspaceComplianceDigestDelivery)
+            .where(
+                WorkspaceComplianceDigestDelivery.workspace_id == workspace_id,
+                WorkspaceComplianceDigestDelivery.user_id == user_id,
+            )
+            .order_by(WorkspaceComplianceDigestDelivery.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+def _summarize_digest_deliveries(
+    deliveries: list[WorkspaceComplianceDigestDelivery],
+) -> ComplianceDigestDeliverySummaryRead:
+    success_count = 0
+    failed_count = 0
+    retry_attempt_count = 0
+    last_status: str | None = None
+    last_failure_reason: str | None = None
+    last_sent_at = None
+
+    sorted_deliveries = sorted(deliveries, key=lambda row: row.created_at, reverse=True)
+    if sorted_deliveries:
+        last_status = _enum_value(sorted_deliveries[0].status)
+        last_failure_reason = sorted_deliveries[0].failure_reason
+    success_rows = [
+        row
+        for row in sorted_deliveries
+        if _enum_value(row.status) == ComplianceDigestDeliveryStatus.SUCCESS.value
+    ]
+    if success_rows:
+        last_sent_at = success_rows[0].created_at
+
+    for row in sorted_deliveries:
+        status = _enum_value(row.status)
+        if status == ComplianceDigestDeliveryStatus.SUCCESS.value:
+            success_count += 1
+        else:
+            failed_count += 1
+        if row.attempt_number > 1:
+            retry_attempt_count += 1
+
+    return ComplianceDigestDeliverySummaryRead(
+        total_attempts=len(sorted_deliveries),
+        success_count=success_count,
+        failed_count=failed_count,
+        retry_attempt_count=retry_attempt_count,
+        last_status=last_status,
+        last_failure_reason=last_failure_reason,
+        last_sent_at=last_sent_at,
+    )
+
+
+async def _get_digest_delivery_summary(
+    workspace_id: int,
+    user_id: int,
+    session: AsyncSession,
+) -> ComplianceDigestDeliverySummaryRead:
+    deliveries = await _list_digest_deliveries(
+        workspace_id,
+        user_id,
+        session,
+        limit=200,
+    )
+    return _summarize_digest_deliveries(deliveries)
+
+
+async def _calculate_digest_recipient_count(
+    workspace_id: int,
+    recipient_role: ComplianceDigestRecipientRole,
+    session: AsyncSession,
+) -> int:
+    workspace = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
+    members = (
+        (
+            await session.execute(
+                select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    unique_member_user_ids = {member.user_id for member in members}
+    all_user_ids = {workspace.owner_id, *unique_member_user_ids}
+    if recipient_role == ComplianceDigestRecipientRole.ALL:
+        return len(all_user_ids)
+    if recipient_role == ComplianceDigestRecipientRole.OWNER:
+        return 1
+    if recipient_role == ComplianceDigestRecipientRole.ADMIN:
+        admin_ids = {
+            member.user_id
+            for member in members
+            if _enum_value(member.role) == WorkspaceRole.ADMIN.value
+        }
+        admin_ids.add(workspace.owner_id)
+        return len(admin_ids)
+    if recipient_role == ComplianceDigestRecipientRole.CONTRIBUTOR:
+        contributor_ids = {
+            member.user_id
+            for member in members
+            if _enum_value(member.role) == WorkspaceRole.CONTRIBUTOR.value
+        }
+        return len(contributor_ids)
+    viewer_ids = {
+        member.user_id
+        for member in members
+        if _enum_value(member.role) == WorkspaceRole.VIEWER.value
+    }
+    return len(viewer_ids)

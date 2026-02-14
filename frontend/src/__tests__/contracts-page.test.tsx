@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { vi } from "vitest";
 import ContractsPage from "@/app/(dashboard)/contracts/page";
 import { contractApi, documentApi } from "@/lib/api";
+import { renderWithQueryClient } from "@/test/react-query";
 
 vi.mock("@/lib/api", () => ({
   contractApi: {
@@ -48,7 +49,7 @@ describe("ContractsPage", () => {
   });
 
   it("renders contracts header", async () => {
-    render(<ContractsPage />);
+    renderWithQueryClient(<ContractsPage />);
     expect(
       await screen.findByText("Track post-award execution and deliverables")
     ).toBeInTheDocument();
@@ -82,7 +83,7 @@ describe("ContractsPage", () => {
       total: 2,
     });
 
-    render(<ContractsPage />);
+    renderWithQueryClient(<ContractsPage />);
 
     expect(await screen.findByText("Hierarchy")).toBeInTheDocument();
     expect(await screen.findByText("Parent Contract")).toBeInTheDocument();

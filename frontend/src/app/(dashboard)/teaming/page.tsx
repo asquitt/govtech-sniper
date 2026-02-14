@@ -9,6 +9,7 @@ import type {
   CapabilityGapResult,
   TeamingDigestPreview,
   TeamingDigestSchedule,
+  TeamingPartnerCohortDrilldownResponse,
   TeamingPartnerPublicProfile,
   TeamingPartnerTrendDrilldownResponse,
   TeamingRequest,
@@ -34,6 +35,8 @@ export default function TeamingBoardPage() {
   const [requestFitTrends, setRequestFitTrends] = useState<TeamingRequestTrend | null>(null);
   const [partnerDrilldowns, setPartnerDrilldowns] =
     useState<TeamingPartnerTrendDrilldownResponse | null>(null);
+  const [partnerCohorts, setPartnerCohorts] =
+    useState<TeamingPartnerCohortDrilldownResponse | null>(null);
   const [digestSchedule, setDigestSchedule] = useState<TeamingDigestSchedule | null>(null);
   const [digestPreview, setDigestPreview] = useState<TeamingDigestPreview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +77,7 @@ export default function TeamingBoardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [sent, received, fitTrends, partnerTrends, schedule] = await Promise.all([
+      const [sent, received, fitTrends, partnerTrends, partnerCohortData, schedule] = await Promise.all([
         teamingBoardApi.listRequests("sent"),
         teamingBoardApi.listRequests("received"),
         teamingBoardApi.getRequestFitTrends(30).catch(
@@ -82,6 +85,9 @@ export default function TeamingBoardPage() {
         ),
         teamingBoardApi.getPartnerTrends(30).catch(
           () => null as TeamingPartnerTrendDrilldownResponse | null
+        ),
+        teamingBoardApi.getPartnerCohorts(30).catch(
+          () => null as TeamingPartnerCohortDrilldownResponse | null
         ),
         teamingBoardApi.getDigestSchedule().catch(
           () => null as TeamingDigestSchedule | null
@@ -91,6 +97,7 @@ export default function TeamingBoardPage() {
       setReceivedRequests(received);
       setRequestFitTrends(fitTrends);
       setPartnerDrilldowns(partnerTrends);
+      setPartnerCohorts(partnerCohortData);
       setDigestSchedule(schedule);
     } catch {
       setError("Failed to load teaming requests.");
@@ -221,6 +228,7 @@ export default function TeamingBoardPage() {
               direction="sent"
               requestFitTrends={requestFitTrends}
               partnerDrilldowns={partnerDrilldowns}
+              partnerCohorts={partnerCohorts}
               digestSchedule={digestSchedule}
               digestPreview={digestPreview}
               onDigestScheduleChange={setDigestSchedule}
@@ -238,6 +246,7 @@ export default function TeamingBoardPage() {
               direction="received"
               requestFitTrends={requestFitTrends}
               partnerDrilldowns={partnerDrilldowns}
+              partnerCohorts={partnerCohorts}
               digestSchedule={digestSchedule}
               digestPreview={digestPreview}
               onDigestScheduleChange={setDigestSchedule}

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import CollaborationPage from "@/app/(dashboard)/collaboration/page";
 import { collaborationApi } from "@/lib/api";
+import { renderWithQueryClient } from "@/test/react-query";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: () => null }),
@@ -26,6 +27,7 @@ vi.mock("@/lib/api", () => ({
     getComplianceDigestSchedule: vi.fn(),
     updateComplianceDigestSchedule: vi.fn(),
     getComplianceDigestPreview: vi.fn(),
+    getComplianceDigestDeliveries: vi.fn(),
     sendComplianceDigest: vi.fn(),
     exportShareAuditCsv: vi.fn(),
   },
@@ -112,13 +114,75 @@ describe("CollaborationPage governance controls", () => {
       hour_utc: 13,
       minute_utc: 0,
       channel: "in_app",
+      recipient_role: "all",
       anomalies_only: false,
       is_enabled: true,
       last_sent_at: null,
     });
-    mockedCollaborationApi.getComplianceDigestPreview.mockResolvedValue({
+    mockedCollaborationApi.getComplianceDigestPreview
+      .mockResolvedValueOnce({
+        workspace_id: 1,
+        generated_at: "2026-02-10T12:04:00Z",
+        recipient_role: "all",
+        recipient_count: 2,
+        summary: {
+          workspace_id: 1,
+          total_shared_items: 1,
+          pending_approval_count: 1,
+          approved_count: 0,
+          revoked_count: 0,
+          expired_count: 0,
+          expiring_7d_count: 0,
+          scoped_share_count: 1,
+          global_share_count: 0,
+        },
+        trends: {
+          workspace_id: 1,
+          days: 30,
+          sla_hours: 24,
+          overdue_pending_count: 0,
+          sla_approval_rate: 100,
+          points: [],
+        },
+        anomalies: [
+          {
+            code: "pending_approvals",
+            severity: "warning",
+            title: "Pending approvals awaiting release",
+            description: "Shared artifacts are waiting for governance approval.",
+            metric_value: 1,
+            threshold: 0,
+            recommendation: "Review pending shares and approve/revoke as appropriate.",
+          },
+        ],
+        schedule: {
+          workspace_id: 1,
+          user_id: 10,
+          frequency: "weekly",
+          day_of_week: 1,
+          hour_utc: 13,
+          minute_utc: 0,
+          channel: "in_app",
+          recipient_role: "all",
+          anomalies_only: false,
+          is_enabled: true,
+          last_sent_at: null,
+        },
+        delivery_summary: {
+          total_attempts: 0,
+          success_count: 0,
+          failed_count: 0,
+          retry_attempt_count: 0,
+          last_status: null,
+          last_failure_reason: null,
+          last_sent_at: null,
+        },
+      })
+      .mockResolvedValue({
       workspace_id: 1,
       generated_at: "2026-02-10T12:04:00Z",
+      recipient_role: "viewer",
+      recipient_count: 1,
       summary: {
         workspace_id: 1,
         total_shared_items: 1,
@@ -157,14 +221,39 @@ describe("CollaborationPage governance controls", () => {
         hour_utc: 13,
         minute_utc: 0,
         channel: "in_app",
+        recipient_role: "viewer",
         anomalies_only: false,
         is_enabled: true,
         last_sent_at: null,
       },
+      delivery_summary: {
+        total_attempts: 1,
+        success_count: 1,
+        failed_count: 0,
+        retry_attempt_count: 0,
+        last_status: "success",
+        last_failure_reason: null,
+        last_sent_at: "2026-02-10T12:04:00Z",
+      },
+    });
+    mockedCollaborationApi.updateComplianceDigestSchedule.mockResolvedValue({
+      workspace_id: 1,
+      user_id: 10,
+      frequency: "weekly",
+      day_of_week: 1,
+      hour_utc: 13,
+      minute_utc: 0,
+      channel: "in_app",
+      recipient_role: "viewer",
+      anomalies_only: false,
+      is_enabled: true,
+      last_sent_at: null,
     });
     mockedCollaborationApi.sendComplianceDigest.mockResolvedValue({
       workspace_id: 1,
       generated_at: "2026-02-10T12:05:00Z",
+      recipient_role: "viewer",
+      recipient_count: 1,
       summary: {
         workspace_id: 1,
         total_shared_items: 1,
@@ -193,10 +282,51 @@ describe("CollaborationPage governance controls", () => {
         hour_utc: 13,
         minute_utc: 0,
         channel: "in_app",
+        recipient_role: "viewer",
         anomalies_only: false,
         is_enabled: true,
         last_sent_at: "2026-02-10T12:05:00Z",
       },
+      delivery_summary: {
+        total_attempts: 1,
+        success_count: 1,
+        failed_count: 0,
+        retry_attempt_count: 0,
+        last_status: "success",
+        last_failure_reason: null,
+        last_sent_at: "2026-02-10T12:05:00Z",
+      },
+    });
+    mockedCollaborationApi.getComplianceDigestDeliveries.mockResolvedValue({
+      workspace_id: 1,
+      user_id: 10,
+      summary: {
+        total_attempts: 1,
+        success_count: 1,
+        failed_count: 0,
+        retry_attempt_count: 0,
+        last_status: "success",
+        last_failure_reason: null,
+        last_sent_at: "2026-02-10T12:05:00Z",
+      },
+      items: [
+        {
+          id: 101,
+          workspace_id: 1,
+          user_id: 10,
+          schedule_id: 9,
+          status: "success",
+          attempt_number: 1,
+          retry_of_delivery_id: null,
+          channel: "in_app",
+          recipient_role: "viewer",
+          recipient_count: 1,
+          anomalies_count: 0,
+          failure_reason: null,
+          generated_at: "2026-02-10T12:05:00Z",
+          created_at: "2026-02-10T12:05:00Z",
+        },
+      ],
     });
     mockedCollaborationApi.exportShareAuditCsv.mockResolvedValue(
       new Blob(["header\nvalue"], { type: "text/csv" })
@@ -232,15 +362,36 @@ describe("CollaborationPage governance controls", () => {
       created_at: "2026-02-10T12:00:00Z",
     });
 
-    render(<CollaborationPage />);
+    renderWithQueryClient(<CollaborationPage />);
 
     await screen.findByRole("heading", { name: "Gov Workspace" });
     fireEvent.click(screen.getByRole("button", { name: /Shared Data \(/ }));
+    fireEvent.change(screen.getByLabelText("Digest recipients"), {
+      target: { value: "viewer" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Schedule" }));
+    await waitFor(() =>
+      expect(mockedCollaborationApi.updateComplianceDigestSchedule).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ recipient_role: "viewer" })
+      )
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("compliance-digest-preview")).toHaveTextContent(
+        "recipients: 1 (viewer)"
+      )
+    );
+    expect(screen.getByTestId("compliance-digest-delivery-summary")).toHaveTextContent(
+      "Delivery attempts: 1"
+    );
     fireEvent.click(await screen.findByTestId("export-governance-audit"));
     await waitFor(() =>
-      expect(mockedCollaborationApi.exportShareAuditCsv).toHaveBeenCalledWith(1, {
-        days: 30,
-      })
+      expect(mockedCollaborationApi.exportShareAuditCsv).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          days: 30,
+        })
+      )
     );
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
 

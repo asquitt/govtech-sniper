@@ -1,15 +1,26 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Cloud, KeyRound, Link2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Cloud,
+  Database,
+  KeyRound,
+  Link2,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SharePointBrowser } from "@/components/integrations/sharepoint-browser";
-import { enterpriseApi } from "@/lib/api";
+import { enterpriseApi, unanetApi } from "@/lib/api";
 import type {
   SecretItem,
   SharePointFile,
+  UnanetFinancialRecord,
+  UnanetResource,
+  UnanetStatus,
   WebhookDelivery,
   WebhookSubscription,
 } from "@/types";
@@ -21,6 +32,15 @@ function formatTimestamp(value: string) {
 export default function IntegrationsPage() {
   const [webhooks, setWebhooks] = useState<WebhookSubscription[]>([]);
   const [secrets, setSecrets] = useState<SecretItem[]>([]);
+  const [unanetStatus, setUnanetStatus] = useState<UnanetStatus | null>(null);
+  const [unanetResources, setUnanetResources] = useState<UnanetResource[]>([]);
+  const [unanetFinancials, setUnanetFinancials] = useState<UnanetFinancialRecord[]>(
+    []
+  );
+  const [unanetSyncMessage, setUnanetSyncMessage] = useState<string | null>(null);
+  const [syncingResources, setSyncingResources] = useState(false);
+  const [syncingFinancials, setSyncingFinancials] = useState(false);
+  const [refreshingUnanet, setRefreshingUnanet] = useState(false);
   const [selectedSharePointFile, setSelectedSharePointFile] = useState<SharePointFile | null>(null);
   const [deliveriesByWebhook, setDeliveriesByWebhook] = useState<
     Record<number, WebhookDelivery[]>
@@ -38,13 +58,34 @@ export default function IntegrationsPage() {
   const [secretValue, setSecretValue] = useState("");
   const [secretValueEdits, setSecretValueEdits] = useState<Record<string, string>>({});
 
+  const totalFundedValue = unanetFinancials.reduce(
+    (sum, record) => sum + record.funded_value,
+    0
+  );
+
+  const loadUnanetData = useCallback(async () => {
+    const status = await unanetApi.getStatus();
+    setUnanetStatus(status);
+    if (!status.configured || !status.enabled) {
+      setUnanetResources([]);
+      setUnanetFinancials([]);
+      return;
+    }
+    const [resources, financials] = await Promise.all([
+      unanetApi.listResources(),
+      unanetApi.listFinancials(),
+    ]);
+    setUnanetResources(resources);
+    setUnanetFinancials(financials);
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [nextWebhooks, nextSecrets] = await Promise.all([
-        enterpriseApi.listWebhooks(),
-        enterpriseApi.listSecrets(),
+      const [[nextWebhooks, nextSecrets]] = await Promise.all([
+        Promise.all([enterpriseApi.listWebhooks(), enterpriseApi.listSecrets()]),
+        loadUnanetData(),
       ]);
       setWebhooks(nextWebhooks);
       setSecrets(nextSecrets);
@@ -54,7 +95,7 @@ export default function IntegrationsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadUnanetData]);
 
   useEffect(() => {
     loadData();
@@ -187,6 +228,53 @@ export default function IntegrationsPage() {
     }
   };
 
+  const handleRefreshUnanet = async () => {
+    setRefreshingUnanet(true);
+    setUnanetSyncMessage(null);
+    try {
+      await loadUnanetData();
+    } catch (err) {
+      console.error("Failed to refresh Unanet data", err);
+      setError("Failed to refresh Unanet data.");
+    } finally {
+      setRefreshingUnanet(false);
+    }
+  };
+
+  const handleSyncResources = async () => {
+    setSyncingResources(true);
+    setUnanetSyncMessage(null);
+    try {
+      const result = await unanetApi.syncResources();
+      setUnanetSyncMessage(
+        `Resources sync ${result.status}: ${result.resources_synced} record(s) processed.`
+      );
+      await loadUnanetData();
+    } catch (err) {
+      console.error("Failed to sync Unanet resources", err);
+      setError("Failed to sync Unanet resources.");
+    } finally {
+      setSyncingResources(false);
+    }
+  };
+
+  const handleSyncFinancials = async () => {
+    setSyncingFinancials(true);
+    setUnanetSyncMessage(null);
+    try {
+      const result = await unanetApi.syncFinancials();
+      setUnanetSyncMessage(
+        `Financial sync ${result.status}: ${result.records_synced} record(s), total funded value $${result.total_funded_value.toLocaleString()}.`
+      );
+      await loadUnanetData();
+    } catch (err) {
+      console.error("Failed to sync Unanet financial records", err);
+      setError("Failed to sync Unanet financial records.");
+    } finally {
+      setSyncingFinancials(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -201,6 +289,129 @@ export default function IntegrationsPage() {
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {loading ? <p className="text-sm text-muted-foreground">Loading controls...</p> : null}
+
+      <Card className="border border-border" data-testid="unanet-controls-card">
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Database className="w-4 h-4 text-primary" />
+            <p className="text-sm font-semibold">Unanet Resource + Financial Sync</p>
+          </div>
+          {unanetStatus?.configured ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={unanetStatus.enabled ? "success" : "outline"}>
+                {unanetStatus.enabled ? "Enabled" : "Disabled"}
+              </Badge>
+              <Badge
+                variant={
+                  unanetStatus.healthy === undefined || unanetStatus.healthy === null
+                    ? "outline"
+                    : unanetStatus.healthy
+                    ? "success"
+                    : "destructive"
+                }
+              >
+                {unanetStatus.healthy === undefined || unanetStatus.healthy === null
+                  ? "Health Unknown"
+                  : unanetStatus.healthy
+                  ? "Healthy"
+                  : "Unhealthy"}
+              </Badge>
+              {unanetStatus.base_url ? <Badge variant="outline">{unanetStatus.base_url}</Badge> : null}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Unanet integration is not configured yet. Add provider `unanet` in Settings to enable
+              resource and financial sync.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleRefreshUnanet}
+              disabled={refreshingUnanet}
+            >
+              {refreshingUnanet ? "Refreshing..." : "Refresh Unanet Data"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncResources}
+              disabled={!unanetStatus?.configured || !unanetStatus.enabled || syncingResources}
+            >
+              {syncingResources ? "Syncing Resources..." : "Sync Resources"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncFinancials}
+              disabled={!unanetStatus?.configured || !unanetStatus.enabled || syncingFinancials}
+            >
+              {syncingFinancials ? "Syncing Financials..." : "Sync Financials"}
+            </Button>
+          </div>
+
+          {unanetSyncMessage ? (
+            <p className="text-xs text-muted-foreground">{unanetSyncMessage}</p>
+          ) : null}
+
+          {unanetStatus?.configured && unanetStatus.enabled ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground">
+                  Resource Planning ({unanetResources.length})
+                </p>
+                {unanetResources.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No resource records available.</p>
+                ) : (
+                  <div className="rounded-md border border-border bg-background/40 p-2 space-y-1 text-xs">
+                    {unanetResources.slice(0, 5).map((resource) => (
+                      <div
+                        key={resource.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-foreground truncate">
+                          {resource.labor_category}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {resource.currency} {resource.hourly_rate.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground">
+                  Financial Records ({unanetFinancials.length})
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Total funded value: ${totalFundedValue.toLocaleString()}
+                </p>
+                {unanetFinancials.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No financial records available.</p>
+                ) : (
+                  <div className="rounded-md border border-border bg-background/40 p-2 space-y-1 text-xs">
+                    {unanetFinancials.slice(0, 5).map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="text-foreground truncate">{record.project_name}</span>
+                        <span className="text-muted-foreground">
+                          {record.currency} {record.funded_value.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card className="border border-border" data-testid="sharepoint-browser-card">
         <CardContent className="p-4 space-y-4">

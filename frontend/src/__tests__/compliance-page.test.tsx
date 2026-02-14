@@ -11,9 +11,13 @@ vi.mock("@/lib/api/compliance", () => ({
     getDataPrivacy: vi.fn(),
     getComplianceAuditSummary: vi.fn(),
     getReadiness: vi.fn(),
+    getReadinessCheckpoints: vi.fn(),
+    getGovCloudProfile: vi.fn(),
+    getSOC2Readiness: vi.fn(),
     getTrustCenter: vi.fn(),
     updateTrustCenterPolicy: vi.fn(),
     exportTrustCenterEvidence: vi.fn(),
+    exportThreePAOPackage: vi.fn(),
   },
 }));
 
@@ -105,9 +109,82 @@ describe("CompliancePage", () => {
       ],
       last_updated: "2026-02-14T12:00:00Z",
     });
+    mockedComplianceApi.getReadinessCheckpoints.mockResolvedValue({
+      checkpoints: [
+        {
+          checkpoint_id: "fedramp_3pao_readiness",
+          program_id: "fedramp_moderate",
+          title: "3PAO readiness checkpoint and assessor onboarding",
+          status: "scheduled",
+          target_date: "2026-05-20T00:00:00Z",
+          owner: "Compliance Lead",
+          third_party_required: true,
+          evidence_items_ready: 9,
+          evidence_items_total: 24,
+        },
+      ],
+      generated_at: "2026-02-14T12:00:00Z",
+    });
+    mockedComplianceApi.getGovCloudProfile.mockResolvedValue({
+      program_id: "govcloud_deployment",
+      provider: "AWS GovCloud (US)",
+      status: "in_progress",
+      target_regions: ["us-gov-west-1", "us-gov-east-1"],
+      boundary_services: ["Amazon EKS (GovCloud)", "Amazon RDS PostgreSQL"],
+      identity_federation_status: "in_progress",
+      network_isolation_status: "validated_in_preprod",
+      data_residency_status: "us_government_regions_only",
+      migration_phases: [
+        {
+          phase_id: "identity_cutover",
+          title: "SSO federation and privileged access cutover",
+          status: "in_progress",
+          target_date: "2026-04-12T00:00:00Z",
+          owner: "Identity & Access Lead",
+          exit_criteria: [
+            "IdP federation mapped to GovCloud IAM Identity Center",
+          ],
+        },
+      ],
+      updated_at: "2026-02-14T12:00:00Z",
+    });
+    mockedComplianceApi.getSOC2Readiness.mockResolvedValue({
+      program_id: "soc2_type_ii",
+      name: "SOC 2 Type II",
+      status: "in_progress",
+      audit_firm_status: "engagement_letter_signed",
+      observation_window_start: "2026-03-01T00:00:00Z",
+      observation_window_end: "2026-08-31T00:00:00Z",
+      overall_percent_complete: 68,
+      domains: [
+        {
+          domain_id: "CC1",
+          domain_name: "Control Environment",
+          controls_total: 18,
+          controls_ready: 13,
+          percent_complete: 72,
+          owner: "Security Program Manager",
+        },
+      ],
+      milestones: [
+        {
+          milestone_id: "auditor_kickoff",
+          title: "External auditor kickoff and PBC package lock",
+          status: "scheduled",
+          due_date: "2026-05-05T00:00:00Z",
+          owner: "Compliance Lead",
+          evidence_ready: false,
+          notes: "Awaiting final access review exports.",
+        },
+      ],
+      updated_at: "2026-02-14T12:00:00Z",
+    });
     mockedComplianceApi.getTrustCenter.mockResolvedValue(baseTrustCenter);
     mockedComplianceApi.updateTrustCenterPolicy.mockResolvedValue(baseTrustCenter);
     mockedComplianceApi.exportTrustCenterEvidence.mockResolvedValue(
+      new Blob([JSON.stringify({ ok: true })], { type: "application/json" })
+    );
+    mockedComplianceApi.exportThreePAOPackage.mockResolvedValue(
       new Blob([JSON.stringify({ ok: true })], { type: "application/json" })
     );
   });
@@ -162,5 +239,36 @@ describe("CompliancePage", () => {
     });
 
     expect(await screen.findByText("Trust center policy saved.")).toBeInTheDocument();
+  });
+
+  it("renders SOC 2 execution track details", async () => {
+    render(<CompliancePage />);
+    expect(await screen.findByText("SOC 2 Type II Execution Track")).toBeInTheDocument();
+    expect(screen.getByText("engagement letter signed")).toBeInTheDocument();
+    expect(screen.getByText("Trust Criteria Domains")).toBeInTheDocument();
+    expect(screen.getByText("Milestones")).toBeInTheDocument();
+    expect(
+      screen.getByText("External auditor kickoff and PBC package lock")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Execution Checkpoints (FedRAMP, CMMC, GovCloud)")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("3PAO readiness checkpoint and assessor onboarding")
+    ).toBeInTheDocument();
+    expect(screen.getByText("GovCloud Deployment Profile")).toBeInTheDocument();
+    expect(screen.getByText("SSO federation and privileged access cutover")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export 3PAO Readiness Package" })).toBeInTheDocument();
+  });
+
+  it("exports the 3PAO readiness package", async () => {
+    render(<CompliancePage />);
+    expect(await screen.findByText("AI & Data Trust Center")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export 3PAO Readiness Package" }));
+
+    await waitFor(() => {
+      expect(mockedComplianceApi.exportThreePAOPackage).toHaveBeenCalledTimes(1);
+    });
   });
 });

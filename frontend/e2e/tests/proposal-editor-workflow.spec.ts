@@ -61,6 +61,20 @@ test.describe("Proposal Editor Workflow", () => {
     expect(createSection.ok()).toBeTruthy();
     const section = await createSection.json();
 
+    const seedSectionContent = await page.request.patch(
+      `/api/draft/sections/${section.id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        data: {
+          final_content: "Initial technical approach content for rewrite testing.",
+        },
+      }
+    );
+    expect(seedSectionContent.ok()).toBeTruthy();
+
     const createReview = await page.request.post(
       `/api/reviews/proposals/${proposal.id}/reviews`,
       {
@@ -96,6 +110,14 @@ test.describe("Proposal Editor Workflow", () => {
     await page.goto(`/proposals/${proposal.id}`);
     await expect(page.getByText("Word Assistant")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Collaboration Context")).toBeVisible({ timeout: 15_000 });
+
+    await page.getByRole("button", { name: "Rewrite" }).click();
+    await page.getByRole("button", { name: "professional" }).click();
+    await expect(page.getByTestId("ai-suggestions-toolbar")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Accept All" })).toBeVisible({
+      timeout: 15_000,
+    });
+
     await page.getByRole("button", { name: "SharePoint Export" }).click();
     await expect(page.getByRole("heading", { name: "Export to SharePoint" })).toBeVisible({
       timeout: 15_000,

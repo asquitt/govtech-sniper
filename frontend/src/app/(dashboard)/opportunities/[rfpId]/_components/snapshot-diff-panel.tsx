@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { rfpApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import type { SnapshotAmendmentImpact } from "@/types";
 
 type Snapshot = {
   id: number;
@@ -51,6 +53,9 @@ export function SnapshotDiffPanel({ rfpId, snapshots }: SnapshotDiffPanelProps) 
   );
   const [diff, setDiff] = useState<SnapshotDiff | null>(null);
   const [isDiffLoading, setIsDiffLoading] = useState(false);
+  const [amendmentImpact, setAmendmentImpact] = useState<SnapshotAmendmentImpact | null>(null);
+  const [isImpactLoading, setIsImpactLoading] = useState(false);
+  const [impactError, setImpactError] = useState<string | null>(null);
 
   const summaryFields = useMemo(
     () => [
@@ -91,6 +96,29 @@ export function SnapshotDiffPanel({ rfpId, snapshots }: SnapshotDiffPanelProps) 
 
     fetchDiff();
   }, [fromSnapshotId, toSnapshotId, rfpId]);
+
+  const handleGenerateImpact = async () => {
+    if (!fromSnapshotId || !toSnapshotId || fromSnapshotId === toSnapshotId) {
+      setImpactError("Select two different snapshots to generate amendment impact.");
+      return;
+    }
+    try {
+      setIsImpactLoading(true);
+      setImpactError(null);
+      const impact = await rfpApi.getSnapshotAmendmentImpact(rfpId, {
+        from_snapshot_id: fromSnapshotId,
+        to_snapshot_id: toSnapshotId,
+        top_n: 8,
+      });
+      setAmendmentImpact(impact);
+    } catch (error) {
+      console.error("Failed to generate amendment impact", error);
+      setAmendmentImpact(null);
+      setImpactError("Failed to generate amendment impact map.");
+    } finally {
+      setIsImpactLoading(false);
+    }
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_3fr]">
@@ -219,6 +247,86 @@ export function SnapshotDiffPanel({ rfpId, snapshots }: SnapshotDiffPanelProps) 
                 : ""}
             </p>
           )}
+
+          <div className="rounded-lg border border-border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Amendment Autopilot</p>
+                <p className="text-xs text-muted-foreground">
+                  Generate section-level remediation from selected snapshot changes.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGenerateImpact}
+                disabled={isImpactLoading || !fromSnapshotId || !toSnapshotId}
+              >
+                {isImpactLoading ? "Generating..." : "Generate Impact Map"}
+              </Button>
+            </div>
+
+            {impactError && <p className="text-xs text-destructive">{impactError}</p>}
+
+            {amendmentImpact ? (
+              <div className="space-y-2 text-xs">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <div className="rounded border border-border px-2 py-1">
+                    Risk:{" "}
+                    <span className="font-semibold text-foreground">
+                      {amendmentImpact.amendment_risk_level}
+                    </span>
+                  </div>
+                  <div className="rounded border border-border px-2 py-1">
+                    Changed fields:{" "}
+                    <span className="font-semibold text-foreground">
+                      {amendmentImpact.changed_fields.length}
+                    </span>
+                  </div>
+                  <div className="rounded border border-border px-2 py-1">
+                    Impacted sections:{" "}
+                    <span className="font-semibold text-foreground">
+                      {amendmentImpact.impacted_sections.length}
+                    </span>
+                  </div>
+                  <div className="rounded border border-border px-2 py-1">
+                    Snapshot pair:{" "}
+                    <span className="font-semibold text-foreground">
+                      {amendmentImpact.from_snapshot_id}→{amendmentImpact.to_snapshot_id}
+                    </span>
+                  </div>
+                </div>
+                {amendmentImpact.impacted_sections.length > 0 ? (
+                  <div className="space-y-2">
+                    {amendmentImpact.impacted_sections.slice(0, 5).map((item) => (
+                      <div
+                        key={`${item.proposal_id}-${item.section_id}`}
+                        className="rounded border border-border/70 px-2 py-2 space-y-1"
+                        data-testid={`amendment-impact-section-${item.section_id}`}
+                      >
+                        <p className="font-medium text-foreground">
+                          {item.proposal_title} • {item.section_number || "?"} {item.section_title}
+                        </p>
+                        <p className="text-muted-foreground">
+                          Impact {item.impact_level} ({item.impact_score}) • Fields:{" "}
+                          {item.matched_change_fields.join(", ")}
+                        </p>
+                        <p className="text-muted-foreground">{item.proposed_patch}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">
+                    No section remediation is required for this amendment pair.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Run impact map to produce amendment remediation guidance.
+              </p>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

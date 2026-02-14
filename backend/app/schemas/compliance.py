@@ -29,6 +29,77 @@ class ComplianceReadinessResponse(BaseModel):
     last_updated: str
 
 
+class ComplianceReadinessCheckpoint(BaseModel):
+    checkpoint_id: str
+    program_id: str
+    title: str
+    status: str
+    target_date: datetime
+    owner: str
+    third_party_required: bool
+    evidence_items_ready: int = Field(ge=0)
+    evidence_items_total: int = Field(ge=0)
+
+
+class ComplianceReadinessCheckpointResponse(BaseModel):
+    checkpoints: list[ComplianceReadinessCheckpoint]
+    generated_at: datetime
+
+
+class GovCloudMigrationPhase(BaseModel):
+    phase_id: str
+    title: str
+    status: str
+    target_date: datetime
+    owner: str
+    exit_criteria: list[str]
+
+
+class GovCloudDeploymentProfile(BaseModel):
+    program_id: str
+    provider: str
+    status: str
+    target_regions: list[str]
+    boundary_services: list[str]
+    identity_federation_status: str
+    network_isolation_status: str
+    data_residency_status: str
+    migration_phases: list[GovCloudMigrationPhase]
+    updated_at: datetime
+
+
+class SOC2ControlDomainStatus(BaseModel):
+    domain_id: str
+    domain_name: str
+    controls_total: int = Field(ge=0)
+    controls_ready: int = Field(ge=0)
+    percent_complete: int = Field(ge=0, le=100)
+    owner: str
+
+
+class SOC2Milestone(BaseModel):
+    milestone_id: str
+    title: str
+    status: str
+    due_date: datetime
+    owner: str
+    evidence_ready: bool
+    notes: str
+
+
+class SOC2ReadinessResponse(BaseModel):
+    program_id: str
+    name: str
+    status: str
+    audit_firm_status: str
+    observation_window_start: datetime
+    observation_window_end: datetime
+    overall_percent_complete: int = Field(ge=0, le=100)
+    domains: list[SOC2ControlDomainStatus]
+    milestones: list[SOC2Milestone]
+    updated_at: datetime
+
+
 class TrustCenterPolicy(BaseModel):
     allow_ai_requirement_analysis: bool
     allow_ai_draft_generation: bool

@@ -5,6 +5,7 @@ import type {
   ReviewComment,
   ReviewChecklistItem,
   ReviewDashboardItem,
+  ReviewPacket,
   ScoringSummary,
   ReviewType,
   CommentSeverity,
@@ -35,6 +36,11 @@ export const reviewApi = {
   // Dashboard
   getDashboard: async (): Promise<ReviewDashboardItem[]> => {
     const { data } = await api.get("/reviews/dashboard");
+    return data;
+  },
+
+  getReviewPacket: async (reviewId: number): Promise<ReviewPacket> => {
+    const { data } = await api.get(`/reviews/${reviewId}/packet`);
     return data;
   },
 

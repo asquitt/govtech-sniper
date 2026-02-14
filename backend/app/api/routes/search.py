@@ -21,6 +21,7 @@ async def semantic_search(
     """Perform semantic search across indexed entities."""
     results = await search(
         session,
+        user_id=current_user.id,
         query=payload.query,
         entity_types=payload.entity_types,
         limit=payload.limit,

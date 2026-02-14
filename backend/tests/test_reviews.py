@@ -59,6 +59,26 @@ class TestReviews:
         assert scoring_payload["review_id"] == review_id
         assert "major" in scoring_payload["comments_by_severity"]
 
+        packet = await client.get(
+            f"/api/v1/reviews/{review_id}/packet",
+            headers=auth_headers,
+        )
+        assert packet.status_code == 200
+        packet_payload = packet.json()
+        assert packet_payload["review_id"] == review_id
+        assert packet_payload["review_type"] == "red"
+        assert packet_payload["risk_summary"]["open_major"] >= 1
+        assert packet_payload["risk_summary"]["overall_risk_level"] in {"high", "medium", "low"}
+        assert len(packet_payload["action_queue"]) >= 1
+        assert (
+            packet_payload["action_queue"][0]["risk_score"]
+            >= packet_payload["action_queue"][-1]["risk_score"]
+        )
+        assert any(
+            "critical findings at red exit" in criterion.lower()
+            for criterion in packet_payload["recommended_exit_criteria"]
+        )
+
         complete = await client.patch(
             f"/api/v1/reviews/{review_id}/complete",
             headers=auth_headers,

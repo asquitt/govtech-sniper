@@ -4,8 +4,10 @@ import asyncio
 import email
 import imaplib
 from email.message import Message
+from io import BytesIO
 
 import structlog
+from pypdf import PdfReader
 
 logger = structlog.get_logger(__name__)
 
@@ -69,6 +71,7 @@ class EmailIngestService:
     @staticmethod
     def _parse_email(msg: Message) -> dict | None:
         """Parse an email message into a structured dict."""
+        message_id = (msg.get("Message-ID", "") or "").strip()
         subject = msg.get("Subject", "")
         sender = msg.get("From", "")
         date = msg.get("Date", "")
@@ -77,6 +80,7 @@ class EmailIngestService:
         body_text = ""
         body_html = ""
         attachments: list[dict] = []
+        attachment_text_parts: list[str] = []
 
         if msg.is_multipart():
             for part in msg.walk():
@@ -87,12 +91,18 @@ class EmailIngestService:
                     filename = part.get_filename() or "unnamed"
                     payload = part.get_payload(decode=True)
                     if payload:
+                        text_preview = EmailIngestService._extract_attachment_text(
+                            filename=filename,
+                            content_type=content_type,
+                            payload=payload,
+                        )
+                        if text_preview:
+                            attachment_text_parts.append(text_preview)
                         attachments.append(
                             {
                                 "filename": filename,
                                 "content_type": content_type,
                                 "size": len(payload),
-                                "data": payload,
                             }
                         )
                 elif content_type == "text/plain":
@@ -108,15 +118,56 @@ class EmailIngestService:
             if payload:
                 body_text = payload.decode("utf-8", errors="replace")
 
+        attachment_names = [a.get("filename", "unnamed") for a in attachments]
+        attachment_text = "\n".join(part for part in attachment_text_parts if part).strip()
+
         return {
+            "message_id": message_id,
             "subject": subject,
             "sender": sender,
             "date": date,
             "body_text": body_text,
             "body_html": body_html,
             "attachments": attachments,
+            "attachment_names": attachment_names,
+            "attachment_text": attachment_text,
             "attachment_count": len(attachments),
         }
+
+    @staticmethod
+    def _extract_attachment_text(
+        *,
+        filename: str,
+        content_type: str,
+        payload: bytes,
+    ) -> str:
+        lowered_name = filename.lower()
+        try:
+            if content_type == "application/pdf" or lowered_name.endswith(".pdf"):
+                return EmailIngestService._extract_pdf_text(payload)
+            if content_type.startswith("text/") or lowered_name.endswith(
+                (".txt", ".md", ".csv", ".rtf")
+            ):
+                return payload.decode("utf-8", errors="replace")[:40000]
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.warning(
+                "Attachment text extraction failed",
+                filename=filename,
+                content_type=content_type,
+                error=str(exc),
+            )
+        return ""
+
+    @staticmethod
+    def _extract_pdf_text(payload: bytes) -> str:
+        try:
+            reader = PdfReader(BytesIO(payload))
+            text_parts: list[str] = []
+            for page in reader.pages[:3]:
+                text_parts.append(page.extract_text() or "")
+            return "\n".join(part for part in text_parts if part).strip()[:40000]
+        except Exception:
+            return ""
 
     async def test_connection(self) -> dict:
         """Test IMAP connection without fetching emails."""

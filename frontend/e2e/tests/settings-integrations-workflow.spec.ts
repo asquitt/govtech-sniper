@@ -55,6 +55,8 @@ test.describe("Settings Integrations Workflow", () => {
 
     await page.goto("/settings/integrations");
     await expect(page.getByRole("heading", { name: "Integrations" })).toBeVisible();
+    await expect(page.getByTestId("unanet-controls-card")).toBeVisible();
+    await expect(page.getByText("Unanet Resource + Financial Sync")).toBeVisible();
     await expect(page.getByTestId("sharepoint-browser-card")).toBeVisible();
     await expect(page.getByText("SharePoint Browser")).toBeVisible();
 

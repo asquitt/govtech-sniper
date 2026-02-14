@@ -22,7 +22,9 @@ from app.models.capture import (
 from app.models.user import User
 from app.schemas.teaming import (
     PartnerTrendDrilldownRead,
+    TeamingCohortDrilldownRead,
     TeamingDigestScheduleUpdate,
+    TeamingPartnerCohortDrilldownResponse,
     TeamingPartnerTrendDrilldownResponse,
     TeamingRequestCreate,
     TeamingRequestRead,
@@ -348,6 +350,121 @@ async def get_partner_request_trends(
         reverse=True,
     )
     return TeamingPartnerTrendDrilldownResponse(days=days, partners=partners)
+
+
+@router.get(
+    "/requests/partner-cohorts",
+    response_model=TeamingPartnerCohortDrilldownResponse,
+)
+async def get_partner_request_cohorts(
+    days: int = Query(30, ge=7, le=90),
+    top_n: int = Query(8, ge=1, le=25),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> TeamingPartnerCohortDrilldownResponse:
+    """Cohort drilldowns by partner NAICS and set-aside profile."""
+    result = await session.execute(
+        select(TeamingRequest).where(TeamingRequest.from_user_id == current_user.id)
+    )
+    requests = result.scalars().all()
+    window_start = datetime.utcnow() - timedelta(days=days)
+
+    filtered_requests = [request for request in requests if request.created_at >= window_start]
+    partner_ids = list({request.to_partner_id for request in filtered_requests})
+
+    partner_map: dict[int, TeamingPartner] = {}
+    if partner_ids:
+        partners_result = await session.execute(
+            select(TeamingPartner).where(TeamingPartner.id.in_(partner_ids))
+        )
+        partner_map = {partner.id: partner for partner in partners_result.scalars().all()}
+
+    def empty_bucket() -> dict[str, int | set[int]]:
+        return {
+            "partner_ids": set(),
+            "sent_count": 0,
+            "accepted_count": 0,
+            "declined_count": 0,
+            "pending_count": 0,
+        }
+
+    naics_aggregate: dict[str, dict[str, int | set[int]]] = {}
+    set_aside_aggregate: dict[str, dict[str, int | set[int]]] = {}
+
+    for request in filtered_requests:
+        partner = partner_map.get(request.to_partner_id)
+        if not partner:
+            continue
+        status = (
+            request.status.value
+            if isinstance(request.status, TeamingRequestStatus)
+            else request.status
+        )
+        naics_values = sorted(set(partner.naics_codes or [])) or ["unspecified"]
+        set_aside_values = sorted(set(partner.set_asides or [])) or ["unspecified"]
+
+        def update_bucket(
+            bucket: dict[str, int | set[int]], partner_id: int, request_status: str
+        ) -> None:
+            partner_ids_bucket = bucket["partner_ids"]
+            if isinstance(partner_ids_bucket, set):
+                partner_ids_bucket.add(partner_id)
+            bucket["sent_count"] = int(bucket["sent_count"]) + 1
+            if request_status == TeamingRequestStatus.ACCEPTED.value:
+                bucket["accepted_count"] = int(bucket["accepted_count"]) + 1
+            elif request_status == TeamingRequestStatus.DECLINED.value:
+                bucket["declined_count"] = int(bucket["declined_count"]) + 1
+            else:
+                bucket["pending_count"] = int(bucket["pending_count"]) + 1
+
+        for naics_value in naics_values:
+            bucket = naics_aggregate.setdefault(naics_value, empty_bucket())
+            update_bucket(bucket, partner.id, status)
+        for set_aside_value in set_aside_values:
+            bucket = set_aside_aggregate.setdefault(set_aside_value, empty_bucket())
+            update_bucket(bucket, partner.id, status)
+
+    def serialize(
+        aggregate: dict[str, dict[str, int | set[int]]],
+    ) -> list[TeamingCohortDrilldownRead]:
+        rows: list[TeamingCohortDrilldownRead] = []
+        for cohort_value, bucket in aggregate.items():
+            sent_count = int(bucket["sent_count"])
+            accepted_count = int(bucket["accepted_count"])
+            declined_count = int(bucket["declined_count"])
+            pending_count = int(bucket["pending_count"])
+            acceptance_rate = round((accepted_count / sent_count) * 100, 2) if sent_count else 0.0
+            partner_count = (
+                len(bucket["partner_ids"]) if isinstance(bucket["partner_ids"], set) else 0
+            )
+            rows.append(
+                TeamingCohortDrilldownRead(
+                    cohort_value=cohort_value,
+                    partner_count=partner_count,
+                    sent_count=sent_count,
+                    accepted_count=accepted_count,
+                    declined_count=declined_count,
+                    pending_count=pending_count,
+                    acceptance_rate=acceptance_rate,
+                )
+            )
+        rows.sort(
+            key=lambda row: (
+                -row.sent_count,
+                -row.acceptance_rate,
+                -row.partner_count,
+                row.cohort_value == "unspecified",
+                row.cohort_value,
+            )
+        )
+        return rows[:top_n]
+
+    return TeamingPartnerCohortDrilldownResponse(
+        days=days,
+        total_sent=len(filtered_requests),
+        naics_cohorts=serialize(naics_aggregate),
+        set_aside_cohorts=serialize(set_aside_aggregate),
+    )
 
 
 @router.get("/digest-schedule", response_model=TeamingDigestScheduleRead)

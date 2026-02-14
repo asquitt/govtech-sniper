@@ -140,8 +140,42 @@ test.describe("Collaboration Workflow", () => {
       { timeout: 15_000 }
     );
     await page.getByLabel("Digest anomalies only").check();
+    await page.getByLabel("Digest recipients").selectOption("viewer");
+    const digestScheduleResponsePromise = page.waitForResponse((response) => {
+      return (
+        response.url().includes("/compliance-digest-schedule") &&
+        response.request().method() === "PATCH" &&
+        response.status() === 200
+      );
+    });
     await page.getByRole("button", { name: "Save Schedule" }).click();
+    const digestScheduleResponse = await digestScheduleResponsePromise;
+    const digestSchedulePayload = await digestScheduleResponse.json();
+    expect(digestSchedulePayload.recipient_role).toBe("viewer");
+    await expect(page.getByTestId("compliance-digest-preview")).toContainText(
+      "recipients: 1 (viewer)",
+      { timeout: 15_000 }
+    );
+
+    const digestSendResponsePromise = page.waitForResponse((response) => {
+      return (
+        response.url().includes("/compliance-digest-send") &&
+        response.request().method() === "POST" &&
+        response.status() === 200
+      );
+    });
     await page.getByRole("button", { name: "Send Now" }).click();
+    const digestSendResponse = await digestSendResponsePromise;
+    const digestSendPayload = await digestSendResponse.json();
+    expect(digestSendPayload.recipient_role).toBe("viewer");
+    expect(digestSendPayload.recipient_count).toBe(1);
+    await expect(page.getByTestId("compliance-digest-delivery-summary")).toContainText(
+      "Delivery attempts: 1",
+      { timeout: 15_000 }
+    );
+    await expect(page.getByTestId("compliance-digest-delivery-list")).toContainText("success", {
+      timeout: 15_000,
+    });
 
     await page.goto(portalHref!);
     await expect(page.getByRole("heading", { name: "Partner Portal" })).toBeVisible({

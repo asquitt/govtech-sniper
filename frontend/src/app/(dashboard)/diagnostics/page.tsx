@@ -11,6 +11,8 @@ import type {
   CursorPosition,
   DocumentPresenceUser,
   SectionLock,
+  WebSocketDiagnosticsAlertSnapshot,
+  WebSocketDiagnosticsThresholds,
   WebSocketDiagnosticsSnapshot,
 } from "@/types";
 
@@ -54,6 +56,18 @@ export default function DiagnosticsPage() {
   const [telemetry, setTelemetry] = useState<WebSocketDiagnosticsSnapshot | null>(
     null
   );
+  const [alertSnapshot, setAlertSnapshot] =
+    useState<WebSocketDiagnosticsAlertSnapshot | null>(null);
+  const [alertThresholds, setAlertThresholds] = useState<WebSocketDiagnosticsThresholds>({
+    max_avg_status_latency_ms: 2000,
+    max_p95_status_latency_ms: 5000,
+    max_reconnect_count: 25,
+    max_disconnect_ratio: 0.4,
+    min_outbound_events_per_minute: 1,
+    min_active_connection_count: 0,
+  });
+  const [isEvaluatingAlerts, setIsEvaluatingAlerts] = useState(false);
+  const [isExportingTelemetry, setIsExportingTelemetry] = useState(false);
   const [diagnosticsTaskId, setDiagnosticsTaskId] = useState(
     () => `diagnostic-task-${Date.now()}`
   );
@@ -105,6 +119,25 @@ export default function DiagnosticsPage() {
       window.clearInterval(timer);
     };
   }, [connectionNonce]);
+
+  const fetchAlerts = React.useCallback(async () => {
+    setIsEvaluatingAlerts(true);
+    try {
+      const snapshot = await diagnosticsApi.getWebsocketAlerts({
+        ...alertThresholds,
+        include_all: true,
+      });
+      setAlertSnapshot(snapshot);
+    } catch {
+      setAlertSnapshot(null);
+    } finally {
+      setIsEvaluatingAlerts(false);
+    }
+  }, [alertThresholds]);
+
+  useEffect(() => {
+    void fetchAlerts();
+  }, [fetchAlerts, connectionNonce]);
 
   useEffect(() => {
     const accessToken = tokenManager.getAccessToken();
@@ -292,6 +325,126 @@ export default function DiagnosticsPage() {
                   {telemetry?.event_throughput.outbound_events_per_minute ?? 0}/min
                 </p>
               </div>
+            </div>
+            <div className="rounded-md border border-border p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-foreground">
+                  Alert Threshold Evaluation
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isEvaluatingAlerts}
+                    onClick={() => {
+                      void fetchAlerts();
+                    }}
+                  >
+                    Evaluate Alerts
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isExportingTelemetry}
+                    onClick={async () => {
+                      setIsExportingTelemetry(true);
+                      try {
+                        const blob = await diagnosticsApi.exportWebsocketTelemetryCsv({
+                          ...alertThresholds,
+                          include_alerts: true,
+                        });
+                        const url = window.URL.createObjectURL(blob);
+                        const link = document.createElement("a");
+                        link.href = url;
+                        link.download = "websocket_diagnostics.csv";
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                      } finally {
+                        setIsExportingTelemetry(false);
+                      }
+                    }}
+                    data-testid="diagnostics-export-telemetry"
+                  >
+                    Export Telemetry CSV
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
+                <label className="space-y-1 text-muted-foreground">
+                  Max avg latency (ms)
+                  <input
+                    aria-label="Max avg latency threshold"
+                    type="number"
+                    className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
+                    value={alertThresholds.max_avg_status_latency_ms}
+                    onChange={(event) =>
+                      setAlertThresholds((prev) => ({
+                        ...prev,
+                        max_avg_status_latency_ms:
+                          Number.parseFloat(event.target.value) || 0,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="space-y-1 text-muted-foreground">
+                  Max reconnects
+                  <input
+                    aria-label="Max reconnect threshold"
+                    type="number"
+                    className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
+                    value={alertThresholds.max_reconnect_count}
+                    onChange={(event) =>
+                      setAlertThresholds((prev) => ({
+                        ...prev,
+                        max_reconnect_count:
+                          Number.parseInt(event.target.value, 10) || 0,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="space-y-1 text-muted-foreground">
+                  Min active connections
+                  <input
+                    aria-label="Min active connection threshold"
+                    type="number"
+                    className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
+                    value={alertThresholds.min_active_connection_count}
+                    onChange={(event) =>
+                      setAlertThresholds((prev) => ({
+                        ...prev,
+                        min_active_connection_count:
+                          Number.parseInt(event.target.value, 10) || 0,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="diagnostics-alert-count"
+              >
+                Breached alerts: {alertSnapshot?.breached_count ?? 0}
+              </p>
+              {alertSnapshot && alertSnapshot.alerts.length > 0 ? (
+                <div className="space-y-1">
+                  {alertSnapshot.alerts
+                    .filter((alert) => alert.breached)
+                    .slice(0, 5)
+                    .map((alert) => (
+                      <div
+                        key={alert.code}
+                        className="rounded border border-border/60 px-2 py-1 text-xs"
+                        data-testid={`diagnostics-alert-${alert.code}`}
+                      >
+                        {alert.code}: {alert.metric} ({alert.actual} vs {alert.threshold})
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">No active alert breaches.</p>
+              )}
             </div>
           </CardContent>
         </Card>

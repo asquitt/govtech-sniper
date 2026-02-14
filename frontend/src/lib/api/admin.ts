@@ -43,6 +43,8 @@ export const adminApi = {
     primary_color?: string;
     ip_allowlist?: string[];
     data_retention_days?: number;
+    require_step_up_for_sensitive_exports?: boolean;
+    require_step_up_for_sensitive_shares?: boolean;
   }): Promise<{ status: string }> => {
     const { data } = await api.patch("/admin/organization", params);
     return data;
@@ -73,6 +75,26 @@ export const adminApi = {
   ): Promise<OrgMemberInvitation> => {
     const { data } = await api.post(
       `/admin/member-invitations/${invitationId}/activate`
+    );
+    return data;
+  },
+
+  revokeMemberInvitation: async (
+    invitationId: number
+  ): Promise<OrgMemberInvitation> => {
+    const { data } = await api.post(
+      `/admin/member-invitations/${invitationId}/revoke`
+    );
+    return data;
+  },
+
+  resendMemberInvitation: async (
+    invitationId: number,
+    expiresInDays = 7
+  ): Promise<OrgMemberInvitation> => {
+    const { data } = await api.post(
+      `/admin/member-invitations/${invitationId}/resend`,
+      { expires_in_days: expiresInDays }
     );
     return data;
   },

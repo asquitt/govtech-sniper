@@ -7,6 +7,7 @@ export type IntegrationProvider =
   | "microsoft"
   | "sharepoint"
   | "salesforce"
+  | "unanet"
   | "word_addin"
   | "webhook"
   | "slack";

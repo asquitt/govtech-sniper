@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import OpportunitiesPage from "@/app/(dashboard)/opportunities/page";
 import { rfpApi, ingestApi, savedSearchApi } from "@/lib/api";
@@ -158,6 +158,7 @@ describe("OpportunitiesPage", () => {
         title: "Manual Opportunity",
         solicitation_number: "MANUAL-001",
         agency: "General Services Administration",
+        classification: "internal",
       })
     );
   });
@@ -207,5 +208,23 @@ describe("OpportunitiesPage", () => {
     expect(
       await screen.findByText("Unqualified Legacy Support RFP")
     ).toBeInTheDocument();
+  });
+
+  it("passes source, jurisdiction, and currency filters to list API", async () => {
+    render(<OpportunitiesPage />);
+    await screen.findByText("Track and manage government contract opportunities");
+
+    await userEvent.click(screen.getByRole("button", { name: "Filters" }));
+    await userEvent.selectOptions(screen.getByLabelText("Source Type"), "canada_provincial");
+    await userEvent.selectOptions(screen.getByLabelText("Jurisdiction"), "CA-ON");
+    await userEvent.selectOptions(screen.getByLabelText("Currency"), "CAD");
+
+    await waitFor(() => {
+      expect(mockedRfpApi.list).toHaveBeenLastCalledWith({
+        source_type: "canada_provincial",
+        jurisdiction: "CA-ON",
+        currency: "CAD",
+      });
+    });
   });
 });

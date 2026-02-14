@@ -66,3 +66,39 @@ class SubscriptionRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SignalIngestResponse(BaseModel):
+    created: int
+    updated: int = 0
+    skipped: int = 0
+    source_breakdown: dict[str, int] = {}
+
+
+class SignalRescoreResponse(BaseModel):
+    updated: int
+    average_score: float
+
+
+class SignalDigestItem(BaseModel):
+    signal_id: int
+    title: str
+    signal_type: SignalType
+    agency: str | None
+    relevance_score: float
+    source_url: str | None
+    published_at: datetime | None
+
+
+class SignalDigestPreview(BaseModel):
+    period_days: int
+    total_unread: int
+    included_count: int
+    type_breakdown: dict[str, int]
+    top_signals: list[SignalDigestItem]
+
+
+class SignalDigestSendResponse(SignalDigestPreview):
+    recipient_email: str
+    sent_at: datetime
+    simulated: bool = True

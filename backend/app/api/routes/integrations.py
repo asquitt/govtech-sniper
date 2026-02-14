@@ -101,6 +101,33 @@ PROVIDER_DEFINITIONS: dict[IntegrationProvider, dict[str, Any]] = {
         "supports_sync": True,
         "supports_webhooks": True,
     },
+    IntegrationProvider.UNANET: {
+        "label": "Unanet",
+        "category": "erp",
+        "required_fields": [
+            {"key": "base_url", "label": "Base URL", "secret": False},
+        ],
+        "optional_fields": [
+            {"key": "auth_type", "label": "Auth Type (bearer/api_key/basic)", "secret": False},
+            {"key": "access_token", "label": "Access Token", "secret": True},
+            {"key": "api_key", "label": "API Key", "secret": True},
+            {"key": "api_key_header", "label": "API Key Header", "secret": False},
+            {"key": "username", "label": "Username", "secret": False},
+            {"key": "password", "label": "Password", "secret": True},
+            {"key": "projects_endpoint", "label": "Projects Endpoint", "secret": False},
+            {"key": "resources_endpoint", "label": "Resources Endpoint", "secret": False},
+            {"key": "financials_endpoint", "label": "Financials Endpoint", "secret": False},
+            {"key": "sync_endpoint", "label": "Project Sync Endpoint", "secret": False},
+            {"key": "resource_sync_endpoint", "label": "Resource Sync Endpoint", "secret": False},
+            {
+                "key": "financial_sync_endpoint",
+                "label": "Financial Sync Endpoint",
+                "secret": False,
+            },
+        ],
+        "supports_sync": True,
+        "supports_webhooks": False,
+    },
     IntegrationProvider.WORD_ADDIN: {
         "label": "Word Add-in",
         "category": "productivity",

@@ -28,6 +28,8 @@ class TestDataSources:
             "oasis",
             "sled_bidnet",
             "dibbs",
+            "canada_buyandsell",
+            "canada_provincial",
         }.issubset(provider_names)
 
     @pytest.mark.asyncio
@@ -232,3 +234,54 @@ class TestDataSources:
         payload = response.json()
         assert payload["searched"] >= 1
         assert payload["created"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_canadian_provincial_ingest_sets_currency_and_jurisdiction(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        monkeypatch,
+    ):
+        provider = get_provider("canada_provincial")
+        assert provider is not None
+
+        async def fake_search(_params):
+            return [
+                RawOpportunity(
+                    external_id="CA-ON-TEST-001",
+                    title="Ontario Cybersecurity Services",
+                    agency="Ontario Shared Services",
+                    description="Provincial managed security services RFP.",
+                    posted_date="2026-02-12",
+                    response_deadline="2026-03-15T17:00:00",
+                    estimated_value=800000,
+                    naics_code="541512",
+                    source_url="https://ontariotenders.bravosolution.com/",
+                    source_type="canada_provincial",
+                    jurisdiction="CA-ON",
+                    currency="CAD",
+                    raw_data={"provincial_portal_url": "https://ontariotenders.bravosolution.com/"},
+                )
+            ]
+
+        monkeypatch.setattr(provider, "search", fake_search)
+
+        ingest_response = await client.post(
+            "/api/v1/data-sources/canada_provincial/ingest",
+            headers=auth_headers,
+            json={"keywords": "cybersecurity", "limit": 5},
+        )
+        assert ingest_response.status_code == 200
+        assert ingest_response.json()["created"] == 1
+
+        list_response = await client.get(
+            "/api/v1/rfps",
+            headers=auth_headers,
+            params={"jurisdiction": "CA-ON", "currency": "CAD"},
+        )
+        assert list_response.status_code == 200
+        records = list_response.json()
+        assert len(records) == 1
+        assert records[0]["source_type"] == "canada_provincial"
+        assert records[0]["jurisdiction"] == "CA-ON"
+        assert records[0]["currency"] == "CAD"

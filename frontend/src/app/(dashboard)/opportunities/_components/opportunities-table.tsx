@@ -98,9 +98,28 @@ export function OpportunitiesTable({
                     </div>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm">{rfp.agency}</span>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm">{rfp.agency}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {rfp.source_type && (
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {rfp.source_type}
+                          </Badge>
+                        )}
+                        {rfp.jurisdiction && (
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {rfp.jurisdiction}
+                          </Badge>
+                        )}
+                        {rfp.currency && (
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {rfp.currency}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="p-4">

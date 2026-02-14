@@ -9,6 +9,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.contract import ContractStatus, ContractType, DeliverableStatus
+from app.models.proposal import DataClassification
 
 
 class ContractCreate(BaseModel):
@@ -22,6 +23,7 @@ class ContractCreate(BaseModel):
     end_date: date | None = None
     value: float | None = None
     status: ContractStatus = ContractStatus.ACTIVE
+    classification: DataClassification = DataClassification.INTERNAL
     summary: str | None = None
 
 
@@ -34,6 +36,7 @@ class ContractUpdate(BaseModel):
     end_date: date | None = None
     value: float | None = None
     status: ContractStatus | None = None
+    classification: DataClassification | None = None
     summary: str | None = None
 
 
@@ -44,6 +47,7 @@ class ContractRead(BaseModel):
     parent_contract_id: int | None
     contract_number: str
     title: str
+    classification: DataClassification
     agency: str | None
     contract_type: ContractType | None
     start_date: date | None

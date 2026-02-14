@@ -1,11 +1,17 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { SignalType } from "@/types/signals";
+import type {
+  SignalDigestPreview,
+  SignalDigestSendResponse,
+  SignalType,
+} from "@/types/signals";
+import { signalApi } from "@/lib/api/signals";
 import {
   useSignalFeed,
   useSignalSubscription,
@@ -30,10 +36,21 @@ const SIGNAL_TYPE_COLORS: Record<SignalType, string> = {
 };
 
 export default function SignalsPage() {
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<SignalType | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(false);
   const [keywords, setKeywords] = useState("");
+  const [digestEnabled, setDigestEnabled] = useState(false);
+  const [digestFrequency, setDigestFrequency] = useState<"daily" | "weekly">("daily");
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [digestPreview, setDigestPreview] = useState<SignalDigestPreview | null>(null);
+  const [lastDigestSend, setLastDigestSend] = useState<SignalDigestSendResponse | null>(null);
+  const [isIngestingNews, setIsIngestingNews] = useState(false);
+  const [isAnalyzingBudget, setIsAnalyzingBudget] = useState(false);
+  const [isRescoring, setIsRescoring] = useState(false);
+  const [isPreviewingDigest, setIsPreviewingDigest] = useState(false);
+  const [isSendingDigest, setIsSendingDigest] = useState(false);
 
   const feedParams = useMemo(
     () => ({ signal_type: filter, limit: 50 }),
@@ -47,12 +64,19 @@ export default function SignalsPage() {
   const signals = feedData?.signals ?? [];
   const total = feedData?.total ?? 0;
 
-  // Sync keywords from subscription on first load
   useEffect(() => {
-    if (subscription?.keywords) {
-      setKeywords(subscription.keywords.join(", "));
-    }
+    if (!subscription) return;
+    setKeywords(subscription.keywords.join(", "));
+    setDigestEnabled(subscription.email_digest_enabled);
+    setDigestFrequency(subscription.digest_frequency);
   }, [subscription]);
+
+  const refreshSignalData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["signal-feed"] }),
+      queryClient.invalidateQueries({ queryKey: ["signal-subscription"] }),
+    ]);
+  };
 
   const handleMarkRead = (id: number) => {
     markRead.mutate(id, {
@@ -69,14 +93,101 @@ export default function SignalsPage() {
           .split(",")
           .map((k) => k.trim())
           .filter(Boolean),
-        email_digest_enabled: subscription?.email_digest_enabled ?? false,
-        digest_frequency: subscription?.digest_frequency ?? "daily",
+        email_digest_enabled: digestEnabled,
+        digest_frequency: digestFrequency,
       },
       {
-        onSuccess: () => setShowSettings(false),
+        onSuccess: () => {
+          setShowSettings(false);
+          setActionMessage("Subscription preferences saved.");
+        },
         onError: () => setError("Failed to save subscription."),
       }
     );
+  };
+
+  const handleIngestNews = async () => {
+    setIsIngestingNews(true);
+    setError(null);
+    setActionMessage(null);
+    try {
+      const result = await signalApi.ingestNews({ max_items_per_source: 8 });
+      setActionMessage(
+        `News ingestion completed: ${result.created} created, ${result.skipped} skipped duplicates.`
+      );
+      await refreshSignalData();
+    } catch {
+      setError("Failed to ingest news sources.");
+    } finally {
+      setIsIngestingNews(false);
+    }
+  };
+
+  const handleAnalyzeBudget = async () => {
+    setIsAnalyzingBudget(true);
+    setError(null);
+    setActionMessage(null);
+    try {
+      const result = await signalApi.ingestBudgetAnalysis({ limit: 25 });
+      setActionMessage(`Budget analysis completed: ${result.created} budget signals generated.`);
+      await refreshSignalData();
+    } catch {
+      setError("Failed to analyze budget documents.");
+    } finally {
+      setIsAnalyzingBudget(false);
+    }
+  };
+
+  const handleRescore = async () => {
+    setIsRescoring(true);
+    setError(null);
+    setActionMessage(null);
+    try {
+      const result = await signalApi.rescore({ unread_only: false });
+      setActionMessage(
+        `Signals rescored: ${result.updated} updated (avg relevance ${result.average_score}%).`
+      );
+      await refreshSignalData();
+    } catch {
+      setError("Failed to rescore signals.");
+    } finally {
+      setIsRescoring(false);
+    }
+  };
+
+  const handlePreviewDigest = async () => {
+    setIsPreviewingDigest(true);
+    setError(null);
+    try {
+      const preview = await signalApi.digestPreview({
+        period_days: digestFrequency === "weekly" ? 7 : 1,
+      });
+      setDigestPreview(preview);
+      setLastDigestSend(null);
+    } catch {
+      setError("Failed to load digest preview.");
+    } finally {
+      setIsPreviewingDigest(false);
+    }
+  };
+
+  const handleSendDigest = async () => {
+    setIsSendingDigest(true);
+    setError(null);
+    try {
+      const sent = await signalApi.sendDigest({
+        period_days: digestFrequency === "weekly" ? 7 : 1,
+      });
+      setLastDigestSend(sent);
+      setDigestPreview(sent);
+      setActionMessage(
+        `Digest sent to ${sent.recipient_email} with ${sent.included_count} signal highlights.`
+      );
+    } catch {
+      setError("Failed to send digest. Ensure digest is enabled in subscription settings.");
+    } finally {
+      setIsSendingDigest(false);
+    }
   };
 
   return (
@@ -105,13 +216,21 @@ export default function SignalsPage() {
           </div>
         )}
 
-        {/* Subscription Settings */}
+        {actionMessage && (
+          <div
+            data-testid="signals-action-message"
+            className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800"
+          >
+            {actionMessage}
+          </div>
+        )}
+
         {showSettings && (
           <Card>
             <CardHeader>
               <CardTitle>Subscription Preferences</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <div>
                 <label className="text-sm font-medium">Keywords (comma-separated)</label>
                 <input
@@ -121,6 +240,33 @@ export default function SignalsPage() {
                   onChange={(e) => setKeywords(e.target.value)}
                 />
               </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  id="signals-digest-enabled"
+                  type="checkbox"
+                  checked={digestEnabled}
+                  onChange={(event) => setDigestEnabled(event.target.checked)}
+                />
+                <label htmlFor="signals-digest-enabled" className="text-sm">
+                  Enable market signals email digest
+                </label>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Digest Frequency</label>
+                <select
+                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm bg-background"
+                  value={digestFrequency}
+                  onChange={(event) =>
+                    setDigestFrequency(event.target.value as "daily" | "weekly")
+                  }
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+
               <Button size="sm" onClick={handleSaveSubscription}>
                 Save Preferences
               </Button>
@@ -128,7 +274,76 @@ export default function SignalsPage() {
           </Card>
         )}
 
-        {/* Filter bar */}
+        <Card data-testid="signals-automation-card">
+          <CardHeader>
+            <CardTitle>Automation</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={handleIngestNews} disabled={isIngestingNews}>
+              {isIngestingNews ? "Ingesting..." : "Ingest News"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAnalyzeBudget}
+              disabled={isAnalyzingBudget}
+            >
+              {isAnalyzingBudget ? "Analyzing..." : "Analyze Budget Docs"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleRescore} disabled={isRescoring}>
+              {isRescoring ? "Rescoring..." : "Rescore Signals"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handlePreviewDigest}
+              disabled={isPreviewingDigest}
+            >
+              {isPreviewingDigest ? "Loading..." : "Preview Digest"}
+            </Button>
+            <Button size="sm" onClick={handleSendDigest} disabled={isSendingDigest}>
+              {isSendingDigest ? "Sending..." : "Send Digest"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {digestPreview && (
+          <Card data-testid="signals-digest-preview-card">
+            <CardHeader>
+              <CardTitle>Digest Preview ({digestPreview.period_days} day window)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {digestPreview.included_count} of {digestPreview.total_unread} unread signals included.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {Object.entries(digestPreview.type_breakdown).map(([type, count]) => (
+                  <Badge key={type} variant="outline">
+                    {type}: {count}
+                  </Badge>
+                ))}
+              </div>
+              {lastDigestSend && (
+                <p className="text-xs text-muted-foreground">
+                  Last sent to {lastDigestSend.recipient_email} at{" "}
+                  {new Date(lastDigestSend.sent_at).toLocaleString()}.
+                </p>
+              )}
+              <div className="space-y-2">
+                {digestPreview.top_signals.map((item) => (
+                  <div key={item.signal_id} className="rounded border p-2">
+                    <p className="text-sm font-medium">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {Math.round(item.relevance_score)}% relevance
+                      {item.agency ? ` • ${item.agency}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex gap-2 flex-wrap">
           <Button
             variant={!filter ? "default" : "outline"}
@@ -149,7 +364,6 @@ export default function SignalsPage() {
           ))}
         </div>
 
-        {/* Signal Feed */}
         <Card>
           <CardHeader>
             <CardTitle>Signal Feed</CardTitle>

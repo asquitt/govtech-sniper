@@ -27,6 +27,10 @@ export default function OpportunitiesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showRecommended, setShowRecommended] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [sourceTypeFilter, setSourceTypeFilter] = useState("");
+  const [jurisdictionFilter, setJurisdictionFilter] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
   const [syncCooldownSeconds, setSyncCooldownSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
@@ -46,7 +50,11 @@ export default function OpportunitiesPage() {
       setError(null);
 
       const [rfpList, rfpStats, savedSearchList] = await Promise.all([
-        rfpApi.list(),
+        rfpApi.list({
+          source_type: sourceTypeFilter || undefined,
+          jurisdiction: jurisdictionFilter || undefined,
+          currency: currencyFilter || undefined,
+        }),
         rfpApi.getStats(),
         savedSearchApi.list(),
       ]);
@@ -65,7 +73,7 @@ export default function OpportunitiesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currencyFilter, jurisdictionFilter, sourceTypeFilter]);
 
   useEffect(() => {
     fetchRfps();
@@ -243,9 +251,9 @@ export default function OpportunitiesPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => setShowFilters((prev) => !prev)}>
             <Filter className="w-4 h-4" />
-            Filters
+            {showFilters ? "Hide Filters" : "Filters"}
           </Button>
           <Button
             variant={showCreateRfp ? "default" : "outline"}
@@ -255,6 +263,82 @@ export default function OpportunitiesPage() {
             Add RFP
           </Button>
         </div>
+
+        {showFilters && (
+          <Card className="mb-4 border border-border">
+            <CardContent className="p-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+              <label className="text-xs text-muted-foreground">
+                Source Type
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                  value={sourceTypeFilter}
+                  onChange={(event) => setSourceTypeFilter(event.target.value)}
+                >
+                  <option value="">Any Source</option>
+                  <option value="federal">Federal</option>
+                  <option value="sled">SLED</option>
+                  <option value="canada_buyandsell">Canada Buy & Sell</option>
+                  <option value="canada_provincial">Canada Provincial</option>
+                  <option value="fpds">FPDS</option>
+                  <option value="email">Email</option>
+                </select>
+              </label>
+
+              <label className="text-xs text-muted-foreground">
+                Jurisdiction
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                  value={jurisdictionFilter}
+                  onChange={(event) => setJurisdictionFilter(event.target.value)}
+                >
+                  <option value="">Any Jurisdiction</option>
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="CA-AB">Canada - Alberta</option>
+                  <option value="CA-BC">Canada - British Columbia</option>
+                  <option value="CA-MB">Canada - Manitoba</option>
+                  <option value="CA-NB">Canada - New Brunswick</option>
+                  <option value="CA-NL">Canada - Newfoundland and Labrador</option>
+                  <option value="CA-NS">Canada - Nova Scotia</option>
+                  <option value="CA-NT">Canada - Northwest Territories</option>
+                  <option value="CA-NU">Canada - Nunavut</option>
+                  <option value="CA-ON">Canada - Ontario</option>
+                  <option value="CA-PE">Canada - Prince Edward Island</option>
+                  <option value="CA-QC">Canada - Quebec</option>
+                  <option value="CA-SK">Canada - Saskatchewan</option>
+                  <option value="CA-YT">Canada - Yukon</option>
+                </select>
+              </label>
+
+              <label className="text-xs text-muted-foreground">
+                Currency
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                  value={currencyFilter}
+                  onChange={(event) => setCurrencyFilter(event.target.value)}
+                >
+                  <option value="">Any Currency</option>
+                  <option value="USD">USD</option>
+                  <option value="CAD">CAD</option>
+                </select>
+              </label>
+
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setSourceTypeFilter("");
+                    setJurisdictionFilter("");
+                    setCurrencyFilter("");
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {showCreateRfp && (
           <CreateRfpForm

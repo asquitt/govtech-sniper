@@ -1,6 +1,7 @@
 import api from "./client";
 import type {
   CapabilityGapResult,
+  TeamingPartnerCohortDrilldownResponse,
   TeamingDigestPreview,
   TeamingDigestSchedule,
   TeamingNDA,
@@ -59,6 +60,16 @@ export const teamingBoardApi = {
   ): Promise<TeamingPartnerTrendDrilldownResponse> => {
     const { data } = await api.get("/teaming/requests/partner-trends", {
       params: { days },
+    });
+    return data;
+  },
+
+  getPartnerCohorts: async (
+    days = 30,
+    topN = 8
+  ): Promise<TeamingPartnerCohortDrilldownResponse> => {
+    const { data } = await api.get("/teaming/requests/partner-cohorts", {
+      params: { days, top_n: topN },
     });
     return data;
   },

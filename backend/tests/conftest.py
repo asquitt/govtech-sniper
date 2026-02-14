@@ -5,8 +5,12 @@ Pytest fixtures and configuration for testing.
 """
 
 import asyncio
+import os
+import tempfile
+import uuid
 from collections.abc import AsyncGenerator, Generator
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -24,8 +28,14 @@ from app.models.user import User
 from app.services.auth_service import create_token_pair, hash_password
 from app.services.cache_service import cache_clear
 
-# Test database URL - use SQLite for testing
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+# Test database URL - use isolated SQLite file for deterministic test runs.
+_test_db_path = os.getenv("TEST_DB_PATH")
+if not _test_db_path:
+    _test_db_path = str(
+        Path(tempfile.gettempdir()) / f"govtech_sniper_test_{os.getpid()}_{uuid.uuid4().hex}.db"
+    )
+TEST_DB_PATH = Path(_test_db_path).resolve()
+TEST_DATABASE_URL = f"sqlite+aiosqlite:///{TEST_DB_PATH}"
 
 # Create test engine
 test_engine = create_async_engine(
@@ -48,6 +58,16 @@ def event_loop() -> Generator:
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_db_file() -> Generator[None, None, None]:
+    """Remove isolated sqlite db artifacts after the test session."""
+    yield
+    for suffix in ("", "-journal", "-wal", "-shm"):
+        target = Path(f"{TEST_DB_PATH}{suffix}")
+        if target.exists():
+            target.unlink()
 
 
 @pytest_asyncio.fixture(scope="function")

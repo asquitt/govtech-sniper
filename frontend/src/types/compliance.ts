@@ -99,3 +99,74 @@ export interface ComplianceReadiness {
   programs: ComplianceReadinessProgram[];
   last_updated: string;
 }
+
+export interface ComplianceReadinessCheckpoint {
+  checkpoint_id: string;
+  program_id: string;
+  title: string;
+  status: string;
+  target_date: string;
+  owner: string;
+  third_party_required: boolean;
+  evidence_items_ready: number;
+  evidence_items_total: number;
+}
+
+export interface ComplianceReadinessCheckpointSnapshot {
+  checkpoints: ComplianceReadinessCheckpoint[];
+  generated_at: string;
+}
+
+export interface GovCloudMigrationPhase {
+  phase_id: string;
+  title: string;
+  status: string;
+  target_date: string;
+  owner: string;
+  exit_criteria: string[];
+}
+
+export interface GovCloudDeploymentProfile {
+  program_id: string;
+  provider: string;
+  status: string;
+  target_regions: string[];
+  boundary_services: string[];
+  identity_federation_status: string;
+  network_isolation_status: string;
+  data_residency_status: string;
+  migration_phases: GovCloudMigrationPhase[];
+  updated_at: string;
+}
+
+export interface SOC2ControlDomainStatus {
+  domain_id: string;
+  domain_name: string;
+  controls_total: number;
+  controls_ready: number;
+  percent_complete: number;
+  owner: string;
+}
+
+export interface SOC2Milestone {
+  milestone_id: string;
+  title: string;
+  status: string;
+  due_date: string;
+  owner: string;
+  evidence_ready: boolean;
+  notes: string;
+}
+
+export interface SOC2Readiness {
+  program_id: string;
+  name: string;
+  status: string;
+  audit_firm_status: string;
+  observation_window_start: string;
+  observation_window_end: string;
+  overall_percent_complete: number;
+  domains: SOC2ControlDomainStatus[];
+  milestones: SOC2Milestone[];
+  updated_at: string;
+}

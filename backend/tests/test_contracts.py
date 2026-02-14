@@ -25,10 +25,12 @@ class TestContracts:
                 "title": "Test Contract",
                 "agency": "Test Agency",
                 "status": "active",
+                "classification": "fci",
             },
         )
         assert response.status_code == 200
         contract = response.json()
+        assert contract["classification"] == "fci"
 
         # List contracts
         response = await client.get("/api/v1/contracts", headers=auth_headers)
@@ -40,10 +42,11 @@ class TestContracts:
         response = await client.patch(
             f"/api/v1/contracts/{contract['id']}",
             headers=auth_headers,
-            json={"status": "at_risk"},
+            json={"status": "at_risk", "classification": "cui"},
         )
         assert response.status_code == 200
         assert response.json()["status"] == "at_risk"
+        assert response.json()["classification"] == "cui"
 
         # Create child contract under parent contract
         response = await client.post(

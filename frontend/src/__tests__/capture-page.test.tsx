@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { vi } from "vitest";
 import CapturePage from "@/app/(dashboard)/capture/page";
 import { captureApi, rfpApi } from "@/lib/api";
+import { renderWithQueryClient } from "@/test/react-query";
 
 vi.mock("@/lib/api", () => ({
   captureApi: {
@@ -17,6 +18,10 @@ vi.mock("@/lib/api", () => ({
     listGateReviews: vi.fn(),
     listCompetitors: vi.fn(),
     getMatchInsight: vi.fn(),
+    listScorecards: vi.fn(),
+    getBidSummary: vi.fn(),
+    aiEvaluateBid: vi.fn(),
+    simulateBidScenarios: vi.fn(),
     createCompetitor: vi.fn(),
     removeCompetitor: vi.fn(),
   },
@@ -71,6 +76,16 @@ describe("CapturePage", () => {
     mockedCaptureApi.listPartnerLinks.mockResolvedValue({ links: [], total: 0 });
     mockedCaptureApi.listGateReviews.mockResolvedValue([]);
     mockedCaptureApi.listCompetitors.mockResolvedValue([]);
+    mockedCaptureApi.listScorecards.mockResolvedValue([]);
+    mockedCaptureApi.getBidSummary.mockResolvedValue({
+      total_votes: 0,
+      ai_score: null,
+      human_avg: null,
+      overall_recommendation: null,
+      bid_count: 0,
+      no_bid_count: 0,
+      conditional_count: 0,
+    });
     mockedCaptureApi.getMatchInsight.mockResolvedValue({
       plan_id: 1,
       rfp_id: 1,
@@ -80,7 +95,7 @@ describe("CapturePage", () => {
   });
 
   it("renders capture pipeline header", async () => {
-    render(<CapturePage />);
+    renderWithQueryClient(<CapturePage />);
     expect(
       await screen.findByText(
         "Track bid decisions, gate reviews, and teaming partners"

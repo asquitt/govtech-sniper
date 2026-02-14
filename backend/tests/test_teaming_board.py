@@ -145,7 +145,12 @@ class TestTeamingBoard:
         make_receiver_partner_public = await client.patch(
             f"/api/v1/teaming/my-profile/{receiver_partner_id}",
             headers=receiver_headers,
-            params={"is_public": True},
+            params={
+                "is_public": True,
+                "naics_codes": ["541512"],
+                "set_asides": ["8a"],
+                "capabilities": ["Cloud migration"],
+            },
         )
         assert make_receiver_partner_public.status_code == 200
         assert make_receiver_partner_public.json()["is_public"] is True
@@ -223,6 +228,20 @@ class TestTeamingBoard:
         partner_trends_payload = partner_trends.json()
         assert partner_trends_payload["days"] == 30
         assert len(partner_trends_payload["partners"]) >= 1
+
+        partner_cohorts = await client.get(
+            "/api/v1/teaming/requests/partner-cohorts",
+            headers=auth_headers,
+            params={"days": 30, "top_n": 10},
+        )
+        assert partner_cohorts.status_code == 200
+        partner_cohort_payload = partner_cohorts.json()
+        assert partner_cohort_payload["days"] == 30
+        assert partner_cohort_payload["total_sent"] >= 1
+        assert len(partner_cohort_payload["naics_cohorts"]) >= 1
+        assert len(partner_cohort_payload["set_aside_cohorts"]) >= 1
+        assert partner_cohort_payload["naics_cohorts"][0]["cohort_value"] == "541512"
+        assert partner_cohort_payload["set_aside_cohorts"][0]["cohort_value"] == "8a"
 
         digest_schedule = await client.get(
             "/api/v1/teaming/digest-schedule",

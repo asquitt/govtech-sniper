@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { vi } from "vitest";
 import AdminPage from "@/app/(dashboard)/admin/page";
 import { adminApi } from "@/lib/api";
@@ -14,6 +14,8 @@ vi.mock("@/lib/api", () => ({
     listMemberInvitations: vi.fn(),
     inviteMember: vi.fn(),
     activateMemberInvitation: vi.fn(),
+    revokeMemberInvitation: vi.fn(),
+    resendMemberInvitation: vi.fn(),
     updateMemberRole: vi.fn(),
     deactivateMember: vi.fn(),
     reactivateMember: vi.fn(),
@@ -41,6 +43,8 @@ describe("AdminPage invitation flow", () => {
       primary_color: null,
       ip_allowlist: [],
       data_retention_days: 365,
+      require_step_up_for_sensitive_exports: true,
+      require_step_up_for_sensitive_shares: true,
       member_count: 1,
       created_at: "2026-02-10T12:00:00Z",
     });
@@ -56,6 +60,25 @@ describe("AdminPage invitation flow", () => {
         accepted_user_id: null,
         invited_by_user_id: 1,
         activation_ready: true,
+        invite_age_hours: 24,
+        invite_age_days: 1,
+        days_until_expiry: 10,
+        sla_state: "healthy",
+      },
+      {
+        id: 43,
+        email: "pending@example.com",
+        role: "viewer",
+        status: "pending",
+        expires_at: "2026-02-19T12:00:00Z",
+        activated_at: null,
+        accepted_user_id: null,
+        invited_by_user_id: 1,
+        activation_ready: false,
+        invite_age_hours: 46,
+        invite_age_days: 2,
+        days_until_expiry: 9,
+        sla_state: "expiring",
       },
     ]);
     mockedAdminApi.getUsageAnalytics.mockResolvedValue({
@@ -110,6 +133,10 @@ describe("AdminPage invitation flow", () => {
       accepted_user_id: null,
       invited_by_user_id: 1,
       activation_ready: false,
+      invite_age_hours: 0,
+      invite_age_days: 0,
+      days_until_expiry: 8,
+      sla_state: "healthy",
     });
     mockedAdminApi.activateMemberInvitation.mockResolvedValue({
       id: 41,
@@ -121,6 +148,40 @@ describe("AdminPage invitation flow", () => {
       accepted_user_id: 99,
       invited_by_user_id: 1,
       activation_ready: true,
+      invite_age_hours: 25,
+      invite_age_days: 1,
+      days_until_expiry: 9,
+      sla_state: "completed",
+    });
+    mockedAdminApi.resendMemberInvitation.mockResolvedValue({
+      id: 43,
+      email: "pending@example.com",
+      role: "viewer",
+      status: "pending",
+      expires_at: "2026-02-24T12:00:00Z",
+      activated_at: null,
+      accepted_user_id: null,
+      invited_by_user_id: 1,
+      activation_ready: false,
+      invite_age_hours: 0,
+      invite_age_days: 0,
+      days_until_expiry: 14,
+      sla_state: "healthy",
+    });
+    mockedAdminApi.revokeMemberInvitation.mockResolvedValue({
+      id: 43,
+      email: "pending@example.com",
+      role: "viewer",
+      status: "revoked",
+      expires_at: "2026-02-24T12:00:00Z",
+      activated_at: null,
+      accepted_user_id: null,
+      invited_by_user_id: 1,
+      activation_ready: false,
+      invite_age_hours: 1,
+      invite_age_days: 0,
+      days_until_expiry: 13,
+      sla_state: "revoked",
     });
 
     render(<AdminPage />);
@@ -138,7 +199,20 @@ describe("AdminPage invitation flow", () => {
       })
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Activate" }));
+    const pendingRow = await screen.findByTestId("org-invitation-43");
+    fireEvent.click(within(pendingRow).getByRole("button", { name: "Resend" }));
+    await waitFor(() =>
+      expect(mockedAdminApi.resendMemberInvitation).toHaveBeenCalledWith(43, 7)
+    );
+
+    const refreshedPendingRow = await screen.findByTestId("org-invitation-43");
+    fireEvent.click(within(refreshedPendingRow).getByRole("button", { name: "Revoke" }));
+    await waitFor(() =>
+      expect(mockedAdminApi.revokeMemberInvitation).toHaveBeenCalledWith(43)
+    );
+
+    const readyRow = await screen.findByTestId("org-invitation-41");
+    fireEvent.click(within(readyRow).getByRole("button", { name: "Activate" }));
     await waitFor(() =>
       expect(mockedAdminApi.activateMemberInvitation).toHaveBeenCalledWith(41)
     );

@@ -6,6 +6,7 @@ import { dashApi, rfpApi } from "@/lib/api";
 vi.mock("@/lib/api", () => ({
   dashApi: {
     ask: vi.fn(),
+    listSessions: vi.fn(),
   },
   rfpApi: {
     list: vi.fn(),
@@ -21,6 +22,7 @@ describe("DashPage", () => {
       answer: "Mocked answer",
       citations: [],
     });
+    mockedDashApi.listSessions.mockResolvedValue([]);
     mockedRfpApi.list.mockResolvedValue([]);
   });
 

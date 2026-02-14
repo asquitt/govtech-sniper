@@ -9,22 +9,52 @@ from sqlmodel import select
 
 from app.api.deps import get_current_user
 from app.database import get_session
+from app.models.collaboration import SharedWorkspace, WorkspaceMember
 from app.models.email_ingest import EmailIngestConfig, EmailProcessingStatus, IngestedEmail
 from app.schemas.email_ingest import (
     EmailIngestConfigCreate,
     EmailIngestConfigRead,
     EmailIngestConfigUpdate,
     EmailIngestListResponse,
+    EmailIngestSyncRequest,
+    EmailIngestSyncResponse,
     IngestedEmailRead,
 )
 from app.services.auth_service import UserAuth
 from app.services.email_ingest_service import EmailIngestService
 from app.services.encryption_service import decrypt_value, encrypt_value
+from app.tasks.email_ingest_tasks import poll_email_configs, process_pending_ingested_emails
 
 router = APIRouter(prefix="/email-ingest", tags=["email-ingest"])
 
 
 # ---- Config CRUD ----
+
+
+async def _ensure_workspace_access(
+    *,
+    workspace_id: int | None,
+    current_user: UserAuth,
+    session: AsyncSession,
+) -> None:
+    if workspace_id is None:
+        return
+
+    workspace = await session.get(SharedWorkspace, workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if workspace.owner_id == current_user.id:
+        return
+
+    member_result = await session.execute(
+        select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id,
+            WorkspaceMember.user_id == current_user.id,
+        )
+    )
+    if not member_result.scalars().first():
+        raise HTTPException(status_code=403, detail="Not authorized for workspace")
 
 
 @router.post("/config", response_model=EmailIngestConfigRead)
@@ -33,13 +63,21 @@ async def create_config(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> EmailIngestConfigRead:
+    await _ensure_workspace_access(
+        workspace_id=payload.workspace_id,
+        current_user=current_user,
+        session=session,
+    )
     config = EmailIngestConfig(
         user_id=current_user.id,
+        workspace_id=payload.workspace_id,
         imap_server=payload.imap_server,
         imap_port=payload.imap_port,
         email_address=payload.email_address,
         encrypted_password=encrypt_value(payload.password),
         folder=payload.folder,
+        auto_create_rfps=payload.auto_create_rfps,
+        min_rfp_confidence=payload.min_rfp_confidence,
     )
     session.add(config)
     await session.commit()
@@ -79,6 +117,12 @@ async def update_config(
         raise HTTPException(status_code=404, detail="Config not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "workspace_id" in update_data:
+        await _ensure_workspace_access(
+            workspace_id=update_data.get("workspace_id"),
+            current_user=current_user,
+            session=session,
+        )
     if "password" in update_data:
         config.encrypted_password = encrypt_value(update_data.pop("password"))
     for field, value in update_data.items():
@@ -216,3 +260,57 @@ async def reprocess_email(
     await session.commit()
     await session.refresh(email)
     return IngestedEmailRead.model_validate(email)
+
+
+@router.post("/sync-now", response_model=EmailIngestSyncResponse)
+async def sync_now(
+    payload: EmailIngestSyncRequest,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> EmailIngestSyncResponse:
+    query = select(EmailIngestConfig).where(EmailIngestConfig.user_id == current_user.id)
+    if payload.config_id is not None:
+        query = query.where(EmailIngestConfig.id == payload.config_id)
+
+    configs = (await session.execute(query)).scalars().all()
+    if payload.config_id is not None and not configs:
+        raise HTTPException(status_code=404, detail="Config not found")
+    if not configs:
+        return EmailIngestSyncResponse(
+            configs_checked=0,
+            fetched=0,
+            duplicates=0,
+            poll_errors=0,
+            processed=0,
+            created_rfps=0,
+            inbox_forwarded=0,
+            process_errors=0,
+        )
+
+    poll_summary = {"configs_checked": len(configs), "fetched": 0, "duplicates": 0, "errors": 0}
+    if payload.run_poll:
+        poll_summary = await poll_email_configs(
+            session,
+            configs=configs,
+            limit=payload.poll_limit,
+        )
+
+    process_summary = {"processed": 0, "created_rfps": 0, "inbox_forwarded": 0, "errors": 0}
+    if payload.run_process:
+        process_summary = await process_pending_ingested_emails(
+            session,
+            config_ids=[config.id for config in configs],
+            limit=payload.process_limit,
+        )
+
+    await session.commit()
+    return EmailIngestSyncResponse(
+        configs_checked=poll_summary["configs_checked"],
+        fetched=poll_summary["fetched"],
+        duplicates=poll_summary["duplicates"],
+        poll_errors=poll_summary["errors"],
+        processed=process_summary["processed"],
+        created_rfps=process_summary["created_rfps"],
+        inbox_forwarded=process_summary["inbox_forwarded"],
+        process_errors=process_summary["errors"],
+    )

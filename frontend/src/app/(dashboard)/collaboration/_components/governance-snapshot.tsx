@@ -15,6 +15,8 @@ interface GovernanceSnapshotProps {
   governanceTrends: ShareGovernanceTrends | null;
   governanceAnomalies: GovernanceAnomaly[];
   isExportingAudit: boolean;
+  stepUpCode: string;
+  onStepUpCodeChange: (code: string) => void;
   onExportAudit: () => void;
 }
 
@@ -23,6 +25,8 @@ export function GovernanceSnapshot({
   governanceTrends,
   governanceAnomalies,
   isExportingAudit,
+  stepUpCode,
+  onStepUpCodeChange,
   onExportAudit,
 }: GovernanceSnapshotProps) {
   const latestTrendPoints = (governanceTrends?.points ?? []).slice(-7).reverse();
@@ -30,18 +34,34 @@ export function GovernanceSnapshot({
   return (
     <>
       <div className="rounded-lg border border-border bg-card p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
           <p className="text-sm font-medium text-foreground">Governance Snapshot</p>
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="export-governance-audit"
-            disabled={isExportingAudit}
-            onClick={onExportAudit}
-          >
-            <Download className="w-3.5 h-3.5" />
-            Export Audit CSV
-          </Button>
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="mb-1 block text-[11px] text-muted-foreground">
+                Step-up code
+              </label>
+              <input
+                aria-label="Audit export step-up code"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="h-8 w-28 rounded-md border border-input bg-background px-2 text-xs"
+                value={stepUpCode}
+                onChange={(event) => onStepUpCodeChange(event.target.value)}
+                placeholder="123456"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="export-governance-audit"
+              disabled={isExportingAudit}
+              onClick={onExportAudit}
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export Audit CSV
+            </Button>
+          </div>
         </div>
         {governanceSummary ? (
           <div className="space-y-2">

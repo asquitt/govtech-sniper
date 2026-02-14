@@ -22,6 +22,7 @@ from app.models.user import User
 
 from .helpers import _require_org_admin
 from .schemas import (
+    InvitationResendRequest,
     InviteMember,
     MemberRoleUpdate,
     OrganizationInvitationRead,
@@ -29,6 +30,47 @@ from .schemas import (
 )
 
 router = APIRouter()
+
+
+def _invitation_metrics(invitation: OrganizationInvitation) -> tuple[int, int, int, str]:
+    """Compute invitation SLA metadata for admin operations."""
+    now = datetime.utcnow()
+    age_delta = now - invitation.created_at
+    invite_age_hours = max(0, int(age_delta.total_seconds() // 3600))
+    invite_age_days = invite_age_hours // 24
+    days_until_expiry = int((invitation.expires_at - now).total_seconds() // 86400)
+
+    status = invitation.status
+    if status == InvitationStatus.ACTIVATED:
+        sla_state = "completed"
+    elif status == InvitationStatus.REVOKED:
+        sla_state = "revoked"
+    elif status == InvitationStatus.EXPIRED or days_until_expiry < 0:
+        sla_state = "expired"
+    elif days_until_expiry <= 1:
+        sla_state = "expiring"
+    elif invite_age_days >= 5:
+        sla_state = "aging"
+    else:
+        sla_state = "healthy"
+
+    return invite_age_hours, invite_age_days, days_until_expiry, sla_state
+
+
+async def _serialize_invitation_with_metrics(
+    invitation: OrganizationInvitation,
+    *,
+    activation_ready: bool,
+) -> OrganizationInvitationRead:
+    age_hours, age_days, days_until_expiry, sla_state = _invitation_metrics(invitation)
+    return _serialize_org_invitation(
+        invitation,
+        activation_ready=activation_ready,
+        invite_age_hours=age_hours,
+        invite_age_days=age_days,
+        days_until_expiry=days_until_expiry,
+        sla_state=sla_state,
+    )
 
 
 @router.post("/members/invite", response_model=OrganizationInvitationRead, status_code=201)
@@ -93,7 +135,10 @@ async def invite_member(
     await session.commit()
     await session.refresh(invitation)
 
-    return _serialize_org_invitation(invitation, activation_ready=existing_user is not None)
+    return await _serialize_invitation_with_metrics(
+        invitation,
+        activation_ready=existing_user is not None,
+    )
 
 
 @router.get("/member-invitations", response_model=list[OrganizationInvitationRead])
@@ -131,7 +176,7 @@ async def list_member_invitations(
             invite.status = InvitationStatus.EXPIRED
             session.add(invite)
         response.append(
-            _serialize_org_invitation(
+            await _serialize_invitation_with_metrics(
                 invite,
                 activation_ready=invite.email.lower() in user_by_email,
             )
@@ -165,7 +210,7 @@ async def activate_member_invitation(
         raise HTTPException(status_code=404, detail="Invitation not found")
 
     if invitation.status == InvitationStatus.ACTIVATED:
-        return _serialize_org_invitation(invitation, activation_ready=True)
+        return await _serialize_invitation_with_metrics(invitation, activation_ready=True)
 
     if invitation.expires_at <= datetime.utcnow():
         invitation.status = InvitationStatus.EXPIRED
@@ -221,7 +266,109 @@ async def activate_member_invitation(
 
     await session.commit()
     await session.refresh(invitation)
-    return _serialize_org_invitation(invitation, activation_ready=True)
+    return await _serialize_invitation_with_metrics(invitation, activation_ready=True)
+
+
+@router.post(
+    "/member-invitations/{invitation_id}/revoke",
+    response_model=OrganizationInvitationRead,
+)
+async def revoke_member_invitation(
+    invitation_id: int,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Revoke a pending/expired invitation."""
+    org, _ = await _require_org_admin(current_user, session)
+
+    invitation = (
+        await session.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.organization_id == org.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if invitation.status == InvitationStatus.ACTIVATED:
+        raise HTTPException(
+            status_code=400,
+            detail="Activated invitations cannot be revoked",
+        )
+
+    if invitation.status != InvitationStatus.REVOKED:
+        invitation.status = InvitationStatus.REVOKED
+        session.add(invitation)
+        await session.commit()
+        await session.refresh(invitation)
+
+    user = (
+        await session.execute(select(User).where(User.email == invitation.email.lower()))
+    ).scalar_one_or_none()
+    return await _serialize_invitation_with_metrics(
+        invitation,
+        activation_ready=user is not None,
+    )
+
+
+@router.post(
+    "/member-invitations/{invitation_id}/resend",
+    response_model=OrganizationInvitationRead,
+)
+async def resend_member_invitation(
+    invitation_id: int,
+    body: InvitationResendRequest,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Reissue an organization invitation token and reset expiry."""
+    org, caller_member = await _require_org_admin(current_user, session)
+    if body.expires_in_days < 1 or body.expires_in_days > 30:
+        raise HTTPException(status_code=400, detail="expires_in_days must be between 1 and 30")
+
+    invitation = (
+        await session.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.organization_id == org.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if invitation.status == InvitationStatus.ACTIVATED:
+        raise HTTPException(
+            status_code=400,
+            detail="Activated invitations cannot be resent",
+        )
+
+    if invitation.role in (OrgRole.OWNER, OrgRole.ADMIN) and caller_member.role != OrgRole.OWNER:
+        raise HTTPException(
+            status_code=403,
+            detail="Only owners can resend admin/owner invitations",
+        )
+
+    invitation.status = InvitationStatus.PENDING
+    invitation.token = secrets.token_urlsafe(32)
+    invitation.expires_at = datetime.utcnow() + timedelta(days=body.expires_in_days)
+    invitation.invited_by_user_id = current_user.id
+    invitation.accepted_user_id = None
+    invitation.activated_at = None
+    session.add(invitation)
+
+    await session.commit()
+    await session.refresh(invitation)
+
+    user = (
+        await session.execute(select(User).where(User.email == invitation.email.lower()))
+    ).scalar_one_or_none()
+    return await _serialize_invitation_with_metrics(
+        invitation,
+        activation_ready=user is not None,
+    )
 
 
 @router.get("/members")

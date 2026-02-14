@@ -7,6 +7,7 @@ Async PostgreSQL connection using SQLModel + SQLAlchemy.
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
@@ -49,6 +50,10 @@ async def init_db() -> None:
     Note: In production, use Alembic migrations instead.
     """
     async with engine.begin() as conn:
+        if conn.dialect.name.startswith("postgresql"):
+            # Ensure pgvector is available before creating vector-typed columns.
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+
         # Import all models to ensure they're registered with SQLModel
         from app.models import (  # noqa: F401
             activity,

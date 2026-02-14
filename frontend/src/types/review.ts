@@ -94,3 +94,46 @@ export interface ReviewDashboardItem {
   total_assignments: number;
   completed_assignments: number;
 }
+
+export interface ReviewPacketActionItem {
+  rank: number;
+  comment_id: number;
+  section_id?: number | null;
+  severity: CommentSeverity;
+  status: CommentStatus;
+  risk_score: number;
+  age_days: number;
+  assigned_to_user_id?: number | null;
+  recommended_action: string;
+  rationale: string;
+}
+
+export interface ReviewPacketChecklistSummary {
+  total_items: number;
+  pass_count: number;
+  fail_count: number;
+  pending_count: number;
+  na_count: number;
+  pass_rate: number;
+}
+
+export interface ReviewPacketRiskSummary {
+  open_critical: number;
+  open_major: number;
+  unresolved_comments: number;
+  highest_risk_score: number;
+  overall_risk_level: "high" | "medium" | "low";
+}
+
+export interface ReviewPacket {
+  review_id: number;
+  proposal_id: number;
+  proposal_title: string;
+  review_type: ReviewType;
+  review_status: ReviewStatus;
+  generated_at: string;
+  checklist_summary: ReviewPacketChecklistSummary;
+  risk_summary: ReviewPacketRiskSummary;
+  action_queue: ReviewPacketActionItem[];
+  recommended_exit_criteria: string[];
+}

@@ -103,6 +103,7 @@ async def create_contract(
         end_date=payload.end_date,
         value=payload.value,
         status=payload.status,
+        classification=payload.classification,
         summary=payload.summary,
     )
     await _resolve_parent_contract(session, current_user.id, payload.parent_contract_id)

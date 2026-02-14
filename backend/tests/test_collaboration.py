@@ -6,6 +6,7 @@ Integration coverage for workspace, invitation, and shared-data flows.
 
 from datetime import datetime, timedelta
 
+import pyotp
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from app.models.collaboration import (
     WorkspaceMember,
     WorkspaceRole,
 )
+from app.models.organization import Organization, OrganizationMember, OrgRole
 from app.models.rfp import RFP
 from app.models.user import User
 from app.services.auth_service import create_token_pair, hash_password
@@ -41,6 +43,71 @@ async def _create_user_and_headers(
     await db_session.refresh(user)
     tokens = create_token_pair(user.id, user.email, str(user.tier))
     return user, {"Authorization": f"Bearer {tokens.access_token}"}
+
+
+async def _configure_org_security_policy(
+    db_session: AsyncSession,
+    user_id: int,
+    *,
+    require_exports_step_up: bool = True,
+    require_shares_step_up: bool = True,
+) -> None:
+    user = (await db_session.execute(select(User).where(User.id == user_id))).scalar_one()
+    org = None
+    if user.organization_id:
+        org = (
+            await db_session.execute(
+                select(Organization).where(Organization.id == user.organization_id)
+            )
+        ).scalar_one_or_none()
+    if not org:
+        org = Organization(
+            name=f"Collab Security Org {user_id}",
+            slug=f"collab-security-org-{user_id}",
+            settings={},
+        )
+        db_session.add(org)
+        await db_session.flush()
+        user.organization_id = org.id
+        db_session.add(user)
+
+    settings_payload = dict(org.settings) if isinstance(org.settings, dict) else {}
+    settings_payload["require_step_up_for_sensitive_exports"] = require_exports_step_up
+    settings_payload["require_step_up_for_sensitive_shares"] = require_shares_step_up
+    org.settings = settings_payload
+    db_session.add(org)
+
+    membership = (
+        await db_session.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.organization_id == org.id,
+                OrganizationMember.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not membership:
+        db_session.add(
+            OrganizationMember(
+                organization_id=org.id,
+                user_id=user_id,
+                role=OrgRole.OWNER,
+                is_active=True,
+            )
+        )
+    await db_session.commit()
+
+
+async def _enable_mfa_for_user(
+    db_session: AsyncSession,
+    user_id: int,
+) -> str:
+    user = (await db_session.execute(select(User).where(User.id == user_id))).scalar_one()
+    secret = pyotp.random_base32()
+    user.mfa_enabled = True
+    user.mfa_secret = secret
+    db_session.add(user)
+    await db_session.commit()
+    return secret
 
 
 class TestCollaboration:
@@ -244,6 +311,71 @@ class TestCollaboration:
             json={"email": "allowed-after-promotion@example.com", "role": "viewer"},
         )
         assert admin_invite_attempt.status_code == 201
+
+    @pytest.mark.asyncio
+    async def test_sensitive_share_and_audit_export_require_step_up(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+        test_rfp: RFP,
+    ):
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _configure_org_security_policy(
+            db_session,
+            user.id,
+            require_exports_step_up=True,
+            require_shares_step_up=True,
+        )
+        mfa_secret = await _enable_mfa_for_user(db_session, user.id)
+
+        test_rfp.classification = "cui"
+        db_session.add(test_rfp)
+        await db_session.commit()
+
+        create_workspace = await client.post(
+            "/api/v1/collaboration/workspaces",
+            headers=auth_headers,
+            json={"name": "Sensitive Workspace", "rfp_id": test_rfp.id},
+        )
+        assert create_workspace.status_code == 201
+        workspace_id = create_workspace.json()["id"]
+
+        blocked_share = await client.post(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/share",
+            headers=auth_headers,
+            json={
+                "data_type": "compliance_matrix",
+                "entity_id": 4001,
+            },
+        )
+        assert blocked_share.status_code == 403
+        assert blocked_share.headers.get("x-step-up-required") == "true"
+
+        allowed_share = await client.post(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/share",
+            headers=auth_headers,
+            json={
+                "data_type": "compliance_matrix",
+                "entity_id": 4001,
+                "step_up_code": pyotp.TOTP(mfa_secret).now(),
+            },
+        )
+        assert allowed_share.status_code == 201
+
+        blocked_export = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/shared/audit-export",
+            headers=auth_headers,
+        )
+        assert blocked_export.status_code == 403
+        assert blocked_export.headers.get("x-step-up-required") == "true"
+
+        allowed_export = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/shared/audit-export",
+            headers={**auth_headers, "X-Step-Up-Code": pyotp.TOTP(mfa_secret).now()},
+        )
+        assert allowed_export.status_code == 200
+        assert "text/csv" in allowed_export.headers["content-type"]
 
     @pytest.mark.asyncio
     async def test_invitation_acceptance_requires_matching_email(
@@ -547,6 +679,51 @@ class TestCollaboration:
         )
         assert workspace_response.status_code == 201
         workspace_id = workspace_response.json()["id"]
+        viewer_user, _ = await _create_user_and_headers(
+            db_session,
+            email=f"digest-viewer-{workspace_id}@example.com",
+            full_name="Digest Viewer",
+        )
+        contributor_user, _ = await _create_user_and_headers(
+            db_session,
+            email=f"digest-contributor-{workspace_id}@example.com",
+            full_name="Digest Contributor",
+        )
+        admin_user, _ = await _create_user_and_headers(
+            db_session,
+            email=f"digest-admin-{workspace_id}@example.com",
+            full_name="Digest Admin",
+        )
+        db_session.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=viewer_user.id,
+                role=WorkspaceRole.VIEWER,
+            )
+        )
+        # Regression coverage: invitation accept can create duplicate membership rows in dev-mode flows.
+        db_session.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=viewer_user.id,
+                role=WorkspaceRole.VIEWER,
+            )
+        )
+        db_session.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=contributor_user.id,
+                role=WorkspaceRole.CONTRIBUTOR,
+            )
+        )
+        db_session.add(
+            WorkspaceMember(
+                workspace_id=workspace_id,
+                user_id=admin_user.id,
+                role=WorkspaceRole.ADMIN,
+            )
+        )
+        await db_session.commit()
 
         pending_share = await client.post(
             f"/api/v1/collaboration/workspaces/{workspace_id}/share",
@@ -582,7 +759,19 @@ class TestCollaboration:
         )
         assert schedule.status_code == 200
         assert schedule.json()["frequency"] == "weekly"
+        assert schedule.json()["recipient_role"] == "all"
         assert schedule.json()["is_enabled"] is True
+
+        default_preview = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-preview",
+            headers=auth_headers,
+            params={"days": 30, "sla_hours": 24},
+        )
+        assert default_preview.status_code == 200
+        assert default_preview.json()["recipient_role"] == "all"
+        assert default_preview.json()["recipient_count"] == 4
+        assert default_preview.json()["delivery_summary"]["total_attempts"] == 0
+        assert default_preview.json()["delivery_summary"]["success_count"] == 0
 
         update_schedule = await client.patch(
             f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-schedule",
@@ -593,24 +782,73 @@ class TestCollaboration:
                 "hour_utc": 15,
                 "minute_utc": 30,
                 "channel": "in_app",
+                "recipient_role": "viewer",
                 "anomalies_only": True,
                 "is_enabled": True,
             },
         )
         assert update_schedule.status_code == 200
         assert update_schedule.json()["anomalies_only"] is True
+        assert update_schedule.json()["recipient_role"] == "viewer"
 
-        preview = await client.get(
+        viewer_preview = await client.get(
             f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-preview",
             headers=auth_headers,
             params={"days": 30, "sla_hours": 24},
         )
-        assert preview.status_code == 200
-        preview_payload = preview.json()
-        assert preview_payload["workspace_id"] == workspace_id
-        assert preview_payload["schedule"]["anomalies_only"] is True
-        assert len(preview_payload["anomalies"]) >= 1
-        assert all(item["code"] != "healthy" for item in preview_payload["anomalies"])
+        assert viewer_preview.status_code == 200
+        viewer_preview_payload = viewer_preview.json()
+        assert viewer_preview_payload["workspace_id"] == workspace_id
+        assert viewer_preview_payload["recipient_role"] == "viewer"
+        assert viewer_preview_payload["recipient_count"] == 1
+        assert viewer_preview_payload["schedule"]["anomalies_only"] is True
+        assert len(viewer_preview_payload["anomalies"]) >= 1
+        assert all(item["code"] != "healthy" for item in viewer_preview_payload["anomalies"])
+
+        admin_schedule = await client.patch(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-schedule",
+            headers=auth_headers,
+            json={
+                "frequency": "weekly",
+                "day_of_week": 2,
+                "hour_utc": 15,
+                "minute_utc": 30,
+                "channel": "in_app",
+                "recipient_role": "admin",
+                "anomalies_only": False,
+                "is_enabled": True,
+            },
+        )
+        assert admin_schedule.status_code == 200
+        assert admin_schedule.json()["recipient_role"] == "admin"
+
+        admin_preview = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-preview",
+            headers=auth_headers,
+            params={"days": 30, "sla_hours": 24},
+        )
+        assert admin_preview.status_code == 200
+        admin_preview_payload = admin_preview.json()
+        assert admin_preview_payload["recipient_role"] == "admin"
+        assert admin_preview_payload["recipient_count"] == 2
+        assert admin_preview_payload["schedule"]["anomalies_only"] is False
+
+        invalid_schedule = await client.patch(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-schedule",
+            headers=auth_headers,
+            json={
+                "frequency": "weekly",
+                "day_of_week": 2,
+                "hour_utc": 15,
+                "minute_utc": 30,
+                "channel": "in_app",
+                "recipient_role": "unknown",
+                "anomalies_only": False,
+                "is_enabled": True,
+            },
+        )
+        assert invalid_schedule.status_code == 400
+        assert invalid_schedule.json()["detail"] == "Invalid digest recipient role"
 
         send_digest = await client.post(
             f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-send",
@@ -619,4 +857,127 @@ class TestCollaboration:
         )
         assert send_digest.status_code == 200
         send_payload = send_digest.json()
+        assert send_payload["recipient_role"] == "admin"
+        assert send_payload["recipient_count"] == 2
         assert send_payload["schedule"]["last_sent_at"] is not None
+        assert send_payload["delivery_summary"]["total_attempts"] == 1
+        assert send_payload["delivery_summary"]["success_count"] == 1
+        assert send_payload["delivery_summary"]["failed_count"] == 0
+        assert send_payload["delivery_summary"]["last_status"] == "success"
+
+        initial_delivery_log = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-deliveries",
+            headers=auth_headers,
+            params={"limit": 10},
+        )
+        assert initial_delivery_log.status_code == 200
+        initial_delivery_payload = initial_delivery_log.json()
+        assert initial_delivery_payload["summary"]["total_attempts"] == 1
+        assert initial_delivery_payload["summary"]["success_count"] == 1
+        assert initial_delivery_payload["items"][0]["status"] == "success"
+        assert initial_delivery_payload["items"][0]["attempt_number"] == 1
+        assert initial_delivery_payload["items"][0]["retry_of_delivery_id"] is None
+
+        contributor_memberships = (
+            (
+                await db_session.execute(
+                    select(WorkspaceMember).where(
+                        WorkspaceMember.workspace_id == workspace_id,
+                        WorkspaceMember.user_id == contributor_user.id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for membership in contributor_memberships:
+            await db_session.delete(membership)
+        await db_session.commit()
+
+        contributor_schedule = await client.patch(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-schedule",
+            headers=auth_headers,
+            json={
+                "frequency": "weekly",
+                "day_of_week": 2,
+                "hour_utc": 15,
+                "minute_utc": 30,
+                "channel": "in_app",
+                "recipient_role": "contributor",
+                "anomalies_only": False,
+                "is_enabled": True,
+            },
+        )
+        assert contributor_schedule.status_code == 200
+        assert contributor_schedule.json()["recipient_role"] == "contributor"
+
+        failed_send = await client.post(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-send",
+            headers=auth_headers,
+            params={"days": 30, "sla_hours": 24},
+        )
+        assert failed_send.status_code == 400
+        assert failed_send.json()["detail"] == "No recipients found for configured digest role"
+
+        failed_delivery_log = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-deliveries",
+            headers=auth_headers,
+            params={"limit": 10},
+        )
+        assert failed_delivery_log.status_code == 200
+        failed_delivery_payload = failed_delivery_log.json()
+        assert failed_delivery_payload["summary"]["total_attempts"] == 2
+        assert failed_delivery_payload["summary"]["success_count"] == 1
+        assert failed_delivery_payload["summary"]["failed_count"] == 1
+        assert failed_delivery_payload["summary"]["last_status"] == "failed"
+        assert (
+            failed_delivery_payload["summary"]["last_failure_reason"]
+            == "No recipients found for configured digest role"
+        )
+        assert failed_delivery_payload["items"][0]["status"] == "failed"
+        assert failed_delivery_payload["items"][0]["attempt_number"] == 1
+        assert failed_delivery_payload["items"][0]["retry_of_delivery_id"] is None
+        failed_delivery_id = failed_delivery_payload["items"][0]["id"]
+
+        admin_retry_schedule = await client.patch(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-schedule",
+            headers=auth_headers,
+            json={
+                "frequency": "weekly",
+                "day_of_week": 2,
+                "hour_utc": 15,
+                "minute_utc": 30,
+                "channel": "in_app",
+                "recipient_role": "admin",
+                "anomalies_only": False,
+                "is_enabled": True,
+            },
+        )
+        assert admin_retry_schedule.status_code == 200
+        assert admin_retry_schedule.json()["recipient_role"] == "admin"
+
+        retry_send = await client.post(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-send",
+            headers=auth_headers,
+            params={"days": 30, "sla_hours": 24},
+        )
+        assert retry_send.status_code == 200
+        retry_send_payload = retry_send.json()
+        assert retry_send_payload["delivery_summary"]["total_attempts"] == 3
+        assert retry_send_payload["delivery_summary"]["success_count"] == 2
+        assert retry_send_payload["delivery_summary"]["failed_count"] == 1
+        assert retry_send_payload["delivery_summary"]["retry_attempt_count"] == 1
+        assert retry_send_payload["delivery_summary"]["last_status"] == "success"
+
+        retry_delivery_log = await client.get(
+            f"/api/v1/collaboration/workspaces/{workspace_id}/compliance-digest-deliveries",
+            headers=auth_headers,
+            params={"limit": 10},
+        )
+        assert retry_delivery_log.status_code == 200
+        retry_delivery_payload = retry_delivery_log.json()
+        assert retry_delivery_payload["summary"]["total_attempts"] == 3
+        assert retry_delivery_payload["summary"]["retry_attempt_count"] == 1
+        assert retry_delivery_payload["items"][0]["status"] == "success"
+        assert retry_delivery_payload["items"][0]["attempt_number"] == 2
+        assert retry_delivery_payload["items"][0]["retry_of_delivery_id"] == failed_delivery_id

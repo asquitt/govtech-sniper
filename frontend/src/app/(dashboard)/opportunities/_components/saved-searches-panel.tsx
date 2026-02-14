@@ -31,6 +31,8 @@ export function SavedSearchesPanel({
   const [naics, setNaics] = useState("");
   const [setAside, setSetAside] = useState("");
   const [sourceType, setSourceType] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [currency, setCurrency] = useState("");
   const [minValue, setMinValue] = useState("");
   const [maxValue, setMaxValue] = useState("");
   const [status, setStatus] = useState<RFPStatus | "">("");
@@ -44,6 +46,8 @@ export function SavedSearchesPanel({
         naics_codes: naics.split(",").map((s) => s.trim()).filter(Boolean),
         set_asides: setAside.split(",").map((s) => s.trim()).filter(Boolean),
         source_types: sourceType.split(",").map((s) => s.trim()).filter(Boolean),
+        jurisdictions: jurisdiction.split(",").map((s) => s.trim()).filter(Boolean),
+        currencies: currency.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean),
         statuses: status ? [status] : [],
       };
 
@@ -64,6 +68,8 @@ export function SavedSearchesPanel({
       setNaics("");
       setSetAside("");
       setSourceType("");
+      setJurisdiction("");
+      setCurrency("");
       setMinValue("");
       setMaxValue("");
       setStatus("");
@@ -136,9 +142,21 @@ export function SavedSearchesPanel({
           />
           <input
             className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-            placeholder="Source Type (federal, sled)"
+            placeholder="Source Type (federal, sled, canada_provincial)"
             value={sourceType}
             onChange={(e) => setSourceType(e.target.value)}
+          />
+          <input
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            placeholder="Jurisdictions (US, CA, CA-ON)"
+            value={jurisdiction}
+            onChange={(e) => setJurisdiction(e.target.value)}
+          />
+          <input
+            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+            placeholder="Currencies (USD, CAD)"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
           />
           <input
             className="rounded-md border border-border bg-background px-2 py-1 text-sm"

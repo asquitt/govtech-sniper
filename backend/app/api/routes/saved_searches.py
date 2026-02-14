@@ -73,6 +73,7 @@ def _apply_filters(query, filters: dict):
     statuses = _normalize_list(filters.get("statuses"))
     source_types = _normalize_list(filters.get("source_types"))
     jurisdictions = _normalize_list(filters.get("jurisdictions"))
+    currencies = _normalize_list(filters.get("currencies"))
     contract_vehicles = _normalize_list(filters.get("contract_vehicles"))
 
     min_value = filters.get("min_value")
@@ -110,6 +111,9 @@ def _apply_filters(query, filters: dict):
 
     if jurisdictions:
         query = query.where(RFP.jurisdiction.in_(jurisdictions))
+
+    if currencies:
+        query = query.where(RFP.currency.in_([value.upper() for value in currencies]))
 
     if contract_vehicles:
         query = query.where(RFP.contract_vehicle.in_(contract_vehicles))

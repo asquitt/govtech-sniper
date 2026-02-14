@@ -13,6 +13,7 @@ vi.mock("@/lib/api", () => ({
     get: vi.fn(),
     getSnapshots: vi.fn(),
     getSnapshotDiff: vi.fn(),
+    getSnapshotAmendmentImpact: vi.fn(),
     update: vi.fn(),
   },
   awardApi: {
@@ -110,6 +111,50 @@ describe("OpportunityDetailPage", () => {
       summary_from: {},
       summary_to: {},
     });
+    mockedRfpApi.getSnapshotAmendmentImpact.mockResolvedValue({
+      rfp_id: 1,
+      from_snapshot_id: 9,
+      to_snapshot_id: 10,
+      generated_at: "2026-02-14T00:00:00Z",
+      amendment_risk_level: "high",
+      changed_fields: ["naics_code"],
+      signals: [
+        {
+          field: "naics_code",
+          from_value: "541512",
+          to_value: "541519",
+          impact_area: "eligibility",
+          severity: "high",
+          recommended_actions: ["Re-check NAICS alignment."],
+        },
+      ],
+      impacted_sections: [
+        {
+          proposal_id: 12,
+          proposal_title: "DoD Cyber Proposal",
+          section_id: 41,
+          section_number: "2.1",
+          section_title: "Eligibility and Compliance",
+          section_status: "approved",
+          impact_score: 83,
+          impact_level: "high",
+          matched_change_fields: ["naics_code"],
+          rationale: "NAICS references detected.",
+          proposed_patch: "Update section language with amended NAICS.",
+          recommended_actions: ["Re-check NAICS alignment."],
+          approval_required: true,
+        },
+      ],
+      summary: {
+        changed_fields: 1,
+        impacted_sections: 1,
+        high_impact_sections: 1,
+        medium_impact_sections: 0,
+        low_impact_sections: 0,
+        risk_level: "high",
+      },
+      approval_workflow: ["1) Review", "2) Patch", "3) Approve"],
+    });
     mockedAwardApi.list.mockResolvedValue([]);
     mockedContactApi.list.mockResolvedValue([]);
     mockedBudgetApi.list.mockResolvedValue([]);
@@ -125,5 +170,10 @@ describe("OpportunityDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "Changes" }));
     expect(await screen.findByText("Snapshot Diff")).toBeInTheDocument();
     expect(await screen.findByText("naics_code")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Generate Impact Map" }));
+    expect(await screen.findByText("Amendment Autopilot")).toBeInTheDocument();
+    expect(await screen.findByText(/DoD Cyber Proposal/)).toBeInTheDocument();
+    expect(await screen.findByText(/Risk:/)).toBeInTheDocument();
   });
 });

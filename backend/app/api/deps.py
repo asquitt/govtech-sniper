@@ -5,8 +5,9 @@ FastAPI dependencies for authentication, database sessions, and rate limiting.
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
+import pyotp
 import structlog
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,7 +16,7 @@ from sqlmodel import select
 
 from app.config import settings
 from app.database import get_session
-from app.models.organization import OrganizationMember, OrgRole
+from app.models.organization import Organization, OrganizationMember, OrgRole
 from app.models.user import User, UserProfile, UserTier
 from app.services.auth_service import UserAuth, decode_token
 
@@ -256,6 +257,89 @@ _ORG_ROLE_TO_POLICY: dict[str, str] = {
     OrgRole.MEMBER.value: "editor",
     OrgRole.VIEWER.value: "viewer",
 }
+
+STEP_UP_REQUIRED_HEADER = "X-Step-Up-Required"
+STEP_UP_CODE_HEADER = "X-Step-Up-Code"
+STEP_UP_FALLBACK_HEADERS = ("X-MFA-Code",)
+
+_ORG_SECURITY_DEFAULTS: dict[str, bool] = {
+    "require_step_up_for_sensitive_exports": True,
+    "require_step_up_for_sensitive_shares": True,
+}
+
+
+def get_org_security_policy_from_settings(settings_payload: Any) -> dict[str, bool]:
+    """Resolve org security policy flags from organization settings JSON."""
+    settings_obj = settings_payload if isinstance(settings_payload, dict) else {}
+    return {
+        key: bool(settings_obj.get(key, default)) for key, default in _ORG_SECURITY_DEFAULTS.items()
+    }
+
+
+def merge_org_security_policy_settings(
+    current_settings: Any,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge org security policy updates into settings JSON payload."""
+    settings_obj: dict[str, Any] = (
+        dict(current_settings) if isinstance(current_settings, dict) else {}
+    )
+    security_policy = get_org_security_policy_from_settings(settings_obj)
+    for key in _ORG_SECURITY_DEFAULTS:
+        if key in updates and updates[key] is not None:
+            security_policy[key] = bool(updates[key])
+    settings_obj.update(security_policy)
+    return settings_obj
+
+
+def get_step_up_code(
+    request: Request | None = None,
+    explicit_code: str | None = None,
+) -> str | None:
+    """Extract step-up code from explicit payload value or request headers."""
+    if explicit_code and explicit_code.strip():
+        return explicit_code.strip()
+    if not request:
+        return None
+    header_code = request.headers.get(STEP_UP_CODE_HEADER)
+    if header_code and header_code.strip():
+        return header_code.strip()
+    for header_name in STEP_UP_FALLBACK_HEADERS:
+        fallback = request.headers.get(header_name)
+        if fallback and fallback.strip():
+            return fallback.strip()
+    return None
+
+
+async def verify_step_up_code(
+    user_id: int,
+    session: AsyncSession,
+    code: str | None,
+) -> bool:
+    """Verify MFA TOTP code for step-up authorization checks."""
+    if not code:
+        return False
+    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user or not user.mfa_enabled or not user.mfa_secret:
+        return False
+    totp = pyotp.TOTP(user.mfa_secret)
+    return bool(totp.verify(code, valid_window=1))
+
+
+async def get_user_org_security_policy(
+    user_id: int,
+    session: AsyncSession,
+) -> dict[str, bool]:
+    """Load effective org security policy flags for the current user."""
+    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user or not user.organization_id:
+        return dict(_ORG_SECURITY_DEFAULTS)
+    organization = (
+        await session.execute(select(Organization).where(Organization.id == user.organization_id))
+    ).scalar_one_or_none()
+    if not organization:
+        return dict(_ORG_SECURITY_DEFAULTS)
+    return get_org_security_policy_from_settings(organization.settings)
 
 
 async def get_user_policy_role(user_id: int, session: AsyncSession) -> str:

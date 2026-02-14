@@ -9,7 +9,12 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import UserAuth, get_current_user
+from app.api.deps import (
+    UserAuth,
+    get_current_user,
+    get_org_security_policy_from_settings,
+    merge_org_security_policy_settings,
+)
 from app.config import settings
 from app.database import get_session
 from app.models.integration import IntegrationConfig
@@ -100,6 +105,7 @@ async def get_organization(
             )
         )
     ).scalar_one() or 0
+    security_policy = get_org_security_policy_from_settings(org.settings)
 
     return {
         "id": org.id,
@@ -115,6 +121,12 @@ async def get_organization(
         "primary_color": org.primary_color,
         "ip_allowlist": org.ip_allowlist,
         "data_retention_days": org.data_retention_days,
+        "require_step_up_for_sensitive_exports": security_policy[
+            "require_step_up_for_sensitive_exports"
+        ],
+        "require_step_up_for_sensitive_shares": security_policy[
+            "require_step_up_for_sensitive_shares"
+        ],
         "member_count": member_count,
         "created_at": org.created_at.isoformat(),
     }
@@ -130,8 +142,18 @@ async def update_organization(
     org, _ = await _require_org_admin(current_user, session)
 
     update_data = body.model_dump(exclude_unset=True)
+    security_updates = {
+        key: update_data.pop(key)
+        for key in (
+            "require_step_up_for_sensitive_exports",
+            "require_step_up_for_sensitive_shares",
+        )
+        if key in update_data
+    }
     for field, value in update_data.items():
         setattr(org, field, value)
+    if security_updates:
+        org.settings = merge_org_security_policy_settings(org.settings, security_updates)
     org.updated_at = datetime.utcnow()
     session.add(org)
     await session.commit()

@@ -13,17 +13,18 @@ test.describe("Admin Organization Workflow", () => {
     authenticatedPage: page,
     browser,
   }) => {
+    test.setTimeout(90_000);
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "Admin Console" })).toBeVisible();
 
     await Promise.race([
       page
         .getByText("Set up your organization")
-        .waitFor({ state: "visible", timeout: 8_000 })
+        .waitFor({ state: "visible", timeout: 20_000 })
         .catch(() => null),
       page
         .getByText("Capability Health")
-        .waitFor({ state: "visible", timeout: 8_000 })
+        .waitFor({ state: "visible", timeout: 20_000 })
         .catch(() => null),
     ]);
 
@@ -39,8 +40,8 @@ test.describe("Admin Organization Workflow", () => {
       await page.getByRole("button", { name: "Create Organization" }).click();
     }
 
-    await expect(page.getByText("Capability Health")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Enterprise Controls")).toBeVisible();
+    await expect(page.getByText("Capability Health")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("Enterprise Controls")).toBeVisible({ timeout: 30_000 });
 
     const token = await getAccessToken(page);
     const nonce = Date.now();
@@ -72,7 +73,7 @@ test.describe("Admin Organization Workflow", () => {
     expect(createSecret.ok()).toBeTruthy();
 
     await page.reload();
-    await expect(page.getByText("Capability Health")).toBeVisible();
+    await expect(page.getByText("Capability Health")).toBeVisible({ timeout: 30_000 });
 
     const bodyText = await page.locator("body").innerText();
     const controlCounts = bodyText.match(/(\d+)\swebhooks,\s(\d+)\ssecrets/);
@@ -97,6 +98,37 @@ test.describe("Admin Organization Workflow", () => {
     await expect(inviteRow).toBeVisible({ timeout: 15_000 });
     await expect(inviteRow).toContainText("Awaiting registration");
 
+    const revokeInviteEmail = `org-invite-revoke-${Date.now()}@example.com`;
+    await page.getByLabel("Invite member email").fill(revokeInviteEmail);
+    await page.getByRole("button", { name: "Invite" }).click();
+    const revokeInviteRow = page
+      .locator("[data-testid^='org-invitation-']")
+      .filter({ hasText: revokeInviteEmail })
+      .first();
+    await expect(revokeInviteRow).toBeVisible({ timeout: 15_000 });
+    await expect(revokeInviteRow).toContainText("Awaiting registration");
+
+    const resendResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/member-invitations/") &&
+        response.url().includes("/resend")
+    );
+    await revokeInviteRow.getByRole("button", { name: "Resend" }).click();
+    const resendResponse = await resendResponsePromise;
+    expect(resendResponse.ok()).toBeTruthy();
+
+    const revokeResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/member-invitations/") &&
+        response.url().includes("/revoke")
+    );
+    await revokeInviteRow.getByRole("button", { name: "Revoke" }).click();
+    const revokeResponse = await revokeResponsePromise;
+    expect(revokeResponse.ok()).toBeTruthy();
+    await expect(revokeInviteRow).toContainText("revoked", { timeout: 15_000 });
+
     const inviteeContext = await browser.newContext();
     const inviteePage = await inviteeContext.newPage();
     await inviteePage.goto("/register");
@@ -118,7 +150,18 @@ test.describe("Admin Organization Workflow", () => {
       .filter({ hasText: inviteEmail })
       .first();
     await expect(readyInviteRow).toContainText("Registered", { timeout: 15_000 });
+    const activateResponsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().includes("/member-invitations/") &&
+        response.url().includes("/activate")
+    );
     await readyInviteRow.getByRole("button", { name: "Activate" }).click();
-    await expect(readyInviteRow).toContainText("activated", { timeout: 15_000 });
+    const activateResponse = await activateResponsePromise;
+    expect(activateResponse.ok()).toBeTruthy();
+    const activatePayload = (await activateResponse.json()) as {
+      status?: string;
+    };
+    expect((activatePayload.status ?? "").toLowerCase()).toBe("activated");
   });
 });

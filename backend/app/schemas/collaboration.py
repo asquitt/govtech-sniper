@@ -73,6 +73,7 @@ class ShareDataCreate(BaseModel):
     requires_approval: bool = False
     expires_at: datetime | None = None
     partner_user_id: int | None = None
+    step_up_code: str | None = None
 
 
 class SharedDataRead(BaseModel):
@@ -108,6 +109,7 @@ class ContractFeedPresetItem(BaseModel):
 
 class SharePresetCreate(BaseModel):
     preset_key: str
+    step_up_code: str | None = None
 
 
 class SharePresetApplyResponse(BaseModel):
@@ -164,6 +166,7 @@ class ComplianceDigestScheduleRead(BaseModel):
     hour_utc: int
     minute_utc: int
     channel: str
+    recipient_role: str
     anomalies_only: bool
     is_enabled: bool
     last_sent_at: datetime | None = None
@@ -175,17 +178,55 @@ class ComplianceDigestScheduleUpdate(BaseModel):
     hour_utc: int = 13
     minute_utc: int = 0
     channel: str = "in_app"
+    recipient_role: str = "all"
     anomalies_only: bool = False
     is_enabled: bool = True
+
+
+class ComplianceDigestDeliveryRead(BaseModel):
+    id: int
+    workspace_id: int
+    user_id: int
+    schedule_id: int | None = None
+    status: str
+    attempt_number: int
+    retry_of_delivery_id: int | None = None
+    channel: str
+    recipient_role: str
+    recipient_count: int
+    anomalies_count: int
+    failure_reason: str | None = None
+    generated_at: datetime
+    created_at: datetime
+
+
+class ComplianceDigestDeliverySummaryRead(BaseModel):
+    total_attempts: int
+    success_count: int
+    failed_count: int
+    retry_attempt_count: int
+    last_status: str | None = None
+    last_failure_reason: str | None = None
+    last_sent_at: datetime | None = None
+
+
+class ComplianceDigestDeliveryListRead(BaseModel):
+    workspace_id: int
+    user_id: int
+    summary: ComplianceDigestDeliverySummaryRead
+    items: list[ComplianceDigestDeliveryRead]
 
 
 class ComplianceDigestPreviewRead(BaseModel):
     workspace_id: int
     generated_at: datetime
+    recipient_role: str
+    recipient_count: int
     summary: ShareGovernanceSummaryRead
     trends: ShareGovernanceTrendRead
     anomalies: list[GovernanceAnomalyRead]
     schedule: ComplianceDigestScheduleRead
+    delivery_summary: ComplianceDigestDeliverySummaryRead | None = None
 
 
 class PortalView(BaseModel):

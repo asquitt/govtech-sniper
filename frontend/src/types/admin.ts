@@ -19,6 +19,8 @@ export interface OrganizationDetails {
   primary_color: string | null;
   ip_allowlist: string[];
   data_retention_days: number;
+  require_step_up_for_sensitive_exports: boolean;
+  require_step_up_for_sensitive_shares: boolean;
   member_count: number;
   created_at: string;
 }
@@ -48,6 +50,10 @@ export interface OrgMemberInvitation {
   accepted_user_id: number | null;
   invited_by_user_id: number;
   activation_ready: boolean;
+  invite_age_hours: number;
+  invite_age_days: number;
+  days_until_expiry: number;
+  sla_state: "healthy" | "expiring" | "aging" | "expired" | "completed" | "revoked";
 }
 
 export interface OrgUsageAnalytics {

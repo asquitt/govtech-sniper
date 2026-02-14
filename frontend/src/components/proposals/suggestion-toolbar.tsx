@@ -130,7 +130,10 @@ export function SuggestionToolbar({ editor }: SuggestionToolbarProps) {
     : "";
 
   return (
-    <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 bg-yellow-50/50 dark:bg-yellow-900/10">
+    <div
+      className="flex items-center gap-2 border-b border-border px-3 py-1.5 bg-yellow-50/50 dark:bg-yellow-900/10"
+      data-testid="ai-suggestions-toolbar"
+    >
       <Sparkles className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
       <span className="text-xs font-medium text-yellow-700 dark:text-yellow-300">
         AI Suggestions

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import IntegrationsPage from "@/app/(dashboard)/settings/integrations/page";
-import { enterpriseApi, sharepointApi } from "@/lib/api";
+import { enterpriseApi, sharepointApi, unanetApi } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   enterpriseApi: {
@@ -19,10 +19,18 @@ vi.mock("@/lib/api", () => ({
     browse: vi.fn(),
     download: vi.fn(),
   },
+  unanetApi: {
+    getStatus: vi.fn(),
+    listResources: vi.fn(),
+    listFinancials: vi.fn(),
+    syncResources: vi.fn(),
+    syncFinancials: vi.fn(),
+  },
 }));
 
 const mockedEnterpriseApi = vi.mocked(enterpriseApi);
 const mockedSharePointApi = vi.mocked(sharepointApi);
+const mockedUnanetApi = vi.mocked(unanetApi);
 
 describe("Settings Integrations Page", () => {
   beforeEach(() => {
@@ -53,11 +61,18 @@ describe("Settings Integrations Page", () => {
       connected: false,
     });
     mockedSharePointApi.browse.mockResolvedValue([]);
+    mockedUnanetApi.getStatus.mockResolvedValue({
+      configured: false,
+      enabled: false,
+    });
+    mockedUnanetApi.listResources.mockResolvedValue([]);
+    mockedUnanetApi.listFinancials.mockResolvedValue([]);
   });
 
-  it("renders SharePoint, webhook, and secrets controls", async () => {
+  it("renders Unanet, SharePoint, webhook, and secrets controls", async () => {
     render(<IntegrationsPage />);
 
+    expect(await screen.findByText("Unanet Resource + Financial Sync")).toBeInTheDocument();
     expect(await screen.findByText("SharePoint Browser")).toBeInTheDocument();
     expect(await screen.findByText("Webhook Subscriptions")).toBeInTheDocument();
     expect(await screen.findByText("Ops Hook")).toBeInTheDocument();

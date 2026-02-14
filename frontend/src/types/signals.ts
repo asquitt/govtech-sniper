@@ -50,3 +50,39 @@ export interface SubscriptionPayload {
   email_digest_enabled: boolean;
   digest_frequency: DigestFrequency;
 }
+
+export interface SignalIngestResponse {
+  created: number;
+  updated: number;
+  skipped: number;
+  source_breakdown: Record<string, number>;
+}
+
+export interface SignalRescoreResponse {
+  updated: number;
+  average_score: number;
+}
+
+export interface SignalDigestItem {
+  signal_id: number;
+  title: string;
+  signal_type: SignalType;
+  agency?: string | null;
+  relevance_score: number;
+  source_url?: string | null;
+  published_at?: string | null;
+}
+
+export interface SignalDigestPreview {
+  period_days: number;
+  total_unread: number;
+  included_count: number;
+  type_breakdown: Record<string, number>;
+  top_signals: SignalDigestItem[];
+}
+
+export interface SignalDigestSendResponse extends SignalDigestPreview {
+  recipient_email: string;
+  sent_at: string;
+  simulated: boolean;
+}

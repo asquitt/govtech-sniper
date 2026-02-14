@@ -7,6 +7,7 @@ Knowledge Base document upload and management.
 import os
 from datetime import datetime
 
+import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -15,6 +16,7 @@ from app.api.deps import get_current_user, get_current_user_optional, resolve_us
 from app.config import settings
 from app.database import get_session
 from app.models.knowledge_base import DocumentType, KnowledgeBaseDocument, ProcessingStatus
+from app.models.proposal import DataClassification
 from app.schemas.knowledge_base import (
     DocumentListItem,
     DocumentListResponse,
@@ -24,9 +26,15 @@ from app.schemas.knowledge_base import (
 )
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
+from app.services.embedding_service import (
+    compose_knowledge_document_text,
+    delete_entity_embeddings,
+    index_entity,
+)
 from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/documents", tags=["Knowledge Base"])
+logger = structlog.get_logger(__name__)
 
 
 @router.get("", response_model=DocumentListResponse)
@@ -126,6 +134,10 @@ async def upload_document(
     title: str = Form(..., description="Document title"),
     document_type: DocumentType = Form(DocumentType.OTHER, description="Document type"),
     description: str | None = Form(None, description="Document description"),
+    classification: DataClassification = Form(
+        DataClassification.INTERNAL,
+        description="Data classification for policy enforcement",
+    ),
     current_user: UserAuth | None = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ) -> DocumentUploadResponse:
@@ -182,6 +194,7 @@ async def upload_document(
         user_id=resolved_user_id,
         title=title,
         document_type=document_type,
+        classification=classification,
         description=description,
         original_filename=file.filename,
         file_path=file_path,
@@ -276,6 +289,26 @@ async def update_document(
             "updated_fields": list(update_dict.keys()),
         },
     )
+    if document.processing_status == ProcessingStatus.READY and document.full_text:
+        try:
+            await index_entity(
+                session,
+                user_id=document.user_id,
+                entity_type="knowledge_doc",
+                entity_id=document.id,
+                text=compose_knowledge_document_text(
+                    title=document.title,
+                    document_type=document.document_type.value,
+                    description=document.description,
+                    full_text=document.full_text,
+                ),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Knowledge document semantic reindex failed",
+                document_id=document.id,
+                error=str(exc),
+            )
     await session.commit()
     await session.refresh(document)
 
@@ -320,6 +353,17 @@ async def delete_document(
             "title": document.title,
         },
     )
+    try:
+        await delete_entity_embeddings(
+            session,
+            user_id=document.user_id,
+            entity_type="knowledge_doc",
+            entity_id=document.id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Knowledge document embedding cleanup failed", document_id=document.id, error=str(exc)
+        )
     await session.delete(document)
     await session.commit()
 

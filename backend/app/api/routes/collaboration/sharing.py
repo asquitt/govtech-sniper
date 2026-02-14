@@ -4,12 +4,18 @@ import csv
 from datetime import datetime, timedelta
 from io import StringIO
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import (
+    STEP_UP_REQUIRED_HEADER,
+    get_current_user,
+    get_step_up_code,
+    get_user_org_security_policy,
+    verify_step_up_code,
+)
 from app.api.utils import get_or_404
 from app.database import get_session
 from app.models.collaboration import (
@@ -20,6 +26,7 @@ from app.models.collaboration import (
     WorkspaceMember,
     WorkspaceRole,
 )
+from app.models.rfp import RFP
 from app.models.user import User
 from app.schemas.collaboration import (
     ContractFeedCatalogItem,
@@ -46,6 +53,41 @@ from .helpers import (
 )
 
 router = APIRouter()
+_SENSITIVE_CLASSIFICATIONS = {"cui", "fci"}
+_SENSITIVE_SHARE_TYPES = {
+    SharedDataType.COMPLIANCE_MATRIX.value,
+    SharedDataType.PROPOSAL_SECTION.value,
+}
+
+
+async def _workspace_has_sensitive_classification(
+    workspace: SharedWorkspace,
+    session: AsyncSession,
+) -> bool:
+    if not workspace.rfp_id:
+        return False
+    rfp = (
+        await session.execute(select(RFP).where(RFP.id == workspace.rfp_id))
+    ).scalar_one_or_none()
+    return bool(rfp and (rfp.classification or "internal").lower() in _SENSITIVE_CLASSIFICATIONS)
+
+
+async def _enforce_step_up(
+    *,
+    current_user: UserAuth,
+    session: AsyncSession,
+    request: Request,
+    explicit_step_up_code: str | None,
+    detail: str,
+) -> None:
+    supplied_code = get_step_up_code(request, explicit_step_up_code)
+    if await verify_step_up_code(current_user.id, session, supplied_code):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=detail,
+        headers={STEP_UP_REQUIRED_HEADER: "true"},
+    )
 
 
 @router.get("/contract-feeds/catalog", response_model=list[ContractFeedCatalogItem])
@@ -69,6 +111,7 @@ async def list_contract_feed_presets(
 async def share_data(
     workspace_id: int,
     payload: ShareDataCreate,
+    request: Request,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SharedDataRead:
@@ -93,6 +136,21 @@ async def share_data(
             )
             if not member_result.scalars().first():
                 raise HTTPException(400, "Partner user must be a workspace member")
+
+    org_policy = await get_user_org_security_policy(current_user.id, session)
+    share_is_sensitive = (
+        payload.data_type in _SENSITIVE_SHARE_TYPES
+        or await _workspace_has_sensitive_classification(ws, session)
+    )
+    if share_is_sensitive and org_policy.get("require_step_up_for_sensitive_shares", True):
+        await _enforce_step_up(
+            current_user=current_user,
+            session=session,
+            request=request,
+            explicit_step_up_code=payload.step_up_code,
+            detail="Sensitive collaboration sharing requires step-up auth",
+        )
+
     now = datetime.utcnow()
     approval_status = (
         ShareApprovalStatus.PENDING if payload.requires_approval else ShareApprovalStatus.APPROVED
@@ -122,13 +180,27 @@ async def share_data(
 async def apply_contract_feed_preset(
     workspace_id: int,
     payload: SharePresetCreate,
+    request: Request,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> SharePresetApplyResponse:
     await _require_member_role(workspace_id, current_user.id, WorkspaceRole.CONTRIBUTOR, session)
+    ws = await get_or_404(session, SharedWorkspace, workspace_id, "Workspace not found")
     preset = CONTRACT_FEED_PRESETS.get(payload.preset_key)
     if not preset:
         raise HTTPException(404, "Preset not found")
+
+    org_policy = await get_user_org_security_policy(current_user.id, session)
+    if await _workspace_has_sensitive_classification(ws, session) and org_policy.get(
+        "require_step_up_for_sensitive_shares", True
+    ):
+        await _enforce_step_up(
+            current_user=current_user,
+            session=session,
+            request=request,
+            explicit_step_up_code=payload.step_up_code,
+            detail="Sensitive collaboration sharing requires step-up auth",
+        )
 
     existing_result = await session.execute(
         select(SharedDataPermission).where(
@@ -252,6 +324,7 @@ async def get_shared_data_governance_anomalies(
 @router.get("/workspaces/{workspace_id}/shared/audit-export")
 async def export_shared_data_audit(
     workspace_id: int,
+    request: Request,
     days: int = Query(30, ge=1, le=365),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -263,6 +336,22 @@ async def export_shared_data_audit(
         select(SharedDataPermission).where(SharedDataPermission.workspace_id == workspace_id)
     )
     permissions = result.scalars().all()
+    org_policy = await get_user_org_security_policy(current_user.id, session)
+    has_sensitive_shared_data = any(
+        _enum_value(permission.data_type) in _SENSITIVE_SHARE_TYPES for permission in permissions
+    )
+    requires_export_step_up = org_policy.get("require_step_up_for_sensitive_exports", True) and (
+        await _workspace_has_sensitive_classification(workspace, session)
+        or has_sensitive_shared_data
+    )
+    if requires_export_step_up:
+        await _enforce_step_up(
+            current_user=current_user,
+            session=session,
+            request=request,
+            explicit_step_up_code=None,
+            detail="Sensitive collaboration export requires step-up auth",
+        )
 
     now = datetime.utcnow()
     window_start = now - timedelta(days=days)

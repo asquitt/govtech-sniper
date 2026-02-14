@@ -2,6 +2,8 @@ import { api } from "./client";
 import type {
   EmailIngestConfig,
   EmailIngestConfigCreate,
+  EmailIngestSyncRequest,
+  EmailIngestSyncResponse,
   EmailIngestConfigUpdate,
   IngestedEmail,
 } from "@/types/email-ingest";
@@ -38,4 +40,9 @@ export const emailIngestApi = {
 
   reprocess: (emailId: number) =>
     api.post<IngestedEmail>(`/email-ingest/process/${emailId}`).then((r) => r.data),
+
+  syncNow: (payload?: EmailIngestSyncRequest) =>
+    api
+      .post<EmailIngestSyncResponse>("/email-ingest/sync-now", payload ?? {})
+      .then((r) => r.data),
 };

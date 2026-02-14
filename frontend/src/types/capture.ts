@@ -171,6 +171,23 @@ export interface TeamingPartnerTrendDrilldownResponse {
   partners: TeamingPartnerTrendDrilldown[];
 }
 
+export interface TeamingCohortDrilldown {
+  cohort_value: string;
+  partner_count: number;
+  sent_count: number;
+  accepted_count: number;
+  declined_count: number;
+  pending_count: number;
+  acceptance_rate: number;
+}
+
+export interface TeamingPartnerCohortDrilldownResponse {
+  days: number;
+  total_sent: number;
+  naics_cohorts: TeamingCohortDrilldown[];
+  set_aside_cohorts: TeamingCohortDrilldown[];
+}
+
 export interface TeamingDigestSchedule {
   frequency: "daily" | "weekly";
   day_of_week: number | null;
@@ -275,6 +292,69 @@ export interface BidDecisionSummary {
   bid_count: number;
   no_bid_count: number;
   conditional_count: number;
+}
+
+export interface BidScenarioAdjustmentInput {
+  criterion: string;
+  delta: number;
+  reason?: string | null;
+}
+
+export interface BidScenarioRequest {
+  name: string;
+  notes?: string | null;
+  adjustments: BidScenarioAdjustmentInput[];
+}
+
+export interface BidScenarioCriterionScore {
+  name: string;
+  weight: number;
+  baseline_score: number;
+  scenario_score: number;
+  delta: number;
+  weighted_impact: number;
+  reason?: string | null;
+  far_reference?: string | null;
+  section_m_factor?: string | null;
+}
+
+export interface BidScenarioSimulationResult {
+  name: string;
+  notes?: string | null;
+  overall_score: number;
+  recommendation: BidScorecardRecommendation;
+  confidence: number;
+  decision_risk: "low" | "medium" | "high";
+  risk_score: number;
+  recommendation_changed: boolean;
+  criteria_scores: BidScenarioCriterionScore[];
+  driver_summary: {
+    positive: BidScenarioCriterionScore[];
+    negative: BidScenarioCriterionScore[];
+  };
+  scoring_rationale: {
+    method: string;
+    dominant_factors: Array<{
+      criterion: string;
+      weighted_impact: number;
+      far_reference: string;
+      section_m_factor: string;
+    }>;
+  };
+  ignored_adjustments: BidScenarioAdjustmentInput[];
+}
+
+export interface BidScenarioSimulationResponse {
+  rfp_id: number;
+  baseline: {
+    scorecard_id: number | null;
+    overall_score: number;
+    recommendation: BidScorecardRecommendation;
+    confidence: number;
+    criteria_scores: CriteriaScore[];
+    scoring_method?: string;
+  };
+  scenarios: BidScenarioSimulationResult[];
 }
 
 // ---------------------------------------------------------------------------

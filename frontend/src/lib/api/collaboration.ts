@@ -8,6 +8,7 @@ import type {
   SharedDataType,
   ContractFeedCatalogItem,
   ContractFeedPresetItem,
+  ComplianceDigestDeliveryList,
   ComplianceDigestPreview,
   ComplianceDigestSchedule,
   GovernanceAnomaly,
@@ -122,11 +123,12 @@ export const collaborationApi = {
 
   applyContractFeedPreset: async (
     workspaceId: number,
-    presetKey: string
+    presetKey: string,
+    stepUpCode?: string
   ): Promise<SharePresetApplyResponse> => {
     const { data } = await api.post(
       `/collaboration/workspaces/${workspaceId}/share/preset`,
-      { preset_key: presetKey }
+      { preset_key: presetKey, step_up_code: stepUpCode }
     );
     return data;
   },
@@ -139,6 +141,7 @@ export const collaborationApi = {
       requires_approval?: boolean;
       expires_at?: string | null;
       partner_user_id?: number | null;
+      step_up_code?: string | null;
     }
   ): Promise<SharedDataPermission> => {
     const { data } = await api.post(
@@ -215,6 +218,7 @@ export const collaborationApi = {
       hour_utc: number;
       minute_utc: number;
       channel: "in_app" | "email";
+      recipient_role: "all" | "owner" | "admin" | "contributor" | "viewer";
       anomalies_only: boolean;
       is_enabled: boolean;
     }>
@@ -249,16 +253,34 @@ export const collaborationApi = {
     return data;
   },
 
+  getComplianceDigestDeliveries: async (
+    workspaceId: number,
+    params?: { limit?: number }
+  ): Promise<ComplianceDigestDeliveryList> => {
+    const { data } = await api.get(
+      `/collaboration/workspaces/${workspaceId}/compliance-digest-deliveries`,
+      { params }
+    );
+    return data;
+  },
+
   exportShareAuditCsv: async (
     workspaceId: number,
-    params?: { days?: number }
+    params?: { days?: number; step_up_code?: string }
   ): Promise<Blob> => {
+    const stepUpCode = params?.step_up_code;
+    const queryParams = {
+      days: params?.days,
+    };
     const { data } = await api.get(
       `/collaboration/workspaces/${workspaceId}/shared/audit-export`,
       {
-        params,
+        params: queryParams,
         responseType: "blob",
-        headers: { Accept: "text/csv" },
+        headers: {
+          Accept: "text/csv",
+          ...(stepUpCode ? { "X-Step-Up-Code": stepUpCode } : {}),
+        },
       }
     );
     return data;

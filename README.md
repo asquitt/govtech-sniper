@@ -507,12 +507,17 @@ GitHub Actions runs on every push with 4 jobs:
 - All secrets loaded from environment variables
 - Runtime validation: `SECRET_KEY` cannot be default in production
 - JWT authentication with token rotation
+- Sensitive export/share step-up verification only accepts `X-Step-Up-Code` header (query-string MFA codes are rejected)
 - AES-256 encryption for stored secrets
 - CORS restricted by environment
 - API rate limiting per subscription tier
 - Upload size enforcement (configurable, default 50MB)
 - SCIM provisioning for enterprise identity management
 - Audit logging for compliance tracking
+- WebSocket diagnostics endpoints require authenticated requests (`/api/v1/ws/diagnostics*`)
+- RFP snapshot diff/amendment-impact routes enforce owner scoping checks
+- Email ingest duplicate suppression is scoped per ingest configuration (`config_id + message_id`)
+- RFP/Contract/Knowledge-Base classification fields are wired through API schemas for policy-aware workflows
 - SQL injection prevention via parameterized queries
 - Security scanning in CI (pip-audit, bandit, secret detection)
 

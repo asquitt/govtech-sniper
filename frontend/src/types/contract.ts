@@ -2,6 +2,8 @@
 // Contract Types
 // -----------------------------------------------------------------------------
 
+import type { DataClassification } from "./proposal";
+
 export type ContractStatus = "active" | "at_risk" | "completed" | "on_hold";
 
 export type DeliverableStatus =
@@ -22,6 +24,7 @@ export interface ContractAward {
   parent_contract_id?: number | null;
   contract_number: string;
   title: string;
+  classification?: DataClassification;
   agency?: string | null;
   contract_type?: ContractType | null;
   start_date?: string | null;

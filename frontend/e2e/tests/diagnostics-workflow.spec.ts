@@ -33,5 +33,21 @@ test.describe("Diagnostics Workflow", () => {
     await expect(page.getByTestId("telemetry-task-latency")).toBeVisible();
     await expect(page.getByTestId("telemetry-reconnect-count")).toBeVisible();
     await expect(page.getByTestId("telemetry-throughput")).toBeVisible();
+
+    await page.getByLabel("Min active connection threshold").fill("2");
+    await page.getByRole("button", { name: "Evaluate Alerts" }).click();
+    await expect(page.getByTestId("diagnostics-alert-count")).toBeVisible();
+    await expect(page.getByTestId("diagnostics-alert-active_connections_low")).toBeVisible();
+
+    const telemetryExportPromise = page.waitForResponse((response) => {
+      return (
+        response.url().includes("/ws/diagnostics/export") &&
+        response.request().method() === "GET" &&
+        response.status() === 200
+      );
+    });
+    await page.getByTestId("diagnostics-export-telemetry").click();
+    const telemetryExportResponse = await telemetryExportPromise;
+    expect(await telemetryExportResponse.headerValue("content-type")).toContain("text/csv");
   });
 });

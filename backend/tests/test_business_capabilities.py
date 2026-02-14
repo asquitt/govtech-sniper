@@ -172,6 +172,85 @@ class TestBusinessCapabilities:
         assert all(item["id"] != event["id"] for item in all_events.json())
 
     @pytest.mark.asyncio
+    async def test_events_ingest_calendar_and_profile_alerts(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+        test_user: User,
+    ):
+        now = datetime.utcnow()
+        rfp = RFP(
+            user_id=test_user.id,
+            title="DHS Cybersecurity Industry Day and Pre-Proposal Conference",
+            solicitation_number="EVT-ING-001",
+            notice_id="evt-ing-notice-001",
+            agency="DHS",
+            naics_code="541512",
+            rfp_type="solicitation",
+            estimated_value=2_500_000,
+            response_deadline=now + timedelta(days=45),
+            posted_date=now,
+            status="new",
+            description=(
+                "This solicitation includes an industry day webinar and a pre-proposal "
+                "conference for interested vendors."
+            ),
+        )
+        db_session.add(rfp)
+        await db_session.commit()
+
+        configure_profile = await client.post(
+            "/api/v1/signals/subscription",
+            headers=auth_headers,
+            json={
+                "agencies": ["DHS"],
+                "naics_codes": ["541512"],
+                "keywords": ["cybersecurity", "industry day"],
+                "email_digest_enabled": False,
+                "digest_frequency": "daily",
+            },
+        )
+        assert configure_profile.status_code == 200
+
+        ingest = await client.post(
+            "/api/v1/events/ingest",
+            headers=auth_headers,
+            params={"days_ahead": 120, "include_curated": True},
+        )
+        assert ingest.status_code == 200
+        ingest_payload = ingest.json()
+        assert ingest_payload["candidates"] >= 1
+        assert ingest_payload["created"] >= 1
+
+        all_events = await client.get("/api/v1/events", headers=auth_headers)
+        assert all_events.status_code == 200
+        events_payload = all_events.json()
+        assert len(events_payload) >= 1
+        sample_event_date = datetime.fromisoformat(events_payload[0]["date"])
+
+        calendar = await client.get(
+            "/api/v1/events/calendar",
+            headers=auth_headers,
+            params={"month": sample_event_date.month, "year": sample_event_date.year},
+        )
+        assert calendar.status_code == 200
+        assert len(calendar.json()) >= 1
+
+        alerts = await client.get(
+            "/api/v1/events/alerts",
+            headers=auth_headers,
+            params={"min_score": 20},
+        )
+        assert alerts.status_code == 200
+        alert_payload = alerts.json()
+        assert alert_payload["evaluated"] >= 1
+        assert alert_payload["total"] >= 1
+        top_alert = alert_payload["alerts"][0]
+        assert top_alert["relevance_score"] >= 20
+        assert len(top_alert["match_reasons"]) >= 1
+
+    @pytest.mark.asyncio
     async def test_signals_feed_mark_read_and_subscription_lifecycle(
         self,
         client: AsyncClient,
@@ -227,6 +306,72 @@ class TestBusinessCapabilities:
         subscription = await client.get("/api/v1/signals/subscription", headers=auth_headers)
         assert subscription.status_code == 200
         assert subscription.json()["agencies"] == ["DoD"]
+
+    @pytest.mark.asyncio
+    async def test_signals_ingestion_rescore_and_digest_delivery(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        configure_profile = await client.post(
+            "/api/v1/signals/subscription",
+            headers=auth_headers,
+            json={
+                "agencies": ["Department of Defense"],
+                "naics_codes": ["541512"],
+                "keywords": ["cloud", "modernization"],
+                "email_digest_enabled": True,
+                "digest_frequency": "daily",
+            },
+        )
+        assert configure_profile.status_code == 200
+
+        budget_record = await client.post(
+            "/api/v1/budget-intel",
+            headers=auth_headers,
+            json={
+                "title": "FY26 Cloud Modernization Budget",
+                "fiscal_year": 2026,
+                "amount": 1800000,
+                "notes": "Priority spending for secure cloud modernization and AI readiness.",
+                "source_url": "https://example.com/fy26-budget",
+            },
+        )
+        assert budget_record.status_code == 200
+
+        ingest_news = await client.post(
+            "/api/v1/signals/ingest/news",
+            headers=auth_headers,
+            params={"use_fallback_only": True},
+        )
+        assert ingest_news.status_code == 200
+        assert ingest_news.json()["created"] >= 1
+
+        ingest_budget = await client.post(
+            "/api/v1/signals/ingest/budget-analysis",
+            headers=auth_headers,
+            params={"limit": 10},
+        )
+        assert ingest_budget.status_code == 200
+        assert ingest_budget.json()["created"] >= 1
+
+        rescore = await client.post("/api/v1/signals/rescore", headers=auth_headers)
+        assert rescore.status_code == 200
+        assert rescore.json()["updated"] >= 1
+        assert rescore.json()["average_score"] > 0
+
+        preview = await client.get("/api/v1/signals/digest-preview", headers=auth_headers)
+        assert preview.status_code == 200
+        preview_payload = preview.json()
+        assert preview_payload["included_count"] >= 1
+        assert len(preview_payload["top_signals"]) >= 1
+
+        send = await client.post("/api/v1/signals/digest-send", headers=auth_headers)
+        assert send.status_code == 200
+        send_payload = send.json()
+        assert send_payload["simulated"] is True
+        assert send_payload["included_count"] >= 1
+        assert send_payload["recipient_email"]
 
     @pytest.mark.asyncio
     async def test_reports_generate_schedule_and_export(

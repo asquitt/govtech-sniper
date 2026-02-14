@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
+import { StepUpAuthModal } from "@/components/security/step-up-auth-modal";
 import { FocusDocumentSelector } from "@/components/proposals/focus-document-selector";
 import { SectionSidebar } from "./_components/section-sidebar";
 import { SectionEditor } from "./_components/section-editor";
@@ -18,6 +19,7 @@ import { CollaborationContextPanel } from "./_components/collaboration-context-p
 import { QualityScorecard } from "./_components/quality-scorecard";
 import { SharePointExportDialog } from "@/components/integrations/sharepoint-export-dialog";
 import { draftApi, documentApi, exportApi, wordAddinApi, graphicsApi } from "@/lib/api";
+import { getApiErrorMessage, isStepUpRequiredError } from "@/lib/api/error";
 import type {
   Proposal,
   ProposalSection,
@@ -74,6 +76,13 @@ export default function ProposalWorkspacePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSharePointExport, setShowSharePointExport] = useState(false);
+  const [isStepUpModalOpen, setIsStepUpModalOpen] = useState(false);
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
+  const [isStepUpSubmitting, setIsStepUpSubmitting] = useState(false);
+  const [pendingStepUpFormat, setPendingStepUpFormat] = useState<
+    "docx" | "pdf" | "compliance-package" | null
+  >(null);
+  const hydratedSectionIdRef = useRef<number | null>(null);
 
   const selectedSection = useMemo(
     () => sections.find((section) => section.id === selectedSectionId) || null,
@@ -121,7 +130,6 @@ export default function ProposalWorkspacePage() {
     const fetchEvidence = async () => {
       if (!selectedSectionId) {
         setEvidence([]);
-        setEditorContent("");
         return;
       }
       try {
@@ -132,15 +140,34 @@ export default function ProposalWorkspacePage() {
       } catch (err) {
         console.error("Failed to load evidence", err);
       }
-
-      const section = sections.find((s) => s.id === selectedSectionId);
-      if (section) {
-        setEditorContent(section.final_content || section.generated_content?.clean_text || "");
-        setWritingPlan(section.writing_plan || "");
-      }
     };
 
     fetchEvidence();
+  }, [selectedSectionId]);
+
+  useEffect(() => {
+    if (!selectedSectionId) {
+      hydratedSectionIdRef.current = null;
+      setEditorContent("");
+      setWritingPlan("");
+      return;
+    }
+
+    // Hydrate editor state only when the user changes section selection.
+    // This prevents section metadata refreshes (rewrite/expand responses) from clobbering
+    // in-progress AI suggestion markup in the editor.
+    if (hydratedSectionIdRef.current === selectedSectionId) {
+      return;
+    }
+
+    const section = sections.find((s) => s.id === selectedSectionId);
+    if (!section) {
+      return;
+    }
+
+    hydratedSectionIdRef.current = selectedSectionId;
+    setEditorContent(section.final_content || section.generated_content?.clean_text || "");
+    setWritingPlan(section.writing_plan || "");
   }, [selectedSectionId, sections]);
 
   const handleSaveSection = async () => {
@@ -393,23 +420,74 @@ export default function ProposalWorkspacePage() {
     }
   };
 
-  const handleExport = async (format: "docx" | "pdf") => {
+  const handleExport = async (
+    format: "docx" | "pdf" | "compliance-package"
+  ) => {
     if (!proposal) return;
-    try {
-      const blob = format === "docx"
-        ? await exportApi.exportProposalDocx(proposal.id)
-        : await exportApi.exportProposalPdf(proposal.id);
+    const extension = format === "compliance-package" ? "zip" : format;
+    const triggerDownload = (blob: Blob) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${proposal.title}.${format}`;
+      a.download = `${proposal.title}.${extension}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+    };
+    const fetchExport = (code?: string) =>
+      format === "docx"
+        ? exportApi.exportProposalDocx(proposal.id, code)
+        : format === "pdf"
+          ? exportApi.exportProposalPdf(proposal.id, code)
+          : exportApi.exportCompliancePackage(proposal.id, code);
+
+    try {
+      const blob = await fetchExport();
+      triggerDownload(blob);
     } catch (err) {
+      if (isStepUpRequiredError(err)) {
+        setPendingStepUpFormat(format);
+        setStepUpError(null);
+        setIsStepUpModalOpen(true);
+        return;
+      }
       console.error("Export failed", err);
       setError("Failed to export proposal.");
+    }
+  };
+
+  const handleStepUpExport = async (code: string) => {
+    if (!proposal || !pendingStepUpFormat) return;
+    setIsStepUpSubmitting(true);
+    setStepUpError(null);
+    try {
+      const blob =
+        pendingStepUpFormat === "docx"
+          ? await exportApi.exportProposalDocx(proposal.id, code)
+          : pendingStepUpFormat === "pdf"
+            ? await exportApi.exportProposalPdf(proposal.id, code)
+            : await exportApi.exportCompliancePackage(proposal.id, code);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${proposal.title}.${pendingStepUpFormat === "compliance-package" ? "zip" : pendingStepUpFormat}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setIsStepUpModalOpen(false);
+      setPendingStepUpFormat(null);
+    } catch (err) {
+      if (isStepUpRequiredError(err)) {
+        setStepUpError("Invalid MFA code. Please try again.");
+        return;
+      }
+      setStepUpError(
+        getApiErrorMessage(err, "Failed to export proposal after MFA verification.")
+      );
+    } finally {
+      setIsStepUpSubmitting(false);
     }
   };
 
@@ -446,6 +524,18 @@ export default function ProposalWorkspacePage() {
 
   return (
     <div className="flex flex-col h-full">
+      <StepUpAuthModal
+        open={isStepUpModalOpen}
+        isSubmitting={isStepUpSubmitting}
+        error={stepUpError}
+        onClose={() => {
+          setIsStepUpModalOpen(false);
+          setStepUpError(null);
+          setPendingStepUpFormat(null);
+        }}
+        onSubmit={handleStepUpExport}
+      />
+
       <Header
         title={proposal.title}
         description={`Proposal Workspace • ${proposal.status}`}
@@ -471,6 +561,12 @@ export default function ProposalWorkspacePage() {
             </Button>
             <Button variant="outline" onClick={() => handleExport("pdf")}>
               Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExport("compliance-package")}
+            >
+              Export Evidence Bundle
             </Button>
             <Button variant="outline" onClick={() => setShowSharePointExport((prev) => !prev)}>
               SharePoint Export

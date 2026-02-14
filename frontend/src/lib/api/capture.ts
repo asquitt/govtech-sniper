@@ -14,6 +14,8 @@ import type {
   CaptureCompetitor,
   CaptureMatchInsight,
   BudgetIntelligence,
+  BidScenarioRequest,
+  BidScenarioSimulationResponse,
 } from "@/types";
 
 // =============================================================================
@@ -261,6 +263,14 @@ export const captureApi = {
 
   getBidSummary: async (rfpId: number): Promise<BidDecisionSummaryResponse> => {
     const { data } = await api.get(`/capture/scorecards/${rfpId}/summary`);
+    return data;
+  },
+
+  simulateBidScenarios: async (
+    rfpId: number,
+    payload?: { scenarios?: BidScenarioRequest[] }
+  ): Promise<BidScenarioSimulationResponse> => {
+    const { data } = await api.post(`/capture/scorecards/${rfpId}/scenario-simulator`, payload ?? {});
     return data;
   },
 };

@@ -2,6 +2,8 @@
 // RFP Types
 // -----------------------------------------------------------------------------
 
+import type { DataClassification } from "./proposal";
+
 export type RFPStatus =
   | "new"
   | "analyzing"
@@ -25,6 +27,7 @@ export interface RFP {
   title: string;
   solicitation_number: string;
   agency: string;
+  classification?: DataClassification;
   sub_agency?: string;
   naics_code?: string;
   set_aside?: string;
@@ -40,6 +43,7 @@ export interface RFP {
   qualification_reason?: string;
   qualification_score?: number;
   estimated_value?: number;
+  currency?: string;
   place_of_performance?: string;
   source_type?: string;
   jurisdiction?: string;
@@ -66,16 +70,58 @@ export interface RFPListItem {
   notice_id?: string;
   agency: string;
   status: RFPStatus;
+  classification?: DataClassification;
   is_qualified?: boolean;
   qualification_score?: number;
   match_score?: number | null;
   recommendation_score?: number;
+  source_type?: string;
+  jurisdiction?: string;
+  currency?: string;
   response_deadline?: string;
   requirements_count?: number;
   sections_generated?: number;
   analyzed_at?: string;
   updated_at?: string;
   created_at: string;
+}
+
+export interface AmendmentImpactSignal {
+  field: string;
+  from_value?: string | null;
+  to_value?: string | null;
+  impact_area: string;
+  severity: "low" | "medium" | "high" | string;
+  recommended_actions: string[];
+}
+
+export interface AmendmentSectionRemediation {
+  proposal_id: number;
+  proposal_title: string;
+  section_id: number;
+  section_number?: string | null;
+  section_title: string;
+  section_status: string;
+  impact_score: number;
+  impact_level: "low" | "medium" | "high" | string;
+  matched_change_fields: string[];
+  rationale: string;
+  proposed_patch: string;
+  recommended_actions: string[];
+  approval_required: boolean;
+}
+
+export interface SnapshotAmendmentImpact {
+  rfp_id: number;
+  from_snapshot_id: number;
+  to_snapshot_id: number;
+  generated_at: string;
+  amendment_risk_level: "low" | "medium" | "high" | string;
+  changed_fields: string[];
+  signals: AmendmentImpactSignal[];
+  impacted_sections: AmendmentSectionRemediation[];
+  summary: Record<string, string | number>;
+  approval_workflow: string[];
 }
 
 // -----------------------------------------------------------------------------

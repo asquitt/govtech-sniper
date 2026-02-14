@@ -186,6 +186,54 @@ class ScoringSummary(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Review Packet
+# ---------------------------------------------------------------------------
+
+
+class ReviewPacketActionItem(BaseModel):
+    rank: int
+    comment_id: int
+    section_id: int | None = None
+    severity: str
+    status: str
+    risk_score: float
+    age_days: int
+    assigned_to_user_id: int | None = None
+    recommended_action: str
+    rationale: str
+
+
+class ReviewPacketChecklistSummary(BaseModel):
+    total_items: int = 0
+    pass_count: int = 0
+    fail_count: int = 0
+    pending_count: int = 0
+    na_count: int = 0
+    pass_rate: float = 0.0
+
+
+class ReviewPacketRiskSummary(BaseModel):
+    open_critical: int = 0
+    open_major: int = 0
+    unresolved_comments: int = 0
+    highest_risk_score: float = 0.0
+    overall_risk_level: str
+
+
+class ReviewPacketRead(BaseModel):
+    review_id: int
+    proposal_id: int
+    proposal_title: str
+    review_type: str
+    review_status: str
+    generated_at: datetime
+    checklist_summary: ReviewPacketChecklistSummary
+    risk_summary: ReviewPacketRiskSummary
+    action_queue: list[ReviewPacketActionItem]
+    recommended_exit_criteria: list[str]
+
+
+# ---------------------------------------------------------------------------
 # List wrapper
 # ---------------------------------------------------------------------------
 

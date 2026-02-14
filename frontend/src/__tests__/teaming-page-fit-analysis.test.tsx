@@ -9,6 +9,7 @@ vi.mock("@/lib/api", () => ({
     listRequests: vi.fn(),
     getRequestFitTrends: vi.fn(),
     getPartnerTrends: vi.fn(),
+    getPartnerCohorts: vi.fn(),
     getDigestSchedule: vi.fn(),
     updateDigestSchedule: vi.fn(),
     sendDigest: vi.fn(),
@@ -78,6 +79,32 @@ describe("TeamingBoardPage fit analysis", () => {
         },
       ],
     });
+    mockedTeamingApi.getPartnerCohorts.mockResolvedValue({
+      days: 30,
+      total_sent: 1,
+      naics_cohorts: [
+        {
+          cohort_value: "541512",
+          partner_count: 1,
+          sent_count: 1,
+          accepted_count: 1,
+          declined_count: 0,
+          pending_count: 0,
+          acceptance_rate: 100,
+        },
+      ],
+      set_aside_cohorts: [
+        {
+          cohort_value: "8a",
+          partner_count: 1,
+          sent_count: 1,
+          accepted_count: 1,
+          declined_count: 0,
+          pending_count: 0,
+          acceptance_rate: 100,
+        },
+      ],
+    });
     mockedTeamingApi.getDigestSchedule.mockResolvedValue({
       frequency: "weekly",
       day_of_week: 1,
@@ -125,6 +152,10 @@ describe("TeamingBoardPage fit analysis", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Sent \(/ }));
     expect(await screen.findByTestId("teaming-acceptance-rate")).toHaveTextContent("100%");
+    expect(await screen.findByText("NAICS Cohorts")).toBeInTheDocument();
+    expect(await screen.findByText(/541512:/)).toBeInTheDocument();
+    expect(await screen.findByText("Set-Aside Cohorts")).toBeInTheDocument();
+    expect(await screen.findByText(/8a:/)).toBeInTheDocument();
     fireEvent.click(await screen.findByTestId("teaming-export-audit"));
     await waitFor(() =>
       expect(mockedTeamingApi.exportRequestAuditCsv).toHaveBeenCalledWith("sent", 30)

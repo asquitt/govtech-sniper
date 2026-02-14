@@ -29,6 +29,27 @@ async function createSignal(page: Parameters<typeof test>[0]["authenticatedPage"
   return payload.id as number;
 }
 
+async function createBudgetIntel(
+  page: Parameters<typeof test>[0]["authenticatedPage"],
+  title: string,
+) {
+  const token = await getAccessToken(page);
+  const response = await page.request.post("/api/budget-intel", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    data: {
+      title,
+      fiscal_year: 2026,
+      amount: 1500000,
+      notes: "Cloud modernization and AI readiness priorities.",
+      source_url: "https://example.com/e2e-budget",
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
 test.describe("Signals and Events Workflow", () => {
   test("updates signal subscription and marks feed item read", async ({
     authenticatedPage: page,
@@ -36,6 +57,7 @@ test.describe("Signals and Events Workflow", () => {
     const nonce = Date.now();
     const title = `Budget Signal ${nonce}`;
     const signalId = await createSignal(page, title);
+    await createBudgetIntel(page, `Budget Intel ${nonce}`);
 
     await page.goto("/signals");
     await expect(page.getByRole("heading", { name: "Market Signals" })).toBeVisible();
@@ -45,10 +67,32 @@ test.describe("Signals and Events Workflow", () => {
     await page
       .getByPlaceholder("cybersecurity, cloud, AI/ML")
       .fill("cloud modernization, ai readiness");
+    await page.getByLabel("Enable market signals email digest").check();
     await page.getByRole("button", { name: "Save Preferences" }).click();
     await expect(
       page.getByRole("button", { name: "Subscription Settings" })
     ).toBeVisible();
+
+    await page.getByRole("button", { name: "Ingest News" }).click();
+    await expect(page.getByTestId("signals-action-message")).toContainText(
+      "News ingestion completed"
+    );
+
+    await page.getByRole("button", { name: "Analyze Budget Docs" }).click();
+    await expect(page.getByTestId("signals-action-message")).toContainText(
+      "Budget analysis completed"
+    );
+
+    await page.getByRole("button", { name: "Rescore Signals" }).click();
+    await expect(page.getByTestId("signals-action-message")).toContainText(
+      "Signals rescored"
+    );
+
+    await page.getByRole("button", { name: "Preview Digest" }).click();
+    await expect(page.getByTestId("signals-digest-preview-card")).toBeVisible();
+
+    await page.getByRole("button", { name: "Send Digest" }).click();
+    await expect(page.getByTestId("signals-action-message")).toContainText("Digest sent to");
 
     const signalRow = page
       .locator(".border.rounded-lg")
@@ -79,7 +123,7 @@ test.describe("Signals and Events Workflow", () => {
       )
       .toBeTruthy();
 
-    await page.getByRole("button", { name: "Budget" }).click();
+    await page.getByRole("button", { name: "Budget", exact: true }).click();
     await expect(page.getByText(title)).toBeVisible();
   });
 
@@ -98,6 +142,14 @@ test.describe("Signals and Events Workflow", () => {
 
     await page.goto("/events");
     await expect(page.getByRole("heading", { name: "Industry Days & Events" })).toBeVisible();
+    await expect(page.getByTestId("events-alerts-card")).toBeVisible();
+
+    await page.getByRole("button", { name: "Ingest from Sources" }).click();
+    await expect(page.getByTestId("events-ingest-summary")).toContainText("Ingestion completed");
+
+    await page.getByRole("button", { name: "Calendar" }).click();
+    await expect(page.getByTestId("events-calendar-card")).toBeVisible();
+    await expect(page.getByTestId("events-calendar-grid")).toBeVisible();
 
     await page.getByRole("button", { name: "Add Event" }).click();
     await page.getByPlaceholder("Event title").fill(eventTitle);
@@ -107,16 +159,20 @@ test.describe("Signals and Events Workflow", () => {
     await page.getByPlaceholder("Description (optional)").fill("E2E event workflow check");
     await page.getByRole("button", { name: "Create Event" }).click();
 
-    await expect(page.getByText(eventTitle)).toBeVisible({ timeout: 15_000 });
-
     await page.getByRole("button", { name: "All Events" }).click();
-    await expect(page.getByText(eventTitle)).toBeVisible();
+    const createdEventRow = page
+      .getByTestId("event-list-row")
+      .filter({ has: page.getByText(eventTitle, { exact: true }) })
+      .first();
+    await expect(createdEventRow).toBeVisible({ timeout: 15_000 });
+
+    await expect(createdEventRow).toBeVisible();
 
     const eventRow = page
-      .locator(".border.rounded-lg")
-      .filter({ has: page.getByText(eventTitle) })
+      .getByTestId("event-list-row")
+      .filter({ has: page.getByText(eventTitle, { exact: true }) })
       .first();
     await eventRow.getByRole("button", { name: "Delete" }).click();
-    await expect(page.getByText(eventTitle)).toBeHidden({ timeout: 15_000 });
+    await expect(eventRow).toBeHidden({ timeout: 15_000 });
   });
 });

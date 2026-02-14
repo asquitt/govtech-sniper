@@ -35,12 +35,15 @@ from app.models.capture import (
 )
 from app.models.collaboration import (
     ComplianceDigestChannel,
+    ComplianceDigestDeliveryStatus,
     ComplianceDigestFrequency,
+    ComplianceDigestRecipientRole,
     GovernanceAnomalySeverity,
     ShareApprovalStatus,
     SharedDataPermission,
     SharedDataType,
     SharedWorkspace,
+    WorkspaceComplianceDigestDelivery,
     WorkspaceComplianceDigestSchedule,
     WorkspaceInvitation,
     WorkspaceMember,
@@ -252,8 +255,11 @@ __all__ = [
     "SSOProvider",
     "ComplianceDigestFrequency",
     "ComplianceDigestChannel",
+    "ComplianceDigestRecipientRole",
+    "ComplianceDigestDeliveryStatus",
     "GovernanceAnomalySeverity",
     "WorkspaceComplianceDigestSchedule",
+    "WorkspaceComplianceDigestDelivery",
     "InboxMessage",
     "InboxMessageType",
 ]

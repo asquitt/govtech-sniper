@@ -190,3 +190,93 @@ class TestAdminRoles:
         members = await client.get("/api/v1/admin/members", headers=auth_headers)
         assert members.status_code == 200
         assert any(member["email"] == invite_email for member in members.json()["members"])
+
+    @pytest.mark.asyncio
+    async def test_org_member_invitation_revoke_and_resend_flow(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        create_org = await client.post(
+            "/api/v1/admin/organizations",
+            headers=auth_headers,
+            json={
+                "name": "Invite Ops Org",
+                "slug": "invite-ops-org",
+                "domain": "invite-ops.example.com",
+            },
+        )
+        assert create_org.status_code == 200
+
+        invite_email = "ops-member@example.com"
+        invite = await client.post(
+            "/api/v1/admin/members/invite",
+            headers=auth_headers,
+            json={
+                "email": invite_email,
+                "role": "member",
+                "expires_in_days": 5,
+            },
+        )
+        assert invite.status_code == 201
+        invite_payload = invite.json()
+        assert invite_payload["sla_state"] in {"healthy", "expiring"}
+        assert invite_payload["invite_age_hours"] >= 0
+
+        revoke = await client.post(
+            f"/api/v1/admin/member-invitations/{invite_payload['id']}/revoke",
+            headers=auth_headers,
+        )
+        assert revoke.status_code == 200
+        assert revoke.json()["status"] == "revoked"
+        assert revoke.json()["sla_state"] == "revoked"
+
+        resend = await client.post(
+            f"/api/v1/admin/member-invitations/{invite_payload['id']}/resend",
+            headers=auth_headers,
+            json={"expires_in_days": 9},
+        )
+        assert resend.status_code == 200
+        resend_payload = resend.json()
+        assert resend_payload["status"] == "pending"
+        assert resend_payload["days_until_expiry"] >= 8
+        assert resend_payload["sla_state"] in {"healthy", "expiring"}
+
+    @pytest.mark.asyncio
+    async def test_org_security_policy_flags_can_be_updated(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        create_org = await client.post(
+            "/api/v1/admin/organizations",
+            headers=auth_headers,
+            json={
+                "name": "Security Policy Org",
+                "slug": "security-policy-org",
+                "domain": "security-policy.example.com",
+            },
+        )
+        assert create_org.status_code == 200
+
+        initial = await client.get("/api/v1/admin/organization", headers=auth_headers)
+        assert initial.status_code == 200
+        initial_payload = initial.json()
+        assert initial_payload["require_step_up_for_sensitive_exports"] is True
+        assert initial_payload["require_step_up_for_sensitive_shares"] is True
+
+        update = await client.patch(
+            "/api/v1/admin/organization",
+            headers=auth_headers,
+            json={
+                "require_step_up_for_sensitive_exports": False,
+                "require_step_up_for_sensitive_shares": False,
+            },
+        )
+        assert update.status_code == 200
+
+        updated = await client.get("/api/v1/admin/organization", headers=auth_headers)
+        assert updated.status_code == 200
+        updated_payload = updated.json()
+        assert updated_payload["require_step_up_for_sensitive_exports"] is False
+        assert updated_payload["require_step_up_for_sensitive_shares"] is False

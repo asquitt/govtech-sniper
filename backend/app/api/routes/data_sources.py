@@ -128,6 +128,10 @@ async def ingest_from_provider(
             description=opp.description,
             source_url=opp.source_url,
             source_type=opp.source_type,
+            jurisdiction=opp.jurisdiction,
+            currency=(
+                opp.currency or ("CAD" if opp.source_type.startswith("canada") else "USD")
+            ).upper(),
             estimated_value=int(opp.estimated_value) if opp.estimated_value else None,
             posted_date=_parse_date(opp.posted_date),
             response_deadline=_parse_date(opp.response_deadline),

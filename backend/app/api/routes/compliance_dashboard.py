@@ -20,8 +20,15 @@ from app.models.audit import AuditEvent
 from app.models.organization import Organization, OrganizationMember, OrgRole
 from app.models.user import User
 from app.schemas.compliance import (
+    ComplianceReadinessCheckpoint,
+    ComplianceReadinessCheckpointResponse,
     ComplianceReadinessResponse,
     DataPrivacyInfo,
+    GovCloudDeploymentProfile,
+    GovCloudMigrationPhase,
+    SOC2ControlDomainStatus,
+    SOC2Milestone,
+    SOC2ReadinessResponse,
     TrustCenterEvidenceItem,
     TrustCenterPolicy,
     TrustCenterPolicyUpdate,
@@ -42,6 +49,266 @@ _TRUST_CENTER_POLICY_DEFAULTS: dict[str, Any] = {
     "retain_prompt_logs_days": 0,
     "retain_output_logs_days": 30,
 }
+
+
+def _readiness_programs() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "fedramp_moderate",
+            "name": "FedRAMP Moderate",
+            "status": "in_progress",
+            "percent_complete": 72,
+            "next_milestone": "Control implementation narrative finalization",
+        },
+        {
+            "id": "cmmc_level_2",
+            "name": "CMMC Level 2",
+            "status": "in_progress",
+            "percent_complete": 78,
+            "next_milestone": "External assessor evidence packet review",
+        },
+        {
+            "id": "govcloud_deployment",
+            "name": "GovCloud Deployment",
+            "status": "in_progress",
+            "percent_complete": 64,
+            "next_milestone": "Boundary migration and tenant hardening validation",
+        },
+        {
+            "id": "soc2_type_ii",
+            "name": "SOC 2 Type II",
+            "status": "in_progress",
+            "percent_complete": 68,
+            "next_milestone": "External auditor kickoff and evidence lock package",
+        },
+        {
+            "id": "salesforce_appexchange",
+            "name": "Salesforce AppExchange Listing",
+            "status": "ready_for_submission",
+            "percent_complete": 90,
+            "next_milestone": "Submit managed package and listing metadata",
+        },
+        {
+            "id": "microsoft_appsource",
+            "name": "Microsoft AppSource Listing",
+            "status": "ready_for_submission",
+            "percent_complete": 88,
+            "next_milestone": "Submit add-in validation package and screenshots",
+        },
+    ]
+
+
+def _readiness_checkpoints() -> list[ComplianceReadinessCheckpoint]:
+    return [
+        ComplianceReadinessCheckpoint(
+            checkpoint_id="fedramp_boundary_package",
+            program_id="fedramp_moderate",
+            title="FedRAMP SSP boundary package freeze",
+            status="in_progress",
+            target_date=datetime(2026, 4, 18),
+            owner="Security Program Manager",
+            third_party_required=False,
+            evidence_items_ready=18,
+            evidence_items_total=27,
+        ),
+        ComplianceReadinessCheckpoint(
+            checkpoint_id="fedramp_3pao_readiness",
+            program_id="fedramp_moderate",
+            title="3PAO readiness checkpoint and assessor onboarding",
+            status="scheduled",
+            target_date=datetime(2026, 5, 20),
+            owner="Compliance Lead",
+            third_party_required=True,
+            evidence_items_ready=9,
+            evidence_items_total=24,
+        ),
+        ComplianceReadinessCheckpoint(
+            checkpoint_id="cmmc_scope_validation",
+            program_id="cmmc_level_2",
+            title="CMMC Level 2 scope and enclave validation",
+            status="completed",
+            target_date=datetime(2026, 3, 10),
+            owner="Security Engineering Lead",
+            third_party_required=False,
+            evidence_items_ready=14,
+            evidence_items_total=14,
+        ),
+        ComplianceReadinessCheckpoint(
+            checkpoint_id="cmmc_assessor_dry_run",
+            program_id="cmmc_level_2",
+            title="Third-party assessor dry-run and POA&M review",
+            status="in_progress",
+            target_date=datetime(2026, 5, 12),
+            owner="Compliance Lead",
+            third_party_required=True,
+            evidence_items_ready=22,
+            evidence_items_total=31,
+        ),
+        ComplianceReadinessCheckpoint(
+            checkpoint_id="govcloud_tenant_attestation",
+            program_id="govcloud_deployment",
+            title="GovCloud tenant hardening attestation pack",
+            status="in_progress",
+            target_date=datetime(2026, 4, 30),
+            owner="Platform Operations Lead",
+            third_party_required=False,
+            evidence_items_ready=11,
+            evidence_items_total=19,
+        ),
+    ]
+
+
+def _build_govcloud_profile(now: datetime) -> GovCloudDeploymentProfile:
+    return GovCloudDeploymentProfile(
+        program_id="govcloud_deployment",
+        provider="AWS GovCloud (US)",
+        status="in_progress",
+        target_regions=["us-gov-west-1", "us-gov-east-1"],
+        boundary_services=[
+            "Amazon EKS (GovCloud)",
+            "Amazon RDS PostgreSQL",
+            "Amazon S3 (SSE-KMS)",
+            "AWS KMS",
+            "AWS WAF + Shield Advanced",
+            "AWS IAM Identity Center",
+        ],
+        identity_federation_status="in_progress",
+        network_isolation_status="validated_in_preprod",
+        data_residency_status="us_government_regions_only",
+        migration_phases=[
+            GovCloudMigrationPhase(
+                phase_id="landing_zone",
+                title="Landing zone and account boundary setup",
+                status="completed",
+                target_date=datetime(2026, 2, 28),
+                owner="Platform Operations Lead",
+                exit_criteria=[
+                    "Dedicated GovCloud org/account hierarchy provisioned",
+                    "Baseline SCP guardrails and KMS boundaries enforced",
+                ],
+            ),
+            GovCloudMigrationPhase(
+                phase_id="identity_cutover",
+                title="SSO federation and privileged access cutover",
+                status="in_progress",
+                target_date=datetime(2026, 4, 12),
+                owner="Identity & Access Lead",
+                exit_criteria=[
+                    "IdP federation mapped to GovCloud IAM Identity Center",
+                    "Privileged sessions covered by break-glass controls and audit logging",
+                ],
+            ),
+            GovCloudMigrationPhase(
+                phase_id="workload_migration",
+                title="Production workload migration and boundary validation",
+                status="scheduled",
+                target_date=datetime(2026, 5, 30),
+                owner="SRE Manager",
+                exit_criteria=[
+                    "Core API and worker services running in GovCloud",
+                    "Cross-region DR replication validated",
+                    "Latency/SLO baselines within 5% of commercial cloud baseline",
+                ],
+            ),
+        ],
+        updated_at=now,
+    )
+
+
+def _build_soc2_readiness(now: datetime) -> SOC2ReadinessResponse:
+    observation_window_start = datetime(now.year, 3, 1)
+    observation_window_end = datetime(now.year, 8, 31)
+    if now.month >= 9:
+        observation_window_start = datetime(now.year + 1, 3, 1)
+        observation_window_end = datetime(now.year + 1, 8, 31)
+
+    domains = [
+        SOC2ControlDomainStatus(
+            domain_id="CC1",
+            domain_name="Control Environment",
+            controls_total=18,
+            controls_ready=13,
+            percent_complete=72,
+            owner="Security Program Manager",
+        ),
+        SOC2ControlDomainStatus(
+            domain_id="CC6",
+            domain_name="Logical and Physical Access",
+            controls_total=16,
+            controls_ready=11,
+            percent_complete=69,
+            owner="Identity & Access Lead",
+        ),
+        SOC2ControlDomainStatus(
+            domain_id="CC7",
+            domain_name="System Operations",
+            controls_total=14,
+            controls_ready=10,
+            percent_complete=71,
+            owner="Platform Operations Lead",
+        ),
+        SOC2ControlDomainStatus(
+            domain_id="A1",
+            domain_name="Availability",
+            controls_total=9,
+            controls_ready=6,
+            percent_complete=67,
+            owner="SRE Manager",
+        ),
+    ]
+
+    milestones = [
+        SOC2Milestone(
+            milestone_id="scope_freeze",
+            title="Audit scope and system boundary freeze",
+            status="completed",
+            due_date=datetime(2026, 3, 15),
+            owner="Compliance Lead",
+            evidence_ready=True,
+            notes="Boundary narrative and asset inventory finalized.",
+        ),
+        SOC2Milestone(
+            milestone_id="control_walkthroughs",
+            title="Control owner walkthroughs and evidence mapping",
+            status="in_progress",
+            due_date=datetime(2026, 4, 20),
+            owner="Security Program Manager",
+            evidence_ready=False,
+            notes="Residual gap remains on privileged access review evidence.",
+        ),
+        SOC2Milestone(
+            milestone_id="auditor_kickoff",
+            title="External auditor kickoff and PBC package lock",
+            status="scheduled",
+            due_date=datetime(2026, 5, 5),
+            owner="Compliance Lead",
+            evidence_ready=False,
+            notes="Awaiting final access-review exports and vendor risk attestations.",
+        ),
+        SOC2Milestone(
+            milestone_id="observation_window_complete",
+            title="Type II observation window close",
+            status="scheduled",
+            due_date=observation_window_end,
+            owner="Security Program Manager",
+            evidence_ready=False,
+            notes="Observation evidence collection in progress across all trust criteria.",
+        ),
+    ]
+
+    overall = round(sum(domain.percent_complete for domain in domains) / max(len(domains), 1))
+    return SOC2ReadinessResponse(
+        program_id="soc2_type_ii",
+        name="SOC 2 Type II",
+        status="in_progress",
+        audit_firm_status="engagement_letter_signed",
+        observation_window_start=observation_window_start,
+        observation_window_end=observation_window_end,
+        overall_percent_complete=overall,
+        domains=domains,
+        milestones=milestones,
+        updated_at=now,
+    )
 
 
 def _trust_center_policy_from_settings(settings_payload: Any) -> TrustCenterPolicy:
@@ -175,46 +442,110 @@ async def readiness_status(
     current_user: UserAuth = Depends(get_current_user),
 ) -> dict:
     """Marketplace and certification readiness tracker."""
+    now = datetime.utcnow()
     return {
-        "programs": [
-            {
-                "id": "fedramp_moderate",
-                "name": "FedRAMP Moderate",
-                "status": "in_progress",
-                "percent_complete": 72,
-                "next_milestone": "Control implementation narrative finalization",
-            },
-            {
-                "id": "cmmc_level_2",
-                "name": "CMMC Level 2",
-                "status": "in_progress",
-                "percent_complete": 78,
-                "next_milestone": "External assessor evidence packet review",
-            },
-            {
-                "id": "govcloud_deployment",
-                "name": "GovCloud Deployment",
-                "status": "in_progress",
-                "percent_complete": 64,
-                "next_milestone": "Boundary migration and tenant hardening validation",
-            },
-            {
-                "id": "salesforce_appexchange",
-                "name": "Salesforce AppExchange Listing",
-                "status": "ready_for_submission",
-                "percent_complete": 90,
-                "next_milestone": "Submit managed package and listing metadata",
-            },
-            {
-                "id": "microsoft_appsource",
-                "name": "Microsoft AppSource Listing",
-                "status": "ready_for_submission",
-                "percent_complete": 88,
-                "next_milestone": "Submit add-in validation package and screenshots",
-            },
-        ],
-        "last_updated": datetime.utcnow().isoformat(),
+        "programs": _readiness_programs(),
+        "last_updated": now.isoformat(),
     }
+
+
+@router.get(
+    "/readiness-checkpoints",
+    response_model=ComplianceReadinessCheckpointResponse,
+)
+async def readiness_checkpoints(
+    current_user: UserAuth = Depends(get_current_user),
+) -> ComplianceReadinessCheckpointResponse:
+    """Execution checkpoints across FedRAMP/CMMC/GovCloud readiness tracks."""
+    return ComplianceReadinessCheckpointResponse(
+        checkpoints=_readiness_checkpoints(),
+        generated_at=datetime.utcnow(),
+    )
+
+
+@router.get("/govcloud-profile", response_model=GovCloudDeploymentProfile)
+async def govcloud_profile(
+    current_user: UserAuth = Depends(get_current_user),
+) -> GovCloudDeploymentProfile:
+    """GovCloud deployment execution profile with phase-level readiness."""
+    return _build_govcloud_profile(datetime.utcnow())
+
+
+@router.get("/soc2-readiness", response_model=SOC2ReadinessResponse)
+async def soc2_readiness(
+    current_user: UserAuth = Depends(get_current_user),
+) -> SOC2ReadinessResponse:
+    """SOC 2 Type II execution tracker with milestone and domain-level posture."""
+    return _build_soc2_readiness(datetime.utcnow())
+
+
+@router.get("/three-pao-package")
+async def export_three_pao_package(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    """Download readiness package for 3PAO onboarding and audit planning."""
+    _user, org, member = await _current_user_with_org(current_user, session)
+    can_manage_policy = bool(member and member.role in (OrgRole.OWNER, OrgRole.ADMIN))
+    now = datetime.utcnow()
+
+    trust_profile = _build_trust_center_profile(
+        organization=org,
+        can_manage_policy=can_manage_policy,
+    )
+    readiness_programs = _readiness_programs()
+    checkpoints = _readiness_checkpoints()
+    third_party_checkpoints = [
+        checkpoint for checkpoint in checkpoints if checkpoint.third_party_required
+    ]
+    soc2_profile = _build_soc2_readiness(now)
+    govcloud = _build_govcloud_profile(now)
+
+    payload = {
+        "generated_at": now.isoformat(),
+        "generated_by_user_id": current_user.id,
+        "organization_id": org.id if org else None,
+        "readiness_programs": readiness_programs,
+        "checkpoint_summary": {
+            "total": len(checkpoints),
+            "third_party_required": len(third_party_checkpoints),
+            "evidence_items_ready": sum(c.evidence_items_ready for c in checkpoints),
+            "evidence_items_total": sum(c.evidence_items_total for c in checkpoints),
+        },
+        "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in checkpoints],
+        "three_pao_focus_checkpoints": [
+            checkpoint.model_dump(mode="json") for checkpoint in third_party_checkpoints
+        ],
+        "govcloud_profile": govcloud.model_dump(mode="json"),
+        "soc2_profile": soc2_profile.model_dump(mode="json"),
+        "trust_center": trust_profile.model_dump(mode="json"),
+        "controls_in_scope": [
+            "FedRAMP Moderate baseline deltas",
+            "CMMC Level 2 practice evidence map",
+            "GovCloud boundary and identity controls",
+            "SOC 2 Type II trust criteria execution status",
+        ],
+    }
+    filename = f"three_pao_readiness_package_{now.strftime('%Y%m%d')}.json"
+
+    session.add(
+        AuditEvent(
+            user_id=current_user.id,
+            entity_type="compliance",
+            entity_id=org.id if org else None,
+            action="compliance.3pao_package.exported",
+            event_metadata={
+                "organization_id": org.id if org else None,
+                "third_party_checkpoints": len(third_party_checkpoints),
+            },
+        )
+    )
+    await session.commit()
+
+    return JSONResponse(
+        content=payload,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/overview")

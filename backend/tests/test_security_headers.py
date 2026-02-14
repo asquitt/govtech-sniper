@@ -3,6 +3,15 @@
 import pytest
 from httpx import AsyncClient
 
+from app.main import SecurityHeadersMiddleware, app
+
+
+def _security_headers_debug_enabled() -> bool:
+    for middleware in app.user_middleware:
+        if middleware.cls is SecurityHeadersMiddleware:
+            return bool(middleware.kwargs.get("debug", False))
+    raise AssertionError("SecurityHeadersMiddleware is not configured")
+
 
 class TestSecurityHeaders:
     @pytest.mark.asyncio
@@ -18,7 +27,11 @@ class TestSecurityHeaders:
 
     @pytest.mark.asyncio
     async def test_hsts_absent_in_debug_mode(self, client: AsyncClient):
-        """HSTS should not be set in debug/test mode."""
+        """HSTS behavior should match configured debug mode."""
         response = await client.get("/health")
-        # In test mode (debug=True), HSTS should not be present
-        assert "strict-transport-security" not in response.headers
+        if _security_headers_debug_enabled():
+            assert "strict-transport-security" not in response.headers
+            return
+        assert (
+            response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+        )

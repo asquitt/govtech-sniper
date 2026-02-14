@@ -13,6 +13,9 @@ import type {
   DataPrivacyInfo,
   ComplianceAuditSummary,
   ComplianceReadiness,
+  ComplianceReadinessCheckpointSnapshot,
+  GovCloudDeploymentProfile,
+  SOC2Readiness,
   TrustCenterPolicy,
   TrustCenterProfile,
 } from "@/types/compliance";
@@ -83,10 +86,15 @@ export default function CompliancePage() {
   const [privacy, setPrivacy] = useState<DataPrivacyInfo | null>(null);
   const [audit, setAudit] = useState<ComplianceAuditSummary | null>(null);
   const [readiness, setReadiness] = useState<ComplianceReadiness | null>(null);
+  const [readinessCheckpoints, setReadinessCheckpoints] =
+    useState<ComplianceReadinessCheckpointSnapshot | null>(null);
+  const [govCloudProfile, setGovCloudProfile] = useState<GovCloudDeploymentProfile | null>(null);
+  const [soc2Readiness, setSoc2Readiness] = useState<SOC2Readiness | null>(null);
   const [trustCenter, setTrustCenter] = useState<TrustCenterProfile | null>(null);
   const [policyDraft, setPolicyDraft] = useState<TrustCenterPolicy | null>(null);
   const [policySaving, setPolicySaving] = useState(false);
   const [evidenceExporting, setEvidenceExporting] = useState(false);
+  const [threePaoExporting, setThreePaoExporting] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySavedMessage, setPolicySavedMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -96,12 +104,15 @@ export default function CompliancePage() {
     setLoading(true);
     setError(null);
     try {
-      const [c, n, p, a, r, t] = await Promise.all([
+      const [c, n, p, a, r, rc, g, s, t] = await Promise.all([
         complianceApi.getCMMCStatus(),
         complianceApi.getNISTOverview(),
         complianceApi.getDataPrivacy(),
         complianceApi.getComplianceAuditSummary(),
         complianceApi.getReadiness(),
+        complianceApi.getReadinessCheckpoints(),
+        complianceApi.getGovCloudProfile(),
+        complianceApi.getSOC2Readiness(),
         complianceApi.getTrustCenter(),
       ]);
       setCmmc(c);
@@ -109,6 +120,9 @@ export default function CompliancePage() {
       setPrivacy(p);
       setAudit(a);
       setReadiness(r);
+      setReadinessCheckpoints(rc);
+      setGovCloudProfile(g);
+      setSoc2Readiness(s);
       setTrustCenter(t);
       setPolicyDraft(t.policy);
     } catch {
@@ -186,6 +200,26 @@ export default function CompliancePage() {
       setPolicyError("Failed to export trust-center evidence.");
     } finally {
       setEvidenceExporting(false);
+    }
+  };
+
+  const handleThreePaoExport = async () => {
+    setThreePaoExporting(true);
+    setPolicyError(null);
+    try {
+      const blob = await complianceApi.exportThreePAOPackage();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `three_pao_readiness_package_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setPolicyError("Failed to export 3PAO readiness package.");
+    } finally {
+      setThreePaoExporting(false);
     }
   };
 
@@ -309,6 +343,17 @@ export default function CompliancePage() {
                 onClick={handleTrustEvidenceExport}
               >
                 {evidenceExporting ? "Exporting..." : "Export Trust Evidence JSON"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={threePaoExporting}
+                onClick={handleThreePaoExport}
+              >
+                {threePaoExporting
+                  ? "Exporting..."
+                  : "Export 3PAO Readiness Package"}
               </Button>
             </div>
 
@@ -579,6 +624,156 @@ export default function CompliancePage() {
 
         <Card>
           <CardHeader>
+            <CardTitle>SOC 2 Type II Execution Track</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Program status</p>
+                <p className="text-sm font-medium capitalize">
+                  {soc2Readiness?.status.replaceAll("_", " ") ?? "in progress"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Overall completion</p>
+                <p className="text-sm font-medium">
+                  {soc2Readiness?.overall_percent_complete ?? 0}%
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Observation window</p>
+                <p className="text-sm font-medium">
+                  {soc2Readiness
+                    ? `${new Date(soc2Readiness.observation_window_start).toLocaleDateString()} - ${new Date(soc2Readiness.observation_window_end).toLocaleDateString()}`
+                    : "Not scheduled"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Audit firm status</p>
+                <p className="text-sm font-medium capitalize">
+                  {soc2Readiness?.audit_firm_status.replaceAll("_", " ") ?? "pending"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Trust Criteria Domains</p>
+                {soc2Readiness?.domains.map((domain) => (
+                  <div key={domain.domain_id} className="space-y-1">
+                    <DomainBar
+                      name={`${domain.domain_id} - ${domain.domain_name}`}
+                      percentage={domain.percent_complete}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Owner: {domain.owner} · {domain.controls_ready}/{domain.controls_total} controls
+                      ready
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm font-medium">Milestones</p>
+                {soc2Readiness?.milestones.map((milestone) => (
+                  <div
+                    key={milestone.milestone_id}
+                    className="rounded-lg border border-border p-3 space-y-1"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{milestone.title}</p>
+                      <Badge variant="outline">{milestone.status.replaceAll("_", " ")}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Due {new Date(milestone.due_date).toLocaleDateString()} · Owner: {milestone.owner}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{milestone.notes}</p>
+                    <Badge variant={milestone.evidence_ready ? "default" : "secondary"}>
+                      {milestone.evidence_ready ? "Evidence ready" : "Evidence in progress"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>GovCloud Deployment Profile</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Cloud provider</p>
+                <p className="text-sm font-medium">{govCloudProfile?.provider ?? "AWS GovCloud (US)"}</p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Deployment status</p>
+                <p className="text-sm font-medium capitalize">
+                  {govCloudProfile?.status.replaceAll("_", " ") ?? "in progress"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Target regions</p>
+                <p className="text-sm font-medium">
+                  {govCloudProfile?.target_regions.join(", ") ?? "us-gov-west-1, us-gov-east-1"}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Boundary Services</p>
+                <ul className="space-y-1">
+                  {(govCloudProfile?.boundary_services ?? []).map((service) => (
+                    <li key={service} className="text-xs text-muted-foreground flex items-start gap-2">
+                      <span className="mt-1.5 w-1 h-1 rounded-full bg-primary flex-shrink-0" />
+                      {service}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Control Status</p>
+                <p className="text-xs text-muted-foreground">
+                  Identity federation: {govCloudProfile?.identity_federation_status.replaceAll("_", " ")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Network isolation: {govCloudProfile?.network_isolation_status.replaceAll("_", " ")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Data residency: {govCloudProfile?.data_residency_status.replaceAll("_", " ")}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Migration Phases</p>
+              {govCloudProfile?.migration_phases.map((phase) => (
+                <div key={phase.phase_id} className="rounded-lg border border-border p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{phase.title}</p>
+                    <Badge variant="outline">{phase.status.replaceAll("_", " ")}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Target {new Date(phase.target_date).toLocaleDateString()} · Owner: {phase.owner}
+                  </p>
+                  <ul className="space-y-1">
+                    {phase.exit_criteria.map((criterion) => (
+                      <li key={criterion} className="text-xs text-muted-foreground flex items-start gap-2">
+                        <span className="mt-1.5 w-1 h-1 rounded-full bg-primary flex-shrink-0" />
+                        {criterion}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Certification and Listing Readiness</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -597,6 +792,50 @@ export default function CompliancePage() {
                 <p className="text-xs text-muted-foreground">
                   Next: {program.next_milestone}
                 </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Execution Checkpoints (FedRAMP, CMMC, GovCloud)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {readinessCheckpoints?.checkpoints.map((checkpoint) => (
+              <div key={checkpoint.checkpoint_id} className="rounded-lg border border-border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{checkpoint.title}</p>
+                  <Badge variant="outline">{checkpoint.status.replaceAll("_", " ")}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Program: {checkpoint.program_id.replaceAll("_", " ")} · Target{" "}
+                  {new Date(checkpoint.target_date).toLocaleDateString()} · Owner: {checkpoint.owner}
+                </p>
+                <div className="h-2 rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{
+                      width: `${
+                        checkpoint.evidence_items_total > 0
+                          ? Math.round(
+                              (checkpoint.evidence_items_ready / checkpoint.evidence_items_total) * 100
+                            )
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={checkpoint.third_party_required ? "default" : "secondary"}>
+                    {checkpoint.third_party_required
+                      ? "Third-party checkpoint"
+                      : "Internal checkpoint"}
+                  </Badge>
+                  <p className="text-xs text-muted-foreground">
+                    Evidence {checkpoint.evidence_items_ready}/{checkpoint.evidence_items_total}
+                  </p>
+                </div>
               </div>
             ))}
           </CardContent>

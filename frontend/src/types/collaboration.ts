@@ -122,18 +122,56 @@ export interface ComplianceDigestSchedule {
   hour_utc: number;
   minute_utc: number;
   channel: "in_app" | "email";
+  recipient_role: "all" | "owner" | "admin" | "contributor" | "viewer";
   anomalies_only: boolean;
   is_enabled: boolean;
   last_sent_at: string | null;
 }
 
+export interface ComplianceDigestDelivery {
+  id: number;
+  workspace_id: number;
+  user_id: number;
+  schedule_id: number | null;
+  status: "success" | "failed";
+  attempt_number: number;
+  retry_of_delivery_id: number | null;
+  channel: "in_app" | "email";
+  recipient_role: "all" | "owner" | "admin" | "contributor" | "viewer";
+  recipient_count: number;
+  anomalies_count: number;
+  failure_reason: string | null;
+  generated_at: string;
+  created_at: string;
+}
+
+export interface ComplianceDigestDeliverySummary {
+  total_attempts: number;
+  success_count: number;
+  failed_count: number;
+  retry_attempt_count: number;
+  last_status: "success" | "failed" | null;
+  last_failure_reason: string | null;
+  last_sent_at: string | null;
+}
+
+export interface ComplianceDigestDeliveryList {
+  workspace_id: number;
+  user_id: number;
+  summary: ComplianceDigestDeliverySummary;
+  items: ComplianceDigestDelivery[];
+}
+
 export interface ComplianceDigestPreview {
   workspace_id: number;
   generated_at: string;
+  recipient_role: "all" | "owner" | "admin" | "contributor" | "viewer";
+  recipient_count: number;
   summary: ShareGovernanceSummary;
   trends: ShareGovernanceTrends;
   anomalies: GovernanceAnomaly[];
   schedule: ComplianceDigestSchedule;
+  delivery_summary?: ComplianceDigestDeliverySummary | null;
 }
 
 export interface PortalView {

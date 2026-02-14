@@ -7,10 +7,11 @@ import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { StepUpAuthModal } from "@/components/security/step-up-auth-modal";
 import { ComplianceMatrix } from "@/components/analysis/compliance-matrix";
 import { DraftPreview } from "@/components/analysis/draft-preview";
 import { rfpApi, analysisApi, draftApi, exportApi } from "@/lib/api";
-import { getApiErrorMessage } from "@/lib/api/error";
+import { getApiErrorMessage, isStepUpRequiredError } from "@/lib/api/error";
 import type { ComplianceRequirement, GeneratedContent, RFP } from "@/types";
 import { AnalysisHeader } from "./_components/analysis-header";
 import { StatusBar } from "./_components/status-bar";
@@ -33,6 +34,12 @@ export default function AnalysisPage() {
   const [activeProposalId, setActiveProposalId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isStepUpModalOpen, setIsStepUpModalOpen] = useState(false);
+  const [isStepUpSubmitting, setIsStepUpSubmitting] = useState(false);
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
+  const [pendingStepUpProposalId, setPendingStepUpProposalId] = useState<number | null>(
+    null
+  );
   const [viewMode, setViewMode] = useState<"list" | "shred">("list");
   const [isEditingRequirement, setIsEditingRequirement] = useState(false);
   const [showCreateRequirement, setShowCreateRequirement] = useState(false);
@@ -189,6 +196,16 @@ export default function AnalysisPage() {
 
   const handleExport = async () => {
     if (!rfp) return;
+    const downloadExport = (blob: Blob) => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `proposal_${rfp.solicitation_number || rfp.id}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    };
     try {
       setIsExporting(true);
       setActionError(null);
@@ -201,7 +218,31 @@ export default function AnalysisPage() {
         setActionError("Create a proposal draft before exporting.");
         return;
       }
-      const blob = await exportApi.exportProposalDocx(proposalId);
+      try {
+        const blob = await exportApi.exportProposalDocx(proposalId);
+        downloadExport(blob);
+      } catch (err) {
+        if (!isStepUpRequiredError(err)) {
+          throw err;
+        }
+        setPendingStepUpProposalId(proposalId);
+        setStepUpError(null);
+        setIsStepUpModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Export failed:", err);
+      setActionError("Failed to export proposal. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleStepUpExport = async (code: string) => {
+    if (!rfp || !pendingStepUpProposalId) return;
+    setIsStepUpSubmitting(true);
+    setStepUpError(null);
+    try {
+      const blob = await exportApi.exportProposalDocx(pendingStepUpProposalId, code);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -210,11 +251,18 @@ export default function AnalysisPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      setIsStepUpModalOpen(false);
+      setPendingStepUpProposalId(null);
     } catch (err) {
-      console.error("Export failed:", err);
-      setActionError("Failed to export proposal. Please try again.");
+      if (isStepUpRequiredError(err)) {
+        setStepUpError("Invalid MFA code. Please try again.");
+        return;
+      }
+      setStepUpError(
+        getApiErrorMessage(err, "Failed to export proposal after MFA verification.")
+      );
     } finally {
-      setIsExporting(false);
+      setIsStepUpSubmitting(false);
     }
   };
 
@@ -248,6 +296,18 @@ export default function AnalysisPage() {
 
   return (
     <div className="flex flex-col h-full">
+      <StepUpAuthModal
+        open={isStepUpModalOpen}
+        isSubmitting={isStepUpSubmitting}
+        error={stepUpError}
+        onClose={() => {
+          setIsStepUpModalOpen(false);
+          setPendingStepUpProposalId(null);
+          setStepUpError(null);
+        }}
+        onSubmit={handleStepUpExport}
+      />
+
       <AnalysisHeader
         rfp={rfp}
         viewMode={viewMode}
