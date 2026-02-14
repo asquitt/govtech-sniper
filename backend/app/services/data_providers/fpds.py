@@ -5,10 +5,9 @@ Fetches contract award data from the Federal Procurement Data System (FPDS)
 via its public ATOM feed.
 """
 
-import xml.etree.ElementTree as ET
-
 import httpx
 import structlog
+from defusedxml import ElementTree as ET
 
 from app.services.data_providers.base import (
     DataSourceProvider,

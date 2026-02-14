@@ -4,6 +4,7 @@ RFP Sniper - FastAPI Application Entry Point
 The main application that ties everything together.
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -462,10 +463,13 @@ async def metrics():
 if __name__ == "__main__":
     import uvicorn
 
+    uvicorn_host = os.getenv("UVICORN_HOST", "127.0.0.1")
+    uvicorn_port = int(os.getenv("UVICORN_PORT", "8000"))
+
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
-        port=8000,
+        host=uvicorn_host,
+        port=uvicorn_port,
         reload=settings.debug,
         log_level="debug" if settings.debug else "info",
     )

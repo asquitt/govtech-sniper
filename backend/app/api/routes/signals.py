@@ -3,9 +3,9 @@
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any, Optional
-from xml.etree import ElementTree
 
 import httpx
+from defusedxml import ElementTree
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select

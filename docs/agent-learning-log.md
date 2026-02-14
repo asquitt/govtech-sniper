@@ -449,3 +449,10 @@ Format:
 - Root cause: Test harness hardcoded `sqlite+aiosqlite:///./test.db`, which collided with concurrently running local processes using the same file.
 - Prevention checklist: Use an isolated per-run SQLite file for backend tests (or explicit `TEST_DB_PATH`) and clean DB artifacts on session teardown to avoid cross-process lock contention.
 - Verification added: Updated `backend/tests/conftest.py` to allocate a unique temp DB path and cleanup `-journal/-wal/-shm` artifacts; reran targeted backend suites (`test_rfps.py`, `test_saved_searches.py`, `test_data_sources.py`, `test_semantic_search.py`) successfully.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Main-branch CI failed in `security-scan` after merge because Bandit flagged medium-severity findings in XML parsing and dev server bind configuration.
+- Root cause: Recent changes were validated with lint/tests but did not include a pre-push Bandit run equivalent to CI (`bandit -r app/ -ll`), so B314/B104 findings were caught only after push.
+- Prevention checklist: When touching parsers or app entrypoints, run the CI-equivalent Bandit command locally before push and resolve all medium/high findings (`B3xx` parser rules, `B104` bind-all interfaces) before committing.
+- Verification added: Switched XML parsing to `defusedxml.ElementTree` in signals/FPDS paths, removed hardcoded `0.0.0.0` in `app/main.py` via env-configured host/port, and reran `bandit -r app/ -f json -o bandit-report.local.json -ll` plus targeted backend tests (`test_data_sources.py`, `test_capability_integrations.py`).
