@@ -4,6 +4,16 @@ RFP Sniper - Pydantic Schemas
 Request/Response validation models.
 """
 
+from app.schemas.compliance import (
+    ComplianceReadinessProgram,
+    ComplianceReadinessResponse,
+    DataPrivacyInfo,
+    TrustCenterEvidenceItem,
+    TrustCenterPolicy,
+    TrustCenterPolicyUpdate,
+    TrustCenterProfile,
+    TrustCenterRuntimeGuarantees,
+)
 from app.schemas.knowledge_base import (
     DocumentCreate,
     DocumentRead,
@@ -24,6 +34,8 @@ from app.schemas.proposal import (
     SubmissionPackageUpdate,
 )
 from app.schemas.rfp import (
+    AmendmentImpactSignal,
+    AmendmentSectionRemediation,
     AnalyzeResponse,
     ComplianceMatrixRead,
     ComplianceRequirementCreate,
@@ -33,6 +45,7 @@ from app.schemas.rfp import (
     RFPRead,
     RFPUpdate,
     SAMIngestResponse,
+    SAMOpportunityAmendmentImpact,
     SAMOpportunitySnapshotDiff,
     SAMOpportunitySnapshotRead,
     SAMSearchParams,
@@ -66,9 +79,12 @@ __all__ = [
     "ComplianceMatrixRead",
     "ComplianceRequirementCreate",
     "ComplianceRequirementUpdate",
+    "AmendmentImpactSignal",
+    "AmendmentSectionRemediation",
     "SAMSearchParams",
     "SAMIngestResponse",
     "AnalyzeResponse",
+    "SAMOpportunityAmendmentImpact",
     "SAMOpportunitySnapshotRead",
     "SAMOpportunitySnapshotDiff",
     # Proposal
@@ -88,4 +104,13 @@ __all__ = [
     "DocumentCreate",
     "DocumentRead",
     "DocumentUploadResponse",
+    # Compliance
+    "DataPrivacyInfo",
+    "ComplianceReadinessProgram",
+    "ComplianceReadinessResponse",
+    "TrustCenterPolicy",
+    "TrustCenterPolicyUpdate",
+    "TrustCenterRuntimeGuarantees",
+    "TrustCenterEvidenceItem",
+    "TrustCenterProfile",
 ]

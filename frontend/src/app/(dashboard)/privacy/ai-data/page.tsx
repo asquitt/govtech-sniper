@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function AIDataPrivacyPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
@@ -7,6 +9,12 @@ export default function AIDataPrivacyPage() {
       <p className="text-muted-foreground mb-8">
         How RFP Sniper handles your data with AI services
       </p>
+      <Link
+        href="/trust-center"
+        className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm mb-8"
+      >
+        Open Public Trust Center
+      </Link>
 
       <div className="space-y-8">
         <section>

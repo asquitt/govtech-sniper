@@ -1,7 +1,7 @@
 # Competitive Analysis & Task Roadmap: GovTech Sniper vs GovDash vs Govly
 
 > **Generated**: February 6, 2026
-> **Updated**: February 12, 2026
+> **Updated**: February 14, 2026
 > **Purpose**: Gap analysis between GovTech Sniper and our two primary competitors, with a prioritized task list to close the gap.
 
 ---
@@ -76,6 +76,25 @@ This roadmap was revalidated against live code, backend integration tests, and P
 - Additional Word add-in parity evidence this session: Office-host-in-the-loop taskpane automation now validates host runtime pull/push sync beyond browser fallback (`word-addin-office-host.spec.ts`), alongside existing backend word-addin coverage (`test_word_addin.py`).
 - Additional analytics-governance parity evidence this session: ownership audit now flags frontend-unused analytics endpoints as retirement candidates (`/api/v1/analytics/documents`, `/api/v1/analytics/slo`, `/api/v1/analytics/alerts`) in `test_route_ownership_audit.py`.
 - Validation evidence refresh this session: backend full suite passed (`169/169`), frontend unit suite passed (`32/32`), and Playwright full suite passed (`58/58`) on deterministic local stack (`DEBUG=true`, `MOCK_AI=true`, backend `8010`, frontend `3100`).
+
+### Research Refresh (2026-02-14)
+
+- Fresh competitor signal validation:
+  - GovDash Proposal Cloud guidance emphasizes compliance matrix + "shreds", outline depth, and structured proposal workflows (support docs).
+  - GovDash public customer stories continue to highlight time-to-draft and output-throughput improvement claims.
+  - Public trust/security signals remain central in buyer messaging (FedRAMP/CMMC and data-handling controls).
+- Fresh industry-direction validation:
+  - FedRAMP 20x Phase 2 process direction reinforces evidence automation and machine-readable control posture as near-term enterprise expectations.
+  - DFARS CMMC rollout milestones continue to increase compliance-documentation burden through phased enforcement windows.
+- Fresh AI-research signal validation (primary sources):
+  - LLM evaluator reliability remains strongest with explicit rubric-driven judging and grounded evidence.
+  - Retrieval/evaluation quality literature continues to favor calibrated confidence reporting and explicit faithfulness/groundedness checks.
+- Executed product response this session:
+  - Shipped capture stress-test scenario simulator with calibrated confidence + recommendation-shift detection + FAR/Section M rationale mapping (`/api/v1/capture/scorecards/{rfp_id}/scenario-simulator`, `/capture` UI).
+  - Shipped review-packet generator with risk-ranked action queue and exit criteria for pink/red/gold workflows (`/api/v1/reviews/{review_id}/packet`, `/reviews` packet builder UI).
+  - Shipped one-click evaluator evidence bundle export depth (`/api/v1/export/proposals/{id}/compliance-package/zip`, proposal workspace `Export Evidence Bundle`) including source trace, section decisions, review outcomes, and bid stress-test artifacts.
+  - Shipped amendment autopilot impact mapping (`/api/v1/rfps/{rfp_id}/snapshots/amendment-impact`, `/opportunities/[rfpId]` changes-tab `Generate Impact Map`) with section-level remediation guidance and approval workflow steps.
+  - Shipped email-ingestion pipeline depth (`/api/v1/email-ingest/sync-now`, `/settings/email-ingest`) with workspace-routed team inbox forwarding, attachment extraction metadata, and confidence-calibrated auto-opportunity creation.
 
 ---
 
@@ -727,7 +746,7 @@ This roadmap was revalidated against live code, backend integration tests, and P
 | FedRAMP Moderate | 🟡 (readiness in progress) | ✅ | ❌ |
 | CMMC certification | 🟡 (readiness in progress) | ✅ | ✅ |
 | GovCloud hosting | 🟡 (migration in progress) | ✅ | ❌ |
-| Data not used for model training | 🟡 (privacy controls + documentation surfaced) | ✅ | ❌ |
+| Data not used for model training | ✅ (public trust center + runtime no-training enforcement + org controls) | ✅ | ❌ |
 
 ---
 
@@ -961,10 +980,10 @@ This roadmap was revalidated against live code, backend integration tests, and P
 - [x] **24d. Competitive intel agent** — Agent that monitors competitor wins and surfaces relevant insights
 
 #### 25. Email Ingestion
-**Gap**: Planned in Phase 9 but not started. Govly has team inboxes.
-- [ ] **25a. Email parsing** — Forward RFP-related emails to a Sniper inbox for automatic processing
-- [ ] **25b. Attachment extraction** — Auto-extract PDF attachments from forwarded emails
-- [ ] **25c. Opportunity creation from email** — Auto-create RFP records from forwarded solicitations
+**Gap**: Closed on 2026-02-14 with production-grade inbox sync, attachment-aware parsing, and confidence-thresholded opportunity creation plus workspace team-inbox routing.
+- [x] **25a. Email parsing** — Forward RFP-related emails to a Sniper inbox for automatic processing
+- [x] **25b. Attachment extraction** — Auto-extract PDF attachments from forwarded emails
+- [x] **25c. Opportunity creation from email** — Auto-create RFP records from forwarded solicitations
 
 #### 26. Canada & International Coverage
 **Gap**: Govly recently added Canada. GovDash is US-only.
@@ -986,11 +1005,11 @@ This roadmap was revalidated against live code, backend integration tests, and P
 - [x] **28d. Teammate evaluation** — Auto-evaluate and recommend teaming partners based on requirements
 
 #### 29. Data Privacy & Model Training Guarantees
-**Gap**: GovDash explicitly states data is never used for model training. We don't.
-- [ ] **29a. Data usage policy page** — Create a public-facing page guaranteeing data isolation
-- [ ] **29b. Technical implementation** — Ensure Gemini API calls use ephemeral mode / no training data retention
+**Gap**: Closed on 2026-02-14 with public trust-center guarantees, runtime no-training guardrails, and org-level privacy policy controls.
+- [x] **29a. Data usage policy page** — Create a public-facing page guaranteeing data isolation
+- [x] **29b. Technical implementation** — Ensure Gemini API calls use ephemeral mode / no training data retention
 - [ ] **29c. SOC 2 preparation** — Begin SOC 2 Type II audit preparation
-- [ ] **29d. Privacy controls UI** — Give users visibility into how their data is used
+- [x] **29d. Privacy controls UI** — Give users visibility into how their data is used
 
 #### 30. Mobile Experience
 **Gap**: Mobile baseline parity is integrated (responsive shell, push-subscription management, Dash mobile validation); next step is deeper route-by-route adaptive polish.
@@ -1198,6 +1217,23 @@ This analysis incorporates research from the following sources (February 2026):
 - [Pricing | GovDash](https://www.govdash.com/pricing)
 - [GovDash Reviews | SoftwareWorld](https://www.softwareworld.co/software/govdash-reviews/)
 - [AI for Government Contracting | GovDash](https://www.govdash.com/)
+- [GovDash Customer Stories](https://www.govdash.com/customer-stories)
+- [GovDash Support Docs](https://support.govdash.com/docs)
+- [Proposal Cloud Deep Dive (GovDash Support)](https://support.govdash.com/docs/proposal-cloud-deep-dive)
+- [Compliance Matrix and Shreds (GovDash Support)](https://support.govdash.com/docs/compliance-matrix-and-shreds)
+- [Outlines Deep Dive (GovDash Support)](https://support.govdash.com/docs/proposal-cloud-a-deep-dive-into-outlines)
+- [Past Performance Deep Dive (GovDash Support)](https://support.govdash.com/docs/proposal-cloud-a-deep-dive-into-the-past-performance-tab)
+
+**Regulatory and Industry Direction**
+- [FedRAMP 20x Phase Two](https://www.fedramp.gov/20x/phase-two/)
+- [FedRAMP 20x Phase Two Process](https://www.fedramp.gov/20x/phase-two/process/)
+- [DFARS 204.7504](https://www.acquisition.gov/dfars/204.7504-solicitation-provision-and-contract-clause)
+- [CMMC Program Rule (32 CFR Part 170)](https://www.ecfr.gov/current/title-32/subtitle-A/chapter-I/subchapter-D/part-170)
+
+**Primary AI Evaluation Research**
+- [G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment](https://arxiv.org/abs/2303.16634)
+- [RAGAS: Automated Evaluation of Retrieval Augmented Generation](https://arxiv.org/abs/2309.15217)
+- [Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366)
 
 **Govly**
 - [Govly Pricing | Capterra](https://www.capterra.com/p/265284/Govly/)

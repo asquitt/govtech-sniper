@@ -5,6 +5,8 @@ import type {
   DataPrivacyInfo,
   ComplianceAuditSummary,
   ComplianceReadiness,
+  TrustCenterPolicyUpdate,
+  TrustCenterProfile,
 } from "@/types/compliance";
 
 export const complianceApi = {
@@ -30,6 +32,25 @@ export const complianceApi = {
 
   getReadiness: async (): Promise<ComplianceReadiness> => {
     const { data } = await api.get("/compliance/readiness");
+    return data;
+  },
+
+  getTrustCenter: async (): Promise<TrustCenterProfile> => {
+    const { data } = await api.get("/compliance/trust-center");
+    return data;
+  },
+
+  updateTrustCenterPolicy: async (
+    payload: TrustCenterPolicyUpdate
+  ): Promise<TrustCenterProfile> => {
+    const { data } = await api.patch("/compliance/trust-center", payload);
+    return data;
+  },
+
+  exportTrustCenterEvidence: async (): Promise<Blob> => {
+    const { data } = await api.get("/compliance/trust-center/evidence-export", {
+      responseType: "blob",
+    });
     return data;
   },
 };

@@ -71,3 +71,46 @@ class TestGeminiService:
 
         assert response.text == "Generated response"
         assert model_used == "gemini-1.5-flash"
+
+    def test_privacy_runtime_guarantees_reflect_runtime_flags(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.gemini_service.core.settings.gemini_data_usage_mode",
+            "ephemeral_no_training",
+        )
+        monkeypatch.setattr(
+            "app.services.gemini_service.core.settings.gemini_allow_provider_training",
+            False,
+        )
+        monkeypatch.setattr(
+            "app.services.gemini_service.core.settings.gemini_provider_retention_hours",
+            0,
+        )
+
+        runtime = GeminiService.privacy_runtime_guarantees()
+        assert runtime["processing_mode"] == "ephemeral_no_training"
+        assert runtime["provider_training_allowed"] is False
+        assert runtime["provider_retention_hours"] == 0
+        assert runtime["no_training_enforced"] is True
+
+    @pytest.mark.asyncio
+    async def test_generate_with_fallback_fails_closed_when_training_allowed(self, monkeypatch):
+        service = GeminiService(api_key=None)
+        service.pro_model = _SuccessModel()
+        service.pro_model_name = "gemini-1.5-pro"
+        service.flash_model = None
+
+        monkeypatch.setattr(
+            "app.services.gemini_service.core.settings.gemini_allow_provider_training",
+            True,
+        )
+
+        with pytest.raises(
+            RuntimeError,
+            match="training must remain disabled",
+        ):
+            await service._generate_with_fallback(
+                prompt="test prompt",
+                generation_config=SimpleNamespace(),
+                primary_model=service.pro_model,
+                primary_model_name=service.pro_model_name,
+            )

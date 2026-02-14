@@ -66,6 +66,23 @@ class Settings(BaseSettings):
         default="gemini-1.5-flash",
         description="Comma-separated Gemini fallback models attempted after the primary model.",
     )
+    gemini_data_usage_mode: str = Field(
+        default="ephemeral_no_training",
+        description=(
+            "Runtime governance mode for Gemini requests. "
+            "Expected production value: ephemeral_no_training"
+        ),
+    )
+    gemini_allow_provider_training: bool = Field(
+        default=False,
+        description="Allow provider model training on prompts/responses. Must remain false.",
+    )
+    gemini_provider_retention_hours: int = Field(
+        default=0,
+        ge=0,
+        le=24,
+        description="Declared upstream provider retention window for request payloads.",
+    )
     gemini_rate_limit_cooldown_seconds: int = Field(default=60, ge=1, le=86400)
     gemini_rate_limit_daily_cooldown_seconds: int = Field(default=1800, ge=1, le=86400)
     gemini_rate_limit_max_seconds: int = Field(default=86400, ge=1, le=86400)

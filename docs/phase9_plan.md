@@ -22,9 +22,9 @@
    - Team collaboration features (comments, @mentions).
 
 5. Automation + Integrations
-   - Email ingestion pipeline for opportunity intake.
+   - Email ingestion pipeline for opportunity intake (implemented 2026-02-14 with sync-now, attachment metadata extraction, confidence thresholds, and workspace inbox routing).
    - Procurement portal automation hooks (config-driven).
    - CRM sync scaffolding (Salesforce/Unanet).
 
 ## Status
-- Planned.
+- In progress (email-ingestion slice delivered on 2026-02-14; trust-center/privacy control slice delivered on 2026-02-14; remaining Govly intelligence expansions pending).

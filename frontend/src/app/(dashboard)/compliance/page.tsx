@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import type {
   DataPrivacyInfo,
   ComplianceAuditSummary,
   ComplianceReadiness,
+  TrustCenterPolicy,
+  TrustCenterProfile,
 } from "@/types/compliance";
 
 function ScoreRing({ score }: { score: number }) {
@@ -53,12 +55,40 @@ function DomainBar({ name, percentage }: { name: string; percentage: number }) {
   );
 }
 
+function trustStatusClass(status: "enforced" | "warning" | "configured"): string {
+  if (status === "enforced") {
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300";
+  }
+  if (status === "warning") {
+    return "bg-destructive/10 text-destructive";
+  }
+  return "bg-primary/10 text-primary";
+}
+
+function hasPolicyChanges(a: TrustCenterPolicy | null, b: TrustCenterPolicy | null): boolean {
+  if (!a || !b) return false;
+  return (
+    a.allow_ai_requirement_analysis !== b.allow_ai_requirement_analysis ||
+    a.allow_ai_draft_generation !== b.allow_ai_draft_generation ||
+    a.require_human_review_for_submission !== b.require_human_review_for_submission ||
+    a.share_anonymized_product_telemetry !== b.share_anonymized_product_telemetry ||
+    a.retain_prompt_logs_days !== b.retain_prompt_logs_days ||
+    a.retain_output_logs_days !== b.retain_output_logs_days
+  );
+}
+
 export default function CompliancePage() {
   const [cmmc, setCmmc] = useState<CMMCStatus | null>(null);
   const [nist, setNist] = useState<NISTOverview | null>(null);
   const [privacy, setPrivacy] = useState<DataPrivacyInfo | null>(null);
   const [audit, setAudit] = useState<ComplianceAuditSummary | null>(null);
   const [readiness, setReadiness] = useState<ComplianceReadiness | null>(null);
+  const [trustCenter, setTrustCenter] = useState<TrustCenterProfile | null>(null);
+  const [policyDraft, setPolicyDraft] = useState<TrustCenterPolicy | null>(null);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [evidenceExporting, setEvidenceExporting] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policySavedMessage, setPolicySavedMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,18 +96,21 @@ export default function CompliancePage() {
     setLoading(true);
     setError(null);
     try {
-      const [c, n, p, a, r] = await Promise.all([
+      const [c, n, p, a, r, t] = await Promise.all([
         complianceApi.getCMMCStatus(),
         complianceApi.getNISTOverview(),
         complianceApi.getDataPrivacy(),
         complianceApi.getComplianceAuditSummary(),
         complianceApi.getReadiness(),
+        complianceApi.getTrustCenter(),
       ]);
       setCmmc(c);
       setNist(n);
       setPrivacy(p);
       setAudit(a);
       setReadiness(r);
+      setTrustCenter(t);
+      setPolicyDraft(t.policy);
     } catch {
       setError("Failed to load compliance data.");
     } finally {
@@ -88,6 +121,73 @@ export default function CompliancePage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const unsavedPolicyChanges = useMemo(() => {
+    return hasPolicyChanges(trustCenter?.policy ?? null, policyDraft);
+  }, [trustCenter, policyDraft]);
+
+  const updateDraftBoolean = (
+    key:
+      | "allow_ai_requirement_analysis"
+      | "allow_ai_draft_generation"
+      | "require_human_review_for_submission"
+      | "share_anonymized_product_telemetry",
+    value: boolean
+  ) => {
+    setPolicyDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setPolicySavedMessage(null);
+  };
+
+  const updateDraftNumber = (
+    key: "retain_prompt_logs_days" | "retain_output_logs_days",
+    value: number
+  ) => {
+    const clamped = key === "retain_prompt_logs_days"
+      ? Math.max(0, Math.min(30, value))
+      : Math.max(0, Math.min(365, value));
+    setPolicyDraft((prev) => (prev ? { ...prev, [key]: clamped } : prev));
+    setPolicySavedMessage(null);
+  };
+
+  const handleTrustPolicySave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!policyDraft || !trustCenter?.can_manage_policy) {
+      return;
+    }
+    setPolicySaving(true);
+    setPolicyError(null);
+    setPolicySavedMessage(null);
+    try {
+      const updated = await complianceApi.updateTrustCenterPolicy(policyDraft);
+      setTrustCenter(updated);
+      setPolicyDraft(updated.policy);
+      setPolicySavedMessage("Trust center policy saved.");
+    } catch {
+      setPolicyError("Failed to update trust-center policy.");
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  const handleTrustEvidenceExport = async () => {
+    setEvidenceExporting(true);
+    setPolicyError(null);
+    try {
+      const blob = await complianceApi.exportTrustCenterEvidence();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `trust_center_evidence_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setPolicyError("Failed to export trust-center evidence.");
+    } finally {
+      setEvidenceExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -109,7 +209,12 @@ export default function CompliancePage() {
       <Header title="Compliance Dashboard" description="CMMC, NIST 800-53, and data privacy posture" />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link href="/trust-center" target="_blank">
+            <Button variant="outline" size="sm">
+              Public Trust Center ↗
+            </Button>
+          </Link>
           <Link href="/compliance/timeline">
             <Button variant="outline" size="sm">
               View Compliance Roadmap &rarr;
@@ -149,6 +254,216 @@ export default function CompliancePage() {
             </p>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>AI & Data Trust Center</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Model provider</p>
+                <p className="text-sm font-medium">
+                  {trustCenter?.runtime_guarantees.model_provider ?? "Google Gemini API"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Processing mode</p>
+                <p className="text-sm font-medium">
+                  {trustCenter?.runtime_guarantees.processing_mode ?? "ephemeral_no_training"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Provider retention window</p>
+                <p className="text-sm font-medium">
+                  {trustCenter?.runtime_guarantees.provider_retention_hours ?? 0} hour(s)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant={
+                  trustCenter?.runtime_guarantees.no_training_enforced
+                    ? "default"
+                    : "destructive"
+                }
+              >
+                {trustCenter?.runtime_guarantees.no_training_enforced
+                  ? "No model training enforced"
+                  : "Training protection requires remediation"}
+              </Badge>
+              <Badge variant="outline">
+                Last updated {trustCenter ? new Date(trustCenter.updated_at).toLocaleString() : "n/a"}
+              </Badge>
+              {trustCenter?.organization_name ? (
+                <Badge variant="outline">Org: {trustCenter.organization_name}</Badge>
+              ) : (
+                <Badge variant="outline">No organization policy scope</Badge>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={evidenceExporting}
+                onClick={handleTrustEvidenceExport}
+              >
+                {evidenceExporting ? "Exporting..." : "Export Trust Evidence JSON"}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {trustCenter?.evidence.map((item) => (
+                <div
+                  key={item.control}
+                  className="rounded-lg border border-border px-3 py-2 flex flex-wrap items-start justify-between gap-2"
+                >
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-sm font-medium">{item.control}</p>
+                    <p className="text-xs text-muted-foreground">{item.detail}</p>
+                  </div>
+                  <span
+                    className={`text-[10px] uppercase tracking-wide rounded px-2 py-1 ${trustStatusClass(item.status)}`}
+                  >
+                    {item.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <p className="text-sm font-medium">Policy Controls</p>
+              {!trustCenter?.can_manage_policy && (
+                <p className="text-xs text-muted-foreground">
+                  Visibility is enabled for all users. Organization owners/admins can edit these controls.
+                </p>
+              )}
+              <form className="space-y-3" onSubmit={handleTrustPolicySave}>
+                <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div className="space-y-1">
+                    <p className="text-sm text-foreground">AI requirement analysis enabled</p>
+                    <p className="text-xs text-muted-foreground">
+                      Controls use of AI for requirement extraction and compliance analysis.
+                    </p>
+                  </div>
+                  <input
+                    aria-label="AI requirement analysis toggle"
+                    type="checkbox"
+                    checked={policyDraft?.allow_ai_requirement_analysis ?? false}
+                    disabled={!trustCenter?.can_manage_policy || policySaving}
+                    onChange={(event) =>
+                      updateDraftBoolean("allow_ai_requirement_analysis", event.target.checked)
+                    }
+                  />
+                </label>
+
+                <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div className="space-y-1">
+                    <p className="text-sm text-foreground">AI draft generation enabled</p>
+                    <p className="text-xs text-muted-foreground">
+                      Controls AI-generated proposal drafting and section rewrites.
+                    </p>
+                  </div>
+                  <input
+                    aria-label="AI draft generation toggle"
+                    type="checkbox"
+                    checked={policyDraft?.allow_ai_draft_generation ?? false}
+                    disabled={!trustCenter?.can_manage_policy || policySaving}
+                    onChange={(event) =>
+                      updateDraftBoolean("allow_ai_draft_generation", event.target.checked)
+                    }
+                  />
+                </label>
+
+                <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div className="space-y-1">
+                    <p className="text-sm text-foreground">Require human review before submission</p>
+                    <p className="text-xs text-muted-foreground">
+                      Enforces human sign-off on submission workflows.
+                    </p>
+                  </div>
+                  <input
+                    aria-label="Human review required toggle"
+                    type="checkbox"
+                    checked={policyDraft?.require_human_review_for_submission ?? false}
+                    disabled={!trustCenter?.can_manage_policy || policySaving}
+                    onChange={(event) =>
+                      updateDraftBoolean("require_human_review_for_submission", event.target.checked)
+                    }
+                  />
+                </label>
+
+                <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div className="space-y-1">
+                    <p className="text-sm text-foreground">Share anonymized product telemetry</p>
+                    <p className="text-xs text-muted-foreground">
+                      Shares anonymized usage metrics to improve platform reliability.
+                    </p>
+                  </div>
+                  <input
+                    aria-label="Anonymized telemetry toggle"
+                    type="checkbox"
+                    checked={policyDraft?.share_anonymized_product_telemetry ?? false}
+                    disabled={!trustCenter?.can_manage_policy || policySaving}
+                    onChange={(event) =>
+                      updateDraftBoolean("share_anonymized_product_telemetry", event.target.checked)
+                    }
+                  />
+                </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label className="space-y-1 rounded-md border border-border px-3 py-2">
+                    <p className="text-sm text-foreground">Prompt log retention (days)</p>
+                    <input
+                      aria-label="Prompt log retention days"
+                      type="number"
+                      min={0}
+                      max={30}
+                      value={policyDraft?.retain_prompt_logs_days ?? 0}
+                      disabled={!trustCenter?.can_manage_policy || policySaving}
+                      onChange={(event) =>
+                        updateDraftNumber(
+                          "retain_prompt_logs_days",
+                          Number.parseInt(event.target.value, 10) || 0
+                        )
+                      }
+                      className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <label className="space-y-1 rounded-md border border-border px-3 py-2">
+                    <p className="text-sm text-foreground">Output log retention (days)</p>
+                    <input
+                      aria-label="Output log retention days"
+                      type="number"
+                      min={0}
+                      max={365}
+                      value={policyDraft?.retain_output_logs_days ?? 30}
+                      disabled={!trustCenter?.can_manage_policy || policySaving}
+                      onChange={(event) =>
+                        updateDraftNumber(
+                          "retain_output_logs_days",
+                          Number.parseInt(event.target.value, 10) || 0
+                        )
+                      }
+                      className="w-24 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                    />
+                  </label>
+                </div>
+
+                {policyError ? <p className="text-xs text-destructive">{policyError}</p> : null}
+                {policySavedMessage ? (
+                  <p className="text-xs text-emerald-600">{policySavedMessage}</p>
+                ) : null}
+
+                {trustCenter?.can_manage_policy ? (
+                  <Button type="submit" size="sm" disabled={policySaving || !unsavedPolicyChanges}>
+                    {policySaving ? "Saving..." : "Save policy controls"}
+                  </Button>
+                ) : null}
+              </form>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* CMMC Domain Breakdown */}
         <Card>

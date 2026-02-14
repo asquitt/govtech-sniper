@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -5,6 +7,14 @@ export default function PrivacyPage() {
         <div>
           <h1 className="text-3xl font-bold">Privacy Policy</h1>
           <p className="text-muted-foreground mt-2">Last updated: February 2026</p>
+          <div className="mt-3">
+            <Link
+              href="/trust-center"
+              className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm"
+            >
+              View Trust Center
+            </Link>
+          </div>
         </div>
 
         <Section title="1. Information We Collect">

@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING
 import google.generativeai as genai
 import structlog
 
-from app.config import settings
 from app.models.proposal import Citation, GeneratedContent
 
+from . import settings
 from .prompts import EXPAND_PROMPT, OUTLINE_PROMPT, REWRITE_PROMPT
 
 if TYPE_CHECKING:
@@ -233,13 +233,15 @@ class GeminiGenerationMixin:
             rfp_summary=rfp_summary[:5000],
         )
 
-        response = await self.pro_model.generate_content_async(
-            prompt,
+        response, _model_used = await self._generate_with_fallback(
+            prompt=prompt,
             generation_config=genai.GenerationConfig(
                 temperature=0.3,
                 max_output_tokens=4096,
                 response_mime_type="application/json",
             ),
+            primary_model=self.pro_model,
+            primary_model_name=self.pro_model_name,
         )
         return json.loads(response.text)
 

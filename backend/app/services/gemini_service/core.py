@@ -22,11 +22,11 @@ try:
 except Exception:  # pragma: no cover - dependency shape can vary by runtime
     GeminiResourceExhausted = None
 
-from app.config import settings
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.proposal import Citation, GeneratedContent
 from app.models.rfp import ComplianceRequirement, ImportanceLevel
 
+from . import settings
 from .generation import GeminiGenerationMixin
 from .prompts import (
     DEEP_READ_PROMPT,
@@ -87,6 +87,32 @@ class GeminiService(GeminiGenerationMixin):
             self.pro_model = None
             self.flash_model = None
             logger.warning("Gemini API key not configured")
+
+    @staticmethod
+    def privacy_runtime_guarantees() -> dict[str, Any]:
+        """Expose effective Gemini data-governance runtime flags."""
+        return {
+            "model_provider": "google_gemini",
+            "processing_mode": settings.gemini_data_usage_mode,
+            "provider_training_allowed": bool(settings.gemini_allow_provider_training),
+            "provider_retention_hours": int(settings.gemini_provider_retention_hours),
+            "no_training_enforced": (
+                settings.gemini_data_usage_mode == "ephemeral_no_training"
+                and not settings.gemini_allow_provider_training
+            ),
+        }
+
+    def _assert_privacy_runtime_guarantees(self) -> None:
+        """
+        Fail closed if Gemini governance flags drift from trust-center policy.
+        """
+        runtime = self.privacy_runtime_guarantees()
+        if runtime["provider_training_allowed"]:
+            raise RuntimeError("Gemini provider training must remain disabled by policy.")
+        if runtime["processing_mode"] != "ephemeral_no_training":
+            raise RuntimeError(
+                "Gemini data usage mode must be ephemeral_no_training for production safety."
+            )
 
     def _resolve_model_name(self, preferred: str, fallback_keywords: list[str]) -> str:
         """
@@ -217,6 +243,7 @@ class GeminiService(GeminiGenerationMixin):
         primary_model: genai.GenerativeModel | None,
         primary_model_name: str | None,
     ) -> tuple[Any, str]:
+        self._assert_privacy_runtime_guarantees()
         self._ensure_quota_available()
 
         candidates = self._build_model_candidates(

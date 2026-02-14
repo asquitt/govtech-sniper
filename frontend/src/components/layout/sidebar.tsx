@@ -152,6 +152,11 @@ const navItems: NavItem[] = [
     icon: ShieldCheck,
   },
   {
+    title: "Trust Center",
+    href: "/trust-center",
+    icon: ShieldCheck,
+  },
+  {
     title: "Reports",
     href: "/reports",
     icon: FileBarChart,
