@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.audit import AuditEvent
+from app.models.compliance_registry import ComplianceEvidence, EvidenceType
 from app.models.organization import Organization, OrganizationMember, OrgRole
 from app.models.user import User
 
@@ -257,3 +258,288 @@ class TestComplianceDashboard:
         )
         assert response.status_code == 403
         assert "admin" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_checkpoint_evidence_and_signoff_flow_updates_readiness_overlay(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+        test_user: User,
+    ):
+        checkpoint_id = "fedramp_3pao_readiness"
+        org = await _set_org_membership(
+            db_session,
+            user_id=test_user.id,
+            role=OrgRole.OWNER,
+        )
+
+        evidence = ComplianceEvidence(
+            user_id=test_user.id,
+            organization_id=org.id,
+            title="FedRAMP Boundary Screenshot",
+            evidence_type=EvidenceType.SCREENSHOT,
+            description="Boundary controls and enclave map",
+        )
+        db_session.add(evidence)
+        await db_session.commit()
+        await db_session.refresh(evidence)
+
+        create_response = await client.post(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/evidence",
+            headers=auth_headers,
+            json={
+                "evidence_id": evidence.id,
+                "status": "submitted",
+                "notes": "Initial submission",
+            },
+        )
+        assert create_response.status_code == 201
+        link_payload = create_response.json()
+        assert link_payload["checkpoint_id"] == checkpoint_id
+        assert link_payload["status"] == "submitted"
+        link_id = link_payload["link_id"]
+
+        list_response = await client.get(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/evidence",
+            headers=auth_headers,
+        )
+        assert list_response.status_code == 200
+        linked_items = list_response.json()
+        assert linked_items
+        assert linked_items[0]["link_id"] == link_id
+
+        update_response = await client.patch(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/evidence/{link_id}",
+            headers=auth_headers,
+            json={"status": "accepted", "reviewer_notes": "Evidence accepted"},
+        )
+        assert update_response.status_code == 200
+        assert update_response.json()["status"] == "accepted"
+        assert update_response.json()["reviewer_notes"] == "Evidence accepted"
+
+        signoff_before_response = await client.get(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/signoff",
+            headers=auth_headers,
+        )
+        assert signoff_before_response.status_code == 200
+        assert signoff_before_response.json()["status"] == "pending"
+
+        signoff_update_response = await client.put(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/signoff",
+            headers=auth_headers,
+            json={
+                "status": "approved",
+                "assessor_name": "Accredited 3PAO",
+                "assessor_org": "Independent Assessors LLC",
+                "notes": "Ready for external review",
+            },
+        )
+        assert signoff_update_response.status_code == 200
+        signoff_payload = signoff_update_response.json()
+        assert signoff_payload["status"] == "approved"
+        assert signoff_payload["assessor_name"] == "Accredited 3PAO"
+        assert signoff_payload["signed_by_user_id"] == test_user.id
+        assert signoff_payload["signed_at"] is not None
+
+        readiness_response = await client.get(
+            "/api/v1/compliance/readiness-checkpoints",
+            headers=auth_headers,
+        )
+        assert readiness_response.status_code == 200
+        readiness_payload = readiness_response.json()
+        checkpoint = next(
+            item
+            for item in readiness_payload["checkpoints"]
+            if item["checkpoint_id"] == checkpoint_id
+        )
+        assert checkpoint["evidence_source"] == "registry"
+        assert checkpoint["evidence_items_total"] >= 1
+        assert checkpoint["evidence_items_ready"] >= 1
+        assert checkpoint["evidence_last_updated_at"] is not None
+        assert checkpoint["assessor_signoff_status"] == "approved"
+        assert checkpoint["assessor_signoff_by"] == "Accredited 3PAO"
+        assert checkpoint["assessor_signed_at"] is not None
+
+        audit_events = (
+            (
+                await db_session.execute(
+                    select(AuditEvent)
+                    .where(
+                        AuditEvent.user_id == test_user.id,
+                        AuditEvent.action.in_(
+                            [
+                                "compliance.readiness_checkpoint.evidence_linked",
+                                "compliance.readiness_checkpoint.evidence_updated",
+                                "compliance.readiness_checkpoint.signoff_updated",
+                            ]
+                        ),
+                    )
+                    .order_by(AuditEvent.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(audit_events) >= 3
+
+    @pytest.mark.asyncio
+    async def test_viewer_cannot_modify_checkpoint_evidence_or_signoff(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+        test_user: User,
+    ):
+        checkpoint_id = "fedramp_3pao_readiness"
+        org = await _set_org_membership(
+            db_session,
+            user_id=test_user.id,
+            role=OrgRole.VIEWER,
+        )
+
+        evidence = ComplianceEvidence(
+            user_id=test_user.id,
+            organization_id=org.id,
+            title="Viewer evidence",
+            evidence_type=EvidenceType.POLICY,
+            description="Should not be writable by viewer for checkpoint flows",
+        )
+        db_session.add(evidence)
+        await db_session.commit()
+        await db_session.refresh(evidence)
+
+        create_response = await client.post(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/evidence",
+            headers=auth_headers,
+            json={"evidence_id": evidence.id},
+        )
+        assert create_response.status_code == 403
+
+        signoff_update_response = await client.put(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/signoff",
+            headers=auth_headers,
+            json={
+                "status": "approved",
+                "assessor_name": "Viewer Attempt",
+            },
+        )
+        assert signoff_update_response.status_code == 403
+
+        signoff_read_response = await client.get(
+            f"/api/v1/compliance/readiness-checkpoints/{checkpoint_id}/signoff",
+            headers=auth_headers,
+        )
+        assert signoff_read_response.status_code == 200
+        assert signoff_read_response.json()["status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_trust_export_variants_support_signed_headers(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        json_response = await client.get(
+            "/api/v1/compliance/trust-center/evidence-export?format=json&signed=true",
+            headers=auth_headers,
+        )
+        assert json_response.status_code == 200
+        assert json_response.headers.get("x-trust-export-signature")
+        assert json_response.json()["profile"]["runtime_guarantees"]["processing_mode"]
+
+        csv_response = await client.get(
+            "/api/v1/compliance/trust-center/evidence-export?format=csv&signed=true",
+            headers=auth_headers,
+        )
+        assert csv_response.status_code == 200
+        assert "text/csv" in csv_response.headers.get("content-type", "")
+        assert "attachment; filename=" in csv_response.headers.get("content-disposition", "")
+        assert csv_response.headers.get("x-trust-export-signature")
+        assert "section,key,value" in csv_response.text
+
+        pdf_response = await client.get(
+            "/api/v1/compliance/trust-center/evidence-export?format=pdf&signed=true",
+            headers=auth_headers,
+        )
+        if pdf_response.status_code == 200:
+            assert "application/pdf" in pdf_response.headers.get("content-type", "")
+            assert pdf_response.headers.get("x-trust-export-signature")
+            assert len(pdf_response.content) > 0
+        else:
+            assert pdf_response.status_code == 500
+            assert "weasyprint" in pdf_response.json().get("detail", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_three_pao_package_signed_export_header(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+    ):
+        response = await client.get(
+            "/api/v1/compliance/three-pao-package?signed=true",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.headers.get("x-trust-export-signature")
+
+    @pytest.mark.asyncio
+    async def test_trust_metrics_endpoint_reports_trust_and_step_up_rates(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+        test_user: User,
+    ):
+        await _set_org_membership(
+            db_session,
+            user_id=test_user.id,
+            role=OrgRole.OWNER,
+        )
+        db_session.add_all(
+            [
+                AuditEvent(
+                    user_id=test_user.id,
+                    entity_type="compliance",
+                    action="compliance.trust_center.exported",
+                    event_metadata={},
+                ),
+                AuditEvent(
+                    user_id=test_user.id,
+                    entity_type="compliance",
+                    action="compliance.3pao_package.exported",
+                    event_metadata={},
+                ),
+                AuditEvent(
+                    user_id=test_user.id,
+                    entity_type="compliance",
+                    action="compliance.trust_center.export_failed",
+                    event_metadata={"error": "missing dependency"},
+                ),
+                AuditEvent(
+                    user_id=test_user.id,
+                    entity_type="security",
+                    action="security.step_up.challenge_succeeded",
+                    event_metadata={"channel": "export"},
+                ),
+                AuditEvent(
+                    user_id=test_user.id,
+                    entity_type="security",
+                    action="security.step_up.challenge_failed",
+                    event_metadata={"channel": "export"},
+                ),
+            ]
+        )
+        await db_session.commit()
+
+        response = await client.get("/api/v1/compliance/trust-metrics", headers=auth_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["window_days"] == 30
+        assert payload["trust_export_successes_30d"] == 2
+        assert payload["trust_export_failures_30d"] == 1
+        assert payload["trust_export_success_rate_30d"] == pytest.approx(66.67, rel=1e-2)
+        assert payload["step_up_challenge_successes_30d"] == 1
+        assert payload["step_up_challenge_failures_30d"] == 1
+        assert payload["step_up_challenge_success_rate_30d"] == pytest.approx(50.0, rel=1e-2)
+        assert payload["checkpoint_evidence_completeness_rate"] is not None
+        assert payload["checkpoint_signoff_completion_rate"] is not None

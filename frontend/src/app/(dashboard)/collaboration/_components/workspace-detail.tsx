@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Users,
   Mail,
@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { collaborationApi } from "@/lib/api";
+import { getApiErrorMessage, isStepUpRequiredError } from "@/lib/api/error";
+import { StepUpAuthModal } from "@/components/security/step-up-auth-modal";
 import type {
   ComplianceDigestDeliveryList,
   ComplianceDigestPreview,
@@ -129,13 +131,20 @@ export function WorkspaceDetail({
   const [selectedPresetKey, setSelectedPresetKey] = useState("");
   const [selectedPartnerUserId, setSelectedPartnerUserId] = useState("");
   const [expirationDays, setExpirationDays] = useState("");
-  const [stepUpCode, setStepUpCode] = useState("");
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isApplyingPreset, setIsApplyingPreset] = useState(false);
   const [isExportingAudit, setIsExportingAudit] = useState(false);
   const [isSavingDigest, setIsSavingDigest] = useState(false);
   const [isSendingDigest, setIsSendingDigest] = useState(false);
+  const [isStepUpModalOpen, setIsStepUpModalOpen] = useState(false);
+  const [isStepUpSubmitting, setIsStepUpSubmitting] = useState(false);
+  const [stepUpError, setStepUpError] = useState<string | null>(null);
+  const [stepUpTitle, setStepUpTitle] = useState("Step-Up Authentication Required");
+  const [stepUpDescription, setStepUpDescription] = useState(
+    "Enter your current 6-digit MFA code to continue."
+  );
+  const stepUpRetryActionRef = useRef<((code: string) => Promise<void>) | null>(null);
 
   void onRefresh;
 
@@ -205,9 +214,58 @@ export function WorkspaceDetail({
     { key: "data" as const, label: "Shared Data", count: sharedData.length },
   ];
 
-  const handleExportAudit = async () => {
-    setIsExportingAudit(true);
-    try {
+  const closeStepUpModal = useCallback(() => {
+    setIsStepUpModalOpen(false);
+    setStepUpError(null);
+    stepUpRetryActionRef.current = null;
+  }, []);
+
+  const requestStepUpChallenge = useCallback(
+    (
+      retryAction: (code: string) => Promise<void>,
+      options?: {
+        title?: string;
+        description?: string;
+      }
+    ) => {
+      stepUpRetryActionRef.current = retryAction;
+      setStepUpTitle(options?.title ?? "Step-Up Authentication Required");
+      setStepUpDescription(
+        options?.description ?? "Enter your current 6-digit MFA code to continue."
+      );
+      setStepUpError(null);
+      setIsStepUpModalOpen(true);
+    },
+    []
+  );
+
+  const handleStepUpSubmit = useCallback(
+    async (code: string) => {
+      const retryAction = stepUpRetryActionRef.current;
+      if (!retryAction) {
+        closeStepUpModal();
+        return;
+      }
+      setIsStepUpSubmitting(true);
+      setStepUpError(null);
+      try {
+        await retryAction(code.trim());
+        closeStepUpModal();
+      } catch (error) {
+        if (isStepUpRequiredError(error)) {
+          setStepUpError("Invalid MFA code. Please try again.");
+          return;
+        }
+        setStepUpError(getApiErrorMessage(error, "Unable to verify MFA code."));
+      } finally {
+        setIsStepUpSubmitting(false);
+      }
+    },
+    [closeStepUpModal]
+  );
+
+  const downloadAuditCsv = useCallback(
+    async (stepUpCode?: string) => {
       const blob = await collaborationApi.exportShareAuditCsv(workspace.id, {
         days: governanceTrends?.days ?? 30,
         step_up_code: stepUpCode || undefined,
@@ -220,7 +278,28 @@ export function WorkspaceDetail({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch {
+    },
+    [workspace.id, governanceTrends?.days]
+  );
+
+  const handleExportAudit = async () => {
+    setIsExportingAudit(true);
+    try {
+      await downloadAuditCsv();
+    } catch (error) {
+      if (isStepUpRequiredError(error)) {
+        requestStepUpChallenge(
+          async (code) => {
+            await downloadAuditCsv(code);
+          },
+          {
+            title: "Step-Up Required for Audit Export",
+            description:
+              "Enter your current 6-digit MFA code to export collaboration audit evidence.",
+          }
+        );
+        return;
+      }
       /* handled by interceptor */
     } finally {
       setIsExportingAudit(false);
@@ -238,6 +317,16 @@ export function WorkspaceDetail({
 
   return (
     <div className="space-y-4">
+      <StepUpAuthModal
+        open={isStepUpModalOpen}
+        title={stepUpTitle}
+        description={stepUpDescription}
+        isSubmitting={isStepUpSubmitting}
+        error={stepUpError}
+        onClose={closeStepUpModal}
+        onSubmit={handleStepUpSubmit}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-foreground">{workspace.name}</h2>
@@ -371,8 +460,6 @@ export function WorkspaceDetail({
             governanceTrends={governanceTrends}
             governanceAnomalies={governanceAnomalies}
             isExportingAudit={isExportingAudit}
-            stepUpCode={stepUpCode}
-            onStepUpCodeChange={setStepUpCode}
             onExportAudit={handleExportAudit}
           />
 
@@ -402,7 +489,6 @@ export function WorkspaceDetail({
             selectedPresetKey={selectedPresetKey}
             selectedPartnerUserId={selectedPartnerUserId}
             expirationDays={expirationDays}
-            stepUpCode={stepUpCode}
             requiresApproval={requiresApproval}
             isSharing={isSharing}
             isApplyingPreset={isApplyingPreset}
@@ -412,10 +498,10 @@ export function WorkspaceDetail({
             onSelectedPresetKeyChange={setSelectedPresetKey}
             onSelectedPartnerUserIdChange={setSelectedPartnerUserId}
             onExpirationDaysChange={setExpirationDays}
-            onStepUpCodeChange={setStepUpCode}
             onRequiresApprovalChange={setRequiresApproval}
             onSharingChange={setIsSharing}
             onApplyingPresetChange={setIsApplyingPreset}
+            onStepUpRequired={requestStepUpChallenge}
             onDataChanged={load}
           />
 

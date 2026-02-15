@@ -5,11 +5,14 @@ Provides CMMC Level 2 readiness, NIST 800-53 overview,
 data privacy practices, trust-center controls, and audit event summary.
 """
 
+import csv
+import io
+import json
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -17,9 +20,21 @@ from sqlmodel import select
 from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.audit import AuditEvent
+from app.models.compliance_registry import (
+    CheckpointEvidenceStatus,
+    CheckpointSignoffStatus,
+    ComplianceCheckpointEvidenceLink,
+    ComplianceCheckpointSignoff,
+    ComplianceEvidence,
+)
 from app.models.organization import Organization, OrganizationMember, OrgRole
 from app.models.user import User
 from app.schemas.compliance import (
+    ComplianceCheckpointEvidenceCreate,
+    ComplianceCheckpointEvidenceRead,
+    ComplianceCheckpointEvidenceUpdate,
+    ComplianceCheckpointSignoffRead,
+    ComplianceCheckpointSignoffWrite,
     ComplianceReadinessCheckpoint,
     ComplianceReadinessCheckpointResponse,
     ComplianceReadinessResponse,
@@ -37,6 +52,12 @@ from app.schemas.compliance import (
 )
 from app.services.auth_service import UserAuth
 from app.services.cmmc_checker import get_compliance_score, get_nist_overview
+from app.services.compliance_readiness_service import (
+    get_checkpoint_signoff,
+    list_checkpoint_evidence_snapshots,
+    overlay_registry_readiness,
+)
+from app.services.export_signing import signed_headers
 from app.services.gemini_service.core import GeminiService
 
 router = APIRouter(prefix="/compliance", tags=["Compliance"])
@@ -437,6 +458,117 @@ def _build_trust_center_profile(
     )
 
 
+def _is_org_admin(member: OrganizationMember | None) -> bool:
+    return bool(member and member.role in (OrgRole.OWNER, OrgRole.ADMIN))
+
+
+def _checkpoint_exists(checkpoint_id: str) -> bool:
+    return any(checkpoint.checkpoint_id == checkpoint_id for checkpoint in _readiness_checkpoints())
+
+
+def _serialize_checkpoint_evidence(
+    snapshot,
+    *,
+    checkpoint_id: str,
+) -> ComplianceCheckpointEvidenceRead:
+    link = snapshot.link
+    evidence = snapshot.evidence
+    return ComplianceCheckpointEvidenceRead(
+        link_id=link.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+        evidence_id=evidence.id,  # type: ignore[arg-type]
+        title=evidence.title,
+        evidence_type=evidence.evidence_type.value,
+        description=evidence.description,
+        file_path=evidence.file_path,
+        url=evidence.url,
+        collected_at=evidence.collected_at,
+        expires_at=evidence.expires_at,
+        status=link.status.value,  # type: ignore[arg-type]
+        notes=link.notes,
+        reviewer_user_id=link.reviewer_user_id,
+        reviewer_notes=link.reviewer_notes,
+        reviewed_at=link.reviewed_at,
+        linked_at=link.created_at,
+    )
+
+
+def _build_trust_center_csv_payload(payload: dict[str, Any]) -> bytes:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["section", "key", "value"])
+    writer.writerow(["meta", "generated_at", payload["generated_at"]])
+    writer.writerow(["meta", "generated_by_user_id", payload["generated_by_user_id"]])
+    writer.writerow(["profile", "organization_id", payload["profile"].get("organization_id")])
+    writer.writerow(["profile", "organization_name", payload["profile"].get("organization_name")])
+    writer.writerow(
+        [
+            "runtime",
+            "processing_mode",
+            payload["profile"]["runtime_guarantees"].get("processing_mode"),
+        ]
+    )
+    writer.writerow(
+        [
+            "runtime",
+            "no_training_enforced",
+            payload["profile"]["runtime_guarantees"].get("no_training_enforced"),
+        ]
+    )
+    for evidence in payload["profile"].get("evidence", []):
+        writer.writerow(
+            [
+                "evidence",
+                evidence.get("control"),
+                f"{evidence.get('status')}|{evidence.get('detail')}",
+            ]
+        )
+    return output.getvalue().encode("utf-8")
+
+
+def _build_trust_center_pdf_payload(payload: dict[str, Any]) -> bytes:
+    profile = payload["profile"]
+    evidence_lines = "".join(
+        [
+            (
+                f"<li><strong>{item.get('control')}:</strong> "
+                f"{item.get('status')} - {item.get('detail')}</li>"
+            )
+            for item in profile.get("evidence", [])
+        ]
+    )
+    html_doc = f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          body {{ font-family: Arial, sans-serif; font-size: 12px; margin: 24px; }}
+          h1 {{ font-size: 20px; margin-bottom: 8px; }}
+          h2 {{ font-size: 14px; margin-top: 18px; }}
+          ul {{ margin: 0; padding-left: 18px; }}
+          li {{ margin-bottom: 6px; }}
+          .meta {{ color: #555; font-size: 11px; }}
+        </style>
+      </head>
+      <body>
+        <h1>Trust Center Evidence Export</h1>
+        <p class="meta">Generated at: {payload["generated_at"]}</p>
+        <p class="meta">Organization: {profile.get("organization_name") or "N/A"}</p>
+        <h2>Runtime Guarantees</h2>
+        <ul>
+          <li>Provider: {profile["runtime_guarantees"].get("model_provider")}</li>
+          <li>Processing mode: {profile["runtime_guarantees"].get("processing_mode")}</li>
+          <li>No training enforced: {profile["runtime_guarantees"].get("no_training_enforced")}</li>
+        </ul>
+        <h2>Evidence Controls</h2>
+        <ul>{evidence_lines}</ul>
+      </body>
+    </html>
+    """
+    return html_doc.encode("utf-8")
+
+
 @router.get("/readiness", response_model=ComplianceReadinessResponse)
 async def readiness_status(
     current_user: UserAuth = Depends(get_current_user),
@@ -455,11 +587,329 @@ async def readiness_status(
 )
 async def readiness_checkpoints(
     current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ) -> ComplianceReadinessCheckpointResponse:
     """Execution checkpoints across FedRAMP/CMMC/GovCloud readiness tracks."""
-    return ComplianceReadinessCheckpointResponse(
+    _user, org, _member = await _current_user_with_org(current_user, session)
+    checkpoints = await overlay_registry_readiness(
+        session,
+        organization_id=org.id if org else None,
         checkpoints=_readiness_checkpoints(),
+    )
+    return ComplianceReadinessCheckpointResponse(
+        checkpoints=checkpoints,
         generated_at=datetime.utcnow(),
+    )
+
+
+@router.get(
+    "/readiness-checkpoints/{checkpoint_id}/evidence",
+    response_model=list[ComplianceCheckpointEvidenceRead],
+)
+async def checkpoint_evidence_list(
+    checkpoint_id: str,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[ComplianceCheckpointEvidenceRead]:
+    """List evidence linked to a readiness checkpoint for the current organization."""
+    _user, org, member = await _current_user_with_org(current_user, session)
+    if not org or not member:
+        raise HTTPException(403, "Organization membership required")
+    if not _checkpoint_exists(checkpoint_id):
+        raise HTTPException(404, "Checkpoint not found")
+
+    snapshots = await list_checkpoint_evidence_snapshots(
+        session,
+        organization_id=org.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+    )
+    return [
+        _serialize_checkpoint_evidence(snapshot, checkpoint_id=checkpoint_id)
+        for snapshot in snapshots
+    ]
+
+
+@router.post(
+    "/readiness-checkpoints/{checkpoint_id}/evidence",
+    response_model=ComplianceCheckpointEvidenceRead,
+    status_code=201,
+)
+async def checkpoint_evidence_create(
+    checkpoint_id: str,
+    payload: ComplianceCheckpointEvidenceCreate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceCheckpointEvidenceRead:
+    """Link an evidence artifact to a readiness checkpoint (org admin only)."""
+    _user, org, member = await _current_user_with_org(current_user, session)
+    if not org or not member:
+        raise HTTPException(403, "Organization membership required")
+    if not _is_org_admin(member):
+        raise HTTPException(403, "Admin access required")
+    if not _checkpoint_exists(checkpoint_id):
+        raise HTTPException(404, "Checkpoint not found")
+
+    evidence = (
+        await session.execute(
+            select(ComplianceEvidence).where(
+                ComplianceEvidence.id == payload.evidence_id,
+                ComplianceEvidence.organization_id == org.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not evidence:
+        raise HTTPException(404, "Evidence not found in organization scope")
+
+    link = ComplianceCheckpointEvidenceLink(
+        organization_id=org.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+        evidence_id=payload.evidence_id,
+        status=CheckpointEvidenceStatus(payload.status or CheckpointEvidenceStatus.SUBMITTED.value),
+        notes=payload.notes,
+        linked_by_user_id=current_user.id,
+    )
+    session.add(link)
+    session.add(
+        AuditEvent(
+            user_id=current_user.id,
+            entity_type="compliance_checkpoint",
+            entity_id=org.id,
+            action="compliance.readiness_checkpoint.evidence_linked",
+            event_metadata={
+                "organization_id": org.id,
+                "checkpoint_id": checkpoint_id,
+                "evidence_id": payload.evidence_id,
+                "status": link.status.value,
+            },
+        )
+    )
+    await session.commit()
+    await session.refresh(link)
+
+    return ComplianceCheckpointEvidenceRead(
+        link_id=link.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+        evidence_id=evidence.id,  # type: ignore[arg-type]
+        title=evidence.title,
+        evidence_type=evidence.evidence_type.value,
+        description=evidence.description,
+        file_path=evidence.file_path,
+        url=evidence.url,
+        collected_at=evidence.collected_at,
+        expires_at=evidence.expires_at,
+        status=link.status.value,  # type: ignore[arg-type]
+        notes=link.notes,
+        reviewer_user_id=link.reviewer_user_id,
+        reviewer_notes=link.reviewer_notes,
+        reviewed_at=link.reviewed_at,
+        linked_at=link.created_at,
+    )
+
+
+@router.patch(
+    "/readiness-checkpoints/{checkpoint_id}/evidence/{link_id}",
+    response_model=ComplianceCheckpointEvidenceRead,
+)
+async def checkpoint_evidence_update(
+    checkpoint_id: str,
+    link_id: int,
+    payload: ComplianceCheckpointEvidenceUpdate,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceCheckpointEvidenceRead:
+    """Review/update checkpoint evidence status (org admin only)."""
+    _user, org, member = await _current_user_with_org(current_user, session)
+    if not org or not member:
+        raise HTTPException(403, "Organization membership required")
+    if not _is_org_admin(member):
+        raise HTTPException(403, "Admin access required")
+    if not _checkpoint_exists(checkpoint_id):
+        raise HTTPException(404, "Checkpoint not found")
+
+    link = (
+        await session.execute(
+            select(ComplianceCheckpointEvidenceLink).where(
+                ComplianceCheckpointEvidenceLink.id == link_id,
+                ComplianceCheckpointEvidenceLink.organization_id == org.id,
+                ComplianceCheckpointEvidenceLink.checkpoint_id == checkpoint_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not link:
+        raise HTTPException(404, "Checkpoint evidence link not found")
+
+    updates = payload.model_dump(exclude_unset=True, exclude_none=True)
+    if "status" in updates:
+        link.status = CheckpointEvidenceStatus(updates["status"])
+    if "reviewer_notes" in updates:
+        link.reviewer_notes = updates["reviewer_notes"]
+    link.reviewer_user_id = current_user.id
+    link.reviewed_at = datetime.utcnow()
+    link.updated_at = datetime.utcnow()
+    session.add(link)
+    session.add(
+        AuditEvent(
+            user_id=current_user.id,
+            entity_type="compliance_checkpoint",
+            entity_id=org.id,
+            action="compliance.readiness_checkpoint.evidence_updated",
+            event_metadata={
+                "organization_id": org.id,
+                "checkpoint_id": checkpoint_id,
+                "link_id": link_id,
+                "updates": updates,
+            },
+        )
+    )
+    await session.commit()
+
+    evidence = (
+        await session.execute(
+            select(ComplianceEvidence).where(ComplianceEvidence.id == link.evidence_id)
+        )
+    ).scalar_one_or_none()
+    if not evidence:
+        raise HTTPException(404, "Linked evidence not found")
+
+    return ComplianceCheckpointEvidenceRead(
+        link_id=link.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+        evidence_id=evidence.id,  # type: ignore[arg-type]
+        title=evidence.title,
+        evidence_type=evidence.evidence_type.value,
+        description=evidence.description,
+        file_path=evidence.file_path,
+        url=evidence.url,
+        collected_at=evidence.collected_at,
+        expires_at=evidence.expires_at,
+        status=link.status.value,  # type: ignore[arg-type]
+        notes=link.notes,
+        reviewer_user_id=link.reviewer_user_id,
+        reviewer_notes=link.reviewer_notes,
+        reviewed_at=link.reviewed_at,
+        linked_at=link.created_at,
+    )
+
+
+@router.get(
+    "/readiness-checkpoints/{checkpoint_id}/signoff",
+    response_model=ComplianceCheckpointSignoffRead,
+)
+async def checkpoint_signoff_get(
+    checkpoint_id: str,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceCheckpointSignoffRead:
+    """Read assessor sign-off status for a checkpoint."""
+    _user, org, member = await _current_user_with_org(current_user, session)
+    if not org or not member:
+        raise HTTPException(403, "Organization membership required")
+    if not _checkpoint_exists(checkpoint_id):
+        raise HTTPException(404, "Checkpoint not found")
+
+    signoff = await get_checkpoint_signoff(
+        session,
+        organization_id=org.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+    )
+    if not signoff:
+        return ComplianceCheckpointSignoffRead(
+            checkpoint_id=checkpoint_id,
+            status=CheckpointSignoffStatus.PENDING.value,  # type: ignore[arg-type]
+            assessor_name="Pending assessor assignment",
+            assessor_org=None,
+            notes=None,
+            signed_by_user_id=None,
+            signed_at=None,
+            updated_at=datetime.utcnow(),
+        )
+    return ComplianceCheckpointSignoffRead(
+        checkpoint_id=checkpoint_id,
+        status=signoff.status.value,  # type: ignore[arg-type]
+        assessor_name=signoff.assessor_name,
+        assessor_org=signoff.assessor_org,
+        notes=signoff.notes,
+        signed_by_user_id=signoff.signed_by_user_id,
+        signed_at=signoff.signed_at,
+        updated_at=signoff.updated_at,
+    )
+
+
+@router.put(
+    "/readiness-checkpoints/{checkpoint_id}/signoff",
+    response_model=ComplianceCheckpointSignoffRead,
+)
+async def checkpoint_signoff_upsert(
+    checkpoint_id: str,
+    payload: ComplianceCheckpointSignoffWrite,
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ComplianceCheckpointSignoffRead:
+    """Create/update checkpoint assessor sign-off (org admin only)."""
+    _user, org, member = await _current_user_with_org(current_user, session)
+    if not org or not member:
+        raise HTTPException(403, "Organization membership required")
+    if not _is_org_admin(member):
+        raise HTTPException(403, "Admin access required")
+    if not _checkpoint_exists(checkpoint_id):
+        raise HTTPException(404, "Checkpoint not found")
+
+    signoff = await get_checkpoint_signoff(
+        session,
+        organization_id=org.id,  # type: ignore[arg-type]
+        checkpoint_id=checkpoint_id,
+    )
+    if not signoff:
+        signoff = ComplianceCheckpointSignoff(
+            organization_id=org.id,  # type: ignore[arg-type]
+            checkpoint_id=checkpoint_id,
+            status=CheckpointSignoffStatus(payload.status),
+            assessor_name=payload.assessor_name,
+            assessor_org=payload.assessor_org,
+            notes=payload.notes,
+            signed_by_user_id=current_user.id,
+            signed_at=datetime.utcnow()
+            if payload.status != CheckpointSignoffStatus.PENDING.value
+            else None,
+        )
+    else:
+        signoff.status = CheckpointSignoffStatus(payload.status)
+        signoff.assessor_name = payload.assessor_name
+        signoff.assessor_org = payload.assessor_org
+        signoff.notes = payload.notes
+        signoff.signed_by_user_id = current_user.id
+        signoff.signed_at = (
+            datetime.utcnow() if payload.status != CheckpointSignoffStatus.PENDING.value else None
+        )
+        signoff.updated_at = datetime.utcnow()
+
+    session.add(signoff)
+    session.add(
+        AuditEvent(
+            user_id=current_user.id,
+            entity_type="compliance_checkpoint",
+            entity_id=org.id,
+            action="compliance.readiness_checkpoint.signoff_updated",
+            event_metadata={
+                "organization_id": org.id,
+                "checkpoint_id": checkpoint_id,
+                "status": payload.status,
+                "assessor_name": payload.assessor_name,
+            },
+        )
+    )
+    await session.commit()
+    await session.refresh(signoff)
+
+    return ComplianceCheckpointSignoffRead(
+        checkpoint_id=checkpoint_id,
+        status=signoff.status.value,  # type: ignore[arg-type]
+        assessor_name=signoff.assessor_name,
+        assessor_org=signoff.assessor_org,
+        notes=signoff.notes,
+        signed_by_user_id=signoff.signed_by_user_id,
+        signed_at=signoff.signed_at,
+        updated_at=signoff.updated_at,
     )
 
 
@@ -481,6 +931,7 @@ async def soc2_readiness(
 
 @router.get("/three-pao-package")
 async def export_three_pao_package(
+    signed: bool = Query(False),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
@@ -488,44 +939,64 @@ async def export_three_pao_package(
     _user, org, member = await _current_user_with_org(current_user, session)
     can_manage_policy = bool(member and member.role in (OrgRole.OWNER, OrgRole.ADMIN))
     now = datetime.utcnow()
+    try:
+        trust_profile = _build_trust_center_profile(
+            organization=org,
+            can_manage_policy=can_manage_policy,
+        )
+        readiness_programs = _readiness_programs()
+        checkpoints = await overlay_registry_readiness(
+            session,
+            organization_id=org.id if org else None,
+            checkpoints=_readiness_checkpoints(),
+        )
+        third_party_checkpoints = [
+            checkpoint for checkpoint in checkpoints if checkpoint.third_party_required
+        ]
+        soc2_profile = _build_soc2_readiness(now)
+        govcloud = _build_govcloud_profile(now)
 
-    trust_profile = _build_trust_center_profile(
-        organization=org,
-        can_manage_policy=can_manage_policy,
-    )
-    readiness_programs = _readiness_programs()
-    checkpoints = _readiness_checkpoints()
-    third_party_checkpoints = [
-        checkpoint for checkpoint in checkpoints if checkpoint.third_party_required
-    ]
-    soc2_profile = _build_soc2_readiness(now)
-    govcloud = _build_govcloud_profile(now)
-
-    payload = {
-        "generated_at": now.isoformat(),
-        "generated_by_user_id": current_user.id,
-        "organization_id": org.id if org else None,
-        "readiness_programs": readiness_programs,
-        "checkpoint_summary": {
-            "total": len(checkpoints),
-            "third_party_required": len(third_party_checkpoints),
-            "evidence_items_ready": sum(c.evidence_items_ready for c in checkpoints),
-            "evidence_items_total": sum(c.evidence_items_total for c in checkpoints),
-        },
-        "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in checkpoints],
-        "three_pao_focus_checkpoints": [
-            checkpoint.model_dump(mode="json") for checkpoint in third_party_checkpoints
-        ],
-        "govcloud_profile": govcloud.model_dump(mode="json"),
-        "soc2_profile": soc2_profile.model_dump(mode="json"),
-        "trust_center": trust_profile.model_dump(mode="json"),
-        "controls_in_scope": [
-            "FedRAMP Moderate baseline deltas",
-            "CMMC Level 2 practice evidence map",
-            "GovCloud boundary and identity controls",
-            "SOC 2 Type II trust criteria execution status",
-        ],
-    }
+        payload = {
+            "generated_at": now.isoformat(),
+            "generated_by_user_id": current_user.id,
+            "organization_id": org.id if org else None,
+            "readiness_programs": readiness_programs,
+            "checkpoint_summary": {
+                "total": len(checkpoints),
+                "third_party_required": len(third_party_checkpoints),
+                "evidence_items_ready": sum(c.evidence_items_ready for c in checkpoints),
+                "evidence_items_total": sum(c.evidence_items_total for c in checkpoints),
+            },
+            "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in checkpoints],
+            "three_pao_focus_checkpoints": [
+                checkpoint.model_dump(mode="json") for checkpoint in third_party_checkpoints
+            ],
+            "govcloud_profile": govcloud.model_dump(mode="json"),
+            "soc2_profile": soc2_profile.model_dump(mode="json"),
+            "trust_center": trust_profile.model_dump(mode="json"),
+            "controls_in_scope": [
+                "FedRAMP Moderate baseline deltas",
+                "CMMC Level 2 practice evidence map",
+                "GovCloud boundary and identity controls",
+                "SOC 2 Type II trust criteria execution status",
+            ],
+        }
+    except Exception as exc:
+        session.add(
+            AuditEvent(
+                user_id=current_user.id,
+                entity_type="compliance",
+                entity_id=org.id if org else None,
+                action="compliance.3pao_package.export_failed",
+                event_metadata={
+                    "organization_id": org.id if org else None,
+                    "signed": signed,
+                    "error": str(exc),
+                },
+            )
+        )
+        await session.commit()
+        raise
     filename = f"three_pao_readiness_package_{now.strftime('%Y%m%d')}.json"
 
     session.add(
@@ -537,15 +1008,20 @@ async def export_three_pao_package(
             event_metadata={
                 "organization_id": org.id if org else None,
                 "third_party_checkpoints": len(third_party_checkpoints),
+                "signed": signed,
             },
         )
     )
     await session.commit()
 
-    return JSONResponse(
-        content=payload,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    headers.update(
+        signed_headers(
+            json.dumps(payload, sort_keys=True).encode("utf-8"),
+            enabled=signed,
+        )
     )
+    return JSONResponse(content=payload, headers=headers)
 
 
 @router.get("/overview")
@@ -675,12 +1151,14 @@ async def update_trust_center_policy(
     )
 
 
-@router.get("/trust-center/evidence-export")
+@router.get("/trust-center/evidence-export", response_model=None)
 async def export_trust_center_evidence(
+    format: Literal["json", "csv", "pdf"] = Query("json"),
+    signed: bool = Query(False),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> JSONResponse:
-    """Download trust-center policy/runtime evidence bundle as JSON."""
+) -> JSONResponse | StreamingResponse:
+    """Download trust-center policy/runtime evidence bundle."""
     _user, org, member = await _current_user_with_org(current_user, session)
     can_manage_policy = bool(member and member.role in (OrgRole.OWNER, OrgRole.ADMIN))
     profile = _build_trust_center_profile(
@@ -693,26 +1171,194 @@ async def export_trust_center_evidence(
         "generated_by_user_id": current_user.id,
         "profile": profile.model_dump(mode="json"),
     }
-    filename = f"trust_center_evidence_{datetime.utcnow().strftime('%Y%m%d')}.json"
+    filename_base = f"trust_center_evidence_{datetime.utcnow().strftime('%Y%m%d')}"
+    try:
+        if format == "csv":
+            csv_bytes = _build_trust_center_csv_payload(payload)
+            session.add(
+                AuditEvent(
+                    user_id=current_user.id,
+                    entity_type="compliance",
+                    entity_id=org.id if org else None,
+                    action="compliance.trust_center.exported",
+                    event_metadata={
+                        "organization_id": org.id if org else None,
+                        "can_manage_policy": can_manage_policy,
+                        "format": format,
+                        "signed": signed,
+                    },
+                )
+            )
+            await session.commit()
+            headers = {
+                "Content-Disposition": f'attachment; filename="{filename_base}.csv"',
+            }
+            headers.update(signed_headers(csv_bytes, enabled=signed))
+            return StreamingResponse(
+                io.BytesIO(csv_bytes),
+                media_type="text/csv",
+                headers=headers,
+            )
 
-    session.add(
-        AuditEvent(
-            user_id=current_user.id,
-            entity_type="compliance",
-            entity_id=org.id if org else None,
-            action="compliance.trust_center.exported",
-            event_metadata={
-                "organization_id": org.id if org else None,
-                "can_manage_policy": can_manage_policy,
-            },
+        if format == "pdf":
+            try:
+                from weasyprint import HTML
+
+                pdf_bytes = HTML(
+                    string=_build_trust_center_pdf_payload(payload).decode("utf-8")
+                ).write_pdf()
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        "PDF export requires WeasyPrint runtime dependencies. "
+                        "Install weasyprint and system libraries."
+                    ),
+                ) from exc
+            session.add(
+                AuditEvent(
+                    user_id=current_user.id,
+                    entity_type="compliance",
+                    entity_id=org.id if org else None,
+                    action="compliance.trust_center.exported",
+                    event_metadata={
+                        "organization_id": org.id if org else None,
+                        "can_manage_policy": can_manage_policy,
+                        "format": format,
+                        "signed": signed,
+                    },
+                )
+            )
+            await session.commit()
+            headers = {
+                "Content-Disposition": f'attachment; filename="{filename_base}.pdf"',
+            }
+            headers.update(signed_headers(pdf_bytes, enabled=signed))
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers=headers,
+            )
+
+        serialized_json = json.dumps(payload, sort_keys=True).encode("utf-8")
+        session.add(
+            AuditEvent(
+                user_id=current_user.id,
+                entity_type="compliance",
+                entity_id=org.id if org else None,
+                action="compliance.trust_center.exported",
+                event_metadata={
+                    "organization_id": org.id if org else None,
+                    "can_manage_policy": can_manage_policy,
+                    "format": format,
+                    "signed": signed,
+                },
+            )
         )
-    )
-    await session.commit()
+        await session.commit()
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename_base}.json"',
+        }
+        headers.update(signed_headers(serialized_json, enabled=signed))
+        return JSONResponse(content=payload, headers=headers)
+    except Exception as exc:
+        session.add(
+            AuditEvent(
+                user_id=current_user.id,
+                entity_type="compliance",
+                entity_id=org.id if org else None,
+                action="compliance.trust_center.export_failed",
+                event_metadata={
+                    "organization_id": org.id if org else None,
+                    "can_manage_policy": can_manage_policy,
+                    "format": format,
+                    "signed": signed,
+                    "error": str(exc),
+                },
+            )
+        )
+        await session.commit()
+        raise
 
-    return JSONResponse(
-        content=payload,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+
+@router.get("/trust-metrics")
+async def trust_metrics(
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Operational trust metrics for enterprise readiness and rollout telemetry."""
+    _user, org, _member = await _current_user_with_org(current_user, session)
+    checkpoints = await overlay_registry_readiness(
+        session,
+        organization_id=org.id if org else None,
+        checkpoints=_readiness_checkpoints(),
     )
+    total_evidence_items = sum(checkpoint.evidence_items_total for checkpoint in checkpoints)
+    ready_evidence_items = sum(checkpoint.evidence_items_ready for checkpoint in checkpoints)
+    checkpoint_count = len(checkpoints)
+    approved_signoffs = sum(
+        1 for checkpoint in checkpoints if checkpoint.assessor_signoff_status == "approved"
+    )
+
+    metrics_window_start = datetime.utcnow() - timedelta(days=30)
+    action_counts = {
+        row[0]: row[1]
+        for row in (
+            await session.execute(
+                select(AuditEvent.action, func.count())
+                .where(
+                    AuditEvent.user_id == current_user.id,
+                    AuditEvent.created_at >= metrics_window_start,
+                    AuditEvent.action.in_(
+                        [
+                            "compliance.trust_center.exported",
+                            "compliance.3pao_package.exported",
+                            "compliance.trust_center.export_failed",
+                            "compliance.3pao_package.export_failed",
+                            "security.step_up.challenge_succeeded",
+                            "security.step_up.challenge_failed",
+                        ]
+                    ),
+                )
+                .group_by(AuditEvent.action)
+            )
+        ).all()
+    }
+    export_successes = int(action_counts.get("compliance.trust_center.exported", 0)) + int(
+        action_counts.get("compliance.3pao_package.exported", 0)
+    )
+    export_failures = int(action_counts.get("compliance.trust_center.export_failed", 0)) + int(
+        action_counts.get("compliance.3pao_package.export_failed", 0)
+    )
+    step_up_successes = int(action_counts.get("security.step_up.challenge_succeeded", 0))
+    step_up_failures = int(action_counts.get("security.step_up.challenge_failed", 0))
+
+    def _rate(successes: int, failures: int) -> float | None:
+        total = successes + failures
+        if total <= 0:
+            return None
+        return round((successes / total) * 100, 2)
+
+    return {
+        "generated_at": datetime.utcnow().isoformat(),
+        "window_days": 30,
+        "checkpoint_evidence_completeness_rate": (
+            round((ready_evidence_items / total_evidence_items) * 100, 2)
+            if total_evidence_items > 0
+            else None
+        ),
+        "checkpoint_signoff_completion_rate": (
+            round((approved_signoffs / checkpoint_count) * 100, 2) if checkpoint_count > 0 else None
+        ),
+        "trust_export_success_rate_30d": _rate(export_successes, export_failures),
+        "trust_export_successes_30d": export_successes,
+        "trust_export_failures_30d": export_failures,
+        "step_up_challenge_success_rate_30d": _rate(step_up_successes, step_up_failures),
+        "step_up_challenge_successes_30d": step_up_successes,
+        "step_up_challenge_failures_30d": step_up_failures,
+        # CI telemetry is tracked in pipeline systems and surfaced as null until connected.
+        "trust_ci_pass_rate_30d": None,
+    }
 
 
 @router.get("/audit-summary")

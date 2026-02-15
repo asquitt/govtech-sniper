@@ -21,6 +21,8 @@ export interface OrganizationDetails {
   data_retention_days: number;
   require_step_up_for_sensitive_exports: boolean;
   require_step_up_for_sensitive_shares: boolean;
+  apply_cui_watermark_to_sensitive_exports: boolean;
+  apply_cui_redaction_to_sensitive_exports: boolean;
   member_count: number;
   created_at: string;
 }

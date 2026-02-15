@@ -39,11 +39,64 @@ class ComplianceReadinessCheckpoint(BaseModel):
     third_party_required: bool
     evidence_items_ready: int = Field(ge=0)
     evidence_items_total: int = Field(ge=0)
+    evidence_source: Literal["static", "registry"] | None = None
+    evidence_last_updated_at: datetime | None = None
+    assessor_signoff_status: Literal["pending", "approved", "rejected"] | None = None
+    assessor_signoff_by: str | None = None
+    assessor_signed_at: datetime | None = None
 
 
 class ComplianceReadinessCheckpointResponse(BaseModel):
     checkpoints: list[ComplianceReadinessCheckpoint]
     generated_at: datetime
+
+
+class ComplianceCheckpointEvidenceCreate(BaseModel):
+    evidence_id: int
+    status: Literal["submitted", "accepted", "rejected"] | None = None
+    notes: str | None = None
+
+
+class ComplianceCheckpointEvidenceUpdate(BaseModel):
+    status: Literal["submitted", "accepted", "rejected"] | None = None
+    reviewer_notes: str | None = None
+
+
+class ComplianceCheckpointEvidenceRead(BaseModel):
+    link_id: int
+    checkpoint_id: str
+    evidence_id: int
+    title: str
+    evidence_type: str
+    description: str | None = None
+    file_path: str | None = None
+    url: str | None = None
+    collected_at: datetime
+    expires_at: datetime | None = None
+    status: Literal["submitted", "accepted", "rejected"]
+    notes: str | None = None
+    reviewer_user_id: int | None = None
+    reviewer_notes: str | None = None
+    reviewed_at: datetime | None = None
+    linked_at: datetime
+
+
+class ComplianceCheckpointSignoffWrite(BaseModel):
+    status: Literal["pending", "approved", "rejected"]
+    assessor_name: str
+    assessor_org: str | None = None
+    notes: str | None = None
+
+
+class ComplianceCheckpointSignoffRead(BaseModel):
+    checkpoint_id: str
+    status: Literal["pending", "approved", "rejected"]
+    assessor_name: str
+    assessor_org: str | None = None
+    notes: str | None = None
+    signed_by_user_id: int | None = None
+    signed_at: datetime | None = None
+    updated_at: datetime
 
 
 class GovCloudMigrationPhase(BaseModel):

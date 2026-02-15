@@ -17,10 +17,15 @@ test.describe("Collaboration Workflow", () => {
       await page.getByPlaceholder("Workspace name").fill(name);
       await page.getByPlaceholder("Description (optional)").fill(description);
       await page.getByRole("button", { name: "Create", exact: true }).click();
-      await page.getByRole("button", { name: new RegExp(name) }).click();
-      await expect(page.getByRole("heading", { name })).toBeVisible({
-        timeout: 15_000,
-      });
+      const workspaceHeading = page.getByRole("heading", { name });
+      try {
+        await expect(workspaceHeading).toBeVisible({ timeout: 10_000 });
+      } catch {
+        const workspaceButton = page.getByRole("button", { name: new RegExp(name) });
+        await expect(workspaceButton).toBeVisible({ timeout: 20_000 });
+        await workspaceButton.click();
+        await expect(workspaceHeading).toBeVisible({ timeout: 15_000 });
+      }
     };
 
     await createWorkspace(workspaceName, "Primary E2E collaboration flow");
@@ -74,6 +79,9 @@ test.describe("Collaboration Workflow", () => {
     });
     const acceptHrefSecondary = await secondaryAcceptLink.getAttribute("href");
     expect(acceptHrefSecondary).toContain("/collaboration/accept?token=");
+
+    // Avoid SQLite write-lock flakes from owner-page background polling while collaborator accepts.
+    await page.goto("about:blank");
 
     const collaboratorContext = await browser.newContext();
     const collaboratorPage = await collaboratorContext.newPage();

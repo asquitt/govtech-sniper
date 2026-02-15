@@ -127,6 +127,12 @@ async def get_organization(
         "require_step_up_for_sensitive_shares": security_policy[
             "require_step_up_for_sensitive_shares"
         ],
+        "apply_cui_watermark_to_sensitive_exports": security_policy[
+            "apply_cui_watermark_to_sensitive_exports"
+        ],
+        "apply_cui_redaction_to_sensitive_exports": security_policy[
+            "apply_cui_redaction_to_sensitive_exports"
+        ],
         "member_count": member_count,
         "created_at": org.created_at.isoformat(),
     }
@@ -147,6 +153,8 @@ async def update_organization(
         for key in (
             "require_step_up_for_sensitive_exports",
             "require_step_up_for_sensitive_shares",
+            "apply_cui_watermark_to_sensitive_exports",
+            "apply_cui_redaction_to_sensitive_exports",
         )
         if key in update_data
     }

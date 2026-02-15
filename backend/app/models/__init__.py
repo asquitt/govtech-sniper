@@ -49,6 +49,18 @@ from app.models.collaboration import (
     WorkspaceMember,
     WorkspaceRole,
 )
+from app.models.compliance_registry import (
+    CheckpointEvidenceStatus,
+    CheckpointSignoffStatus,
+    ComplianceCheckpointEvidenceLink,
+    ComplianceCheckpointSignoff,
+    ComplianceControl,
+    ComplianceEvidence,
+    ControlEvidenceLink,
+    ControlFramework,
+    ControlStatus,
+    EvidenceType,
+)
 from app.models.contact import AgencyContactDatabase, OpportunityContact
 from app.models.contract import (
     CLINType,
@@ -201,6 +213,16 @@ __all__ = [
     "TeamingRequest",
     "TeamingRequestStatus",
     "SharedWorkspace",
+    "ControlFramework",
+    "ControlStatus",
+    "EvidenceType",
+    "CheckpointEvidenceStatus",
+    "CheckpointSignoffStatus",
+    "ComplianceControl",
+    "ComplianceEvidence",
+    "ControlEvidenceLink",
+    "ComplianceCheckpointEvidenceLink",
+    "ComplianceCheckpointSignoff",
     "WorkspaceInvitation",
     "WorkspaceMember",
     "SharedDataPermission",

@@ -265,6 +265,8 @@ STEP_UP_FALLBACK_HEADERS = ("X-MFA-Code",)
 _ORG_SECURITY_DEFAULTS: dict[str, bool] = {
     "require_step_up_for_sensitive_exports": True,
     "require_step_up_for_sensitive_shares": True,
+    "apply_cui_watermark_to_sensitive_exports": True,
+    "apply_cui_redaction_to_sensitive_exports": False,
 }
 
 

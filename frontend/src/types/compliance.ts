@@ -110,11 +110,92 @@ export interface ComplianceReadinessCheckpoint {
   third_party_required: boolean;
   evidence_items_ready: number;
   evidence_items_total: number;
+  evidence_source?: "static" | "registry" | null;
+  evidence_last_updated_at?: string | null;
+  assessor_signoff_status?: "pending" | "approved" | "rejected" | null;
+  assessor_signoff_by?: string | null;
+  assessor_signed_at?: string | null;
 }
 
 export interface ComplianceReadinessCheckpointSnapshot {
   checkpoints: ComplianceReadinessCheckpoint[];
   generated_at: string;
+}
+
+export interface ComplianceTrustMetrics {
+  generated_at: string;
+  window_days: number;
+  checkpoint_evidence_completeness_rate: number | null;
+  checkpoint_signoff_completion_rate: number | null;
+  trust_export_success_rate_30d: number | null;
+  trust_export_successes_30d: number;
+  trust_export_failures_30d: number;
+  step_up_challenge_success_rate_30d: number | null;
+  step_up_challenge_successes_30d: number;
+  step_up_challenge_failures_30d: number;
+  trust_ci_pass_rate_30d: number | null;
+}
+
+export interface ComplianceRegistryEvidenceItem {
+  id: number;
+  user_id: number;
+  title: string;
+  evidence_type: string;
+  description: string | null;
+  file_path: string | null;
+  url: string | null;
+  collected_at: string;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComplianceCheckpointEvidenceItem {
+  link_id: number;
+  checkpoint_id: string;
+  evidence_id: number;
+  title: string;
+  evidence_type: string;
+  description: string | null;
+  file_path: string | null;
+  url: string | null;
+  collected_at: string;
+  expires_at: string | null;
+  status: "submitted" | "accepted" | "rejected";
+  notes: string | null;
+  reviewer_user_id: number | null;
+  reviewer_notes: string | null;
+  reviewed_at: string | null;
+  linked_at: string;
+}
+
+export interface ComplianceCheckpointEvidenceCreate {
+  evidence_id: number;
+  status?: "submitted" | "accepted" | "rejected";
+  notes?: string;
+}
+
+export interface ComplianceCheckpointEvidenceUpdate {
+  status?: "submitted" | "accepted" | "rejected";
+  reviewer_notes?: string;
+}
+
+export interface ComplianceCheckpointSignoff {
+  checkpoint_id: string;
+  status: "pending" | "approved" | "rejected";
+  assessor_name: string;
+  assessor_org: string | null;
+  notes: string | null;
+  signed_by_user_id: number | null;
+  signed_at: string | null;
+  updated_at: string;
+}
+
+export interface ComplianceCheckpointSignoffWrite {
+  status: "pending" | "approved" | "rejected";
+  assessor_name: string;
+  assessor_org?: string;
+  notes?: string;
 }
 
 export interface GovCloudMigrationPhase {

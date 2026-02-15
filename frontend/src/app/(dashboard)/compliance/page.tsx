@@ -14,6 +14,7 @@ import type {
   ComplianceAuditSummary,
   ComplianceReadiness,
   ComplianceReadinessCheckpointSnapshot,
+  ComplianceTrustMetrics,
   GovCloudDeploymentProfile,
   SOC2Readiness,
   TrustCenterPolicy,
@@ -88,6 +89,7 @@ export default function CompliancePage() {
   const [readiness, setReadiness] = useState<ComplianceReadiness | null>(null);
   const [readinessCheckpoints, setReadinessCheckpoints] =
     useState<ComplianceReadinessCheckpointSnapshot | null>(null);
+  const [trustMetrics, setTrustMetrics] = useState<ComplianceTrustMetrics | null>(null);
   const [govCloudProfile, setGovCloudProfile] = useState<GovCloudDeploymentProfile | null>(null);
   const [soc2Readiness, setSoc2Readiness] = useState<SOC2Readiness | null>(null);
   const [trustCenter, setTrustCenter] = useState<TrustCenterProfile | null>(null);
@@ -95,6 +97,8 @@ export default function CompliancePage() {
   const [policySaving, setPolicySaving] = useState(false);
   const [evidenceExporting, setEvidenceExporting] = useState(false);
   const [threePaoExporting, setThreePaoExporting] = useState(false);
+  const [trustExportFormat, setTrustExportFormat] = useState<"json" | "csv" | "pdf">("json");
+  const [signedTrustExports, setSignedTrustExports] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySavedMessage, setPolicySavedMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -104,13 +108,14 @@ export default function CompliancePage() {
     setLoading(true);
     setError(null);
     try {
-      const [c, n, p, a, r, rc, g, s, t] = await Promise.all([
+      const [c, n, p, a, r, rc, tm, g, s, t] = await Promise.all([
         complianceApi.getCMMCStatus(),
         complianceApi.getNISTOverview(),
         complianceApi.getDataPrivacy(),
         complianceApi.getComplianceAuditSummary(),
         complianceApi.getReadiness(),
         complianceApi.getReadinessCheckpoints(),
+        complianceApi.getTrustMetrics(),
         complianceApi.getGovCloudProfile(),
         complianceApi.getSOC2Readiness(),
         complianceApi.getTrustCenter(),
@@ -121,6 +126,7 @@ export default function CompliancePage() {
       setAudit(a);
       setReadiness(r);
       setReadinessCheckpoints(rc);
+      setTrustMetrics(tm);
       setGovCloudProfile(g);
       setSoc2Readiness(s);
       setTrustCenter(t);
@@ -187,11 +193,14 @@ export default function CompliancePage() {
     setEvidenceExporting(true);
     setPolicyError(null);
     try {
-      const blob = await complianceApi.exportTrustCenterEvidence();
+      const blob = await complianceApi.exportTrustCenterEvidenceWithOptions({
+        format: trustExportFormat,
+        signed: signedTrustExports,
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `trust_center_evidence_${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `trust_center_evidence_${new Date().toISOString().slice(0, 10)}.${trustExportFormat}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -207,7 +216,9 @@ export default function CompliancePage() {
     setThreePaoExporting(true);
     setPolicyError(null);
     try {
-      const blob = await complianceApi.exportThreePAOPackage();
+      const blob = await complianceApi.exportThreePAOPackage({
+        signed: signedTrustExports,
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -254,6 +265,11 @@ export default function CompliancePage() {
               View Compliance Roadmap &rarr;
             </Button>
           </Link>
+          <Link href="/compliance/evidence-registry">
+            <Button variant="outline" size="sm">
+              Evidence Registry
+            </Button>
+          </Link>
         </div>
 
         {error && (
@@ -294,6 +310,33 @@ export default function CompliancePage() {
             <CardTitle>AI & Data Trust Center</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Evidence completeness</p>
+                <p className="text-sm font-medium">
+                  {trustMetrics?.checkpoint_evidence_completeness_rate ?? 0}%
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Sign-off completion</p>
+                <p className="text-sm font-medium">
+                  {trustMetrics?.checkpoint_signoff_completion_rate ?? 0}%
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Trust export success (30d)</p>
+                <p className="text-sm font-medium">
+                  {trustMetrics?.trust_export_success_rate_30d ?? 0}%
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs text-muted-foreground">Step-up success (30d)</p>
+                <p className="text-sm font-medium">
+                  {trustMetrics?.step_up_challenge_success_rate_30d ?? 0}%
+                </p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="rounded-lg border border-border p-3">
                 <p className="text-xs text-muted-foreground">Model provider</p>
@@ -335,6 +378,29 @@ export default function CompliancePage() {
               ) : (
                 <Badge variant="outline">No organization policy scope</Badge>
               )}
+              <select
+                aria-label="Trust export format"
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                value={trustExportFormat}
+                onChange={(event) =>
+                  setTrustExportFormat(event.target.value as "json" | "csv" | "pdf")
+                }
+                disabled={evidenceExporting || threePaoExporting}
+              >
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+                <option value="pdf">PDF</option>
+              </select>
+              <label className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-2 text-xs">
+                <input
+                  aria-label="Signed trust export toggle"
+                  type="checkbox"
+                  checked={signedTrustExports}
+                  onChange={(event) => setSignedTrustExports(event.target.checked)}
+                  disabled={evidenceExporting || threePaoExporting}
+                />
+                Signed export
+              </label>
               <Button
                 type="button"
                 variant="outline"
@@ -342,7 +408,7 @@ export default function CompliancePage() {
                 disabled={evidenceExporting}
                 onClick={handleTrustEvidenceExport}
               >
-                {evidenceExporting ? "Exporting..." : "Export Trust Evidence JSON"}
+                {evidenceExporting ? "Exporting..." : "Export Trust Evidence"}
               </Button>
               <Button
                 type="button"
@@ -832,9 +898,37 @@ export default function CompliancePage() {
                       ? "Third-party checkpoint"
                       : "Internal checkpoint"}
                   </Badge>
+                  {checkpoint.evidence_source ? (
+                    <Badge variant="outline">
+                      Source: {checkpoint.evidence_source}
+                    </Badge>
+                  ) : null}
+                  {checkpoint.assessor_signoff_status ? (
+                    <Badge
+                      variant={
+                        checkpoint.assessor_signoff_status === "approved"
+                          ? "default"
+                          : checkpoint.assessor_signoff_status === "rejected"
+                            ? "destructive"
+                            : "secondary"
+                      }
+                    >
+                      Assessor sign-off: {checkpoint.assessor_signoff_status}
+                    </Badge>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     Evidence {checkpoint.evidence_items_ready}/{checkpoint.evidence_items_total}
                   </p>
+                  {checkpoint.evidence_last_updated_at ? (
+                    <p className="text-xs text-muted-foreground">
+                      Updated {new Date(checkpoint.evidence_last_updated_at).toLocaleString()}
+                    </p>
+                  ) : null}
+                  {checkpoint.assessor_signoff_by ? (
+                    <p className="text-xs text-muted-foreground">
+                      Assessor: {checkpoint.assessor_signoff_by}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             ))}

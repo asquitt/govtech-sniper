@@ -456,3 +456,38 @@ Format:
 - Root cause: Recent changes were validated with lint/tests but did not include a pre-push Bandit run equivalent to CI (`bandit -r app/ -ll`), so B314/B104 findings were caught only after push.
 - Prevention checklist: When touching parsers or app entrypoints, run the CI-equivalent Bandit command locally before push and resolve all medium/high findings (`B3xx` parser rules, `B104` bind-all interfaces) before committing.
 - Verification added: Switched XML parsing to `defusedxml.ElementTree` in signals/FPDS paths, removed hardcoded `0.0.0.0` in `app/main.py` via env-configured host/port, and reran `bandit -r app/ -f json -o bandit-report.local.json -ll` plus targeted backend tests (`test_data_sources.py`, `test_capability_integrations.py`).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Trust-center PDF export endpoint raised unhandled `500` exceptions in integration tests on hosts without WeasyPrint system libraries.
+- Root cause: Endpoint guarded only `ImportError`, but WeasyPrint can import as a package and still raise `OSError` for missing native libs (`gobject`/Pango stack).
+- Prevention checklist: For optional rendering backends with native dependencies, wrap both import and render execution in broad dependency-availability handling and return deterministic error contracts.
+- Verification added: Updated `/api/v1/compliance/trust-center/evidence-export` PDF path to catch runtime dependency failures and return explicit guidance; validated through `test_compliance_dashboard.py`.
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: New compliance-registry integration tests triggered `sqlite3.IntegrityError` on audit inserts (`NOT NULL constraint failed: audit_events.entity_type`).
+- Root cause: Registry route audit writes still used legacy fields (`resource_type`, `details`) that no longer match the canonical `AuditEvent` schema (`entity_type`, `event_metadata`).
+- Prevention checklist: When adding endpoints in legacy modules, cross-check audit payload keys against current model definitions and run at least one endpoint-level create/update integration test before expanding coverage.
+- Verification added: Updated compliance-registry audit events to canonical audit fields and added CRUD/org-scope regression coverage in `test_compliance_registry.py` (`3/3` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Trust Playwright spec failed after compliance UI expansion due strict-locator ambiguity on repeated `FedRAMP Moderate` text.
+- Root cause: E2E assertion used unconstrained `getByText` while the same label now appears in multiple containers (card title and checkpoint metadata line).
+- Prevention checklist: In trust/compliance pages with repeated taxonomy labels, always use exact/scoped locators (`exact: true` or container-scoped role/text) rather than global partial text matchers.
+- Verification added: Updated `compliance-readiness.spec.ts` selector and export-button assertion to current UI contract, then reran targeted Playwright trust sweep (`compliance-readiness.spec.ts`, `collaboration-workflow.spec.ts`, `2/2` passing).
+
+### 2026-02-14
+- Date: 2026-02-14
+- Mistake: Trust export audit telemetry recorded successful exports before PDF rendering completed, causing false-positive success events when runtime PDF dependencies were missing.
+- Root cause: `compliance.trust_center.exported` audit writes were committed before format-specific payload generation, so later rendering failures did not flip telemetry to a failure action.
+- Prevention checklist: For export/download flows, only persist `*.exported` audit events after payload generation succeeds; on generation exceptions, emit `*.export_failed` with deterministic metadata.
+- Verification added: Refactored trust export endpoints to log success post-generation and log `compliance.trust_center.export_failed`/`compliance.3pao_package.export_failed` on exceptions; added trust metrics aggregation coverage in `test_compliance_dashboard.py`.
+
+### 2026-02-15
+- Date: 2026-02-15
+- Mistake: Trust Playwright collaboration flow repeatedly failed with inconsistent UI state despite backend tests passing.
+- Root cause: Local deterministic validation reused a stale SQLite `dev.db` whose schema lagged current models (missing columns such as `shared_data_permissions.requires_approval` and `onboarding_progress.step_timestamps`), which caused background `500` responses and delayed/failed UI refreshes.
+- Prevention checklist: For local Playwright trust validation, run against a fresh per-run SQLite file (or apply migrations before startup) and verify schema-dependent background endpoints are clean before asserting UI state transitions.
+- Verification added: Restarted backend with fresh `/tmp/trust-e2e.db`, reran trust Playwright specs (`compliance-readiness.spec.ts`, `collaboration-workflow.spec.ts`), and reran `RUN_TRUST_PLAYWRIGHT=true ./scripts/run_trust_ci_suite.sh` successfully.

@@ -9,7 +9,7 @@ test.describe("Compliance Readiness", () => {
     await expect(page.getByText("Certification and Listing Readiness")).toBeVisible();
     await expect(page.getByText("AI & Data Trust Center")).toBeVisible();
     await expect(page.getByText("No model training enforced")).toBeVisible();
-    await expect(page.getByText("FedRAMP Moderate")).toBeVisible();
+    await expect(page.getByText("FedRAMP Moderate", { exact: true })).toBeVisible();
     await expect(page.getByText("Salesforce AppExchange Listing")).toBeVisible();
     await expect(page.getByText("Microsoft AppSource Listing")).toBeVisible();
     await expect(
@@ -17,9 +17,7 @@ test.describe("Compliance Readiness", () => {
         "Visibility is enabled for all users. Organization owners/admins can edit these controls."
       )
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Export Trust Evidence JSON" })
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Export Trust Evidence" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Public Trust Center ↗" })).toBeVisible();
 
     await page.goto("/trust-center");

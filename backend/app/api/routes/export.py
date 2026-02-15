@@ -69,8 +69,31 @@ async def _enforce_export_policy(
 
     supplied_code = get_step_up_code(request, step_up_code)
     if await verify_step_up_code(current_user.id, session, supplied_code):
+        await log_audit_event(
+            session,
+            user_id=current_user.id,
+            entity_type="security",
+            entity_id=current_user.id,
+            action="security.step_up.challenge_succeeded",
+            metadata={
+                "channel": "export",
+                **policy.to_audit_dict(),
+            },
+        )
+        await session.commit()
         return
 
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="security",
+        entity_id=current_user.id,
+        action="security.step_up.challenge_failed",
+        metadata={
+            "channel": "export",
+            **policy.to_audit_dict(),
+        },
+    )
     await session.commit()
     raise HTTPException(
         status_code=403,
@@ -290,7 +313,6 @@ async def export_proposal_docx(
         session=session,
         request=request,
     )
-
     # Get sections
     sections_result = await session.execute(
         select(ProposalSection)
@@ -676,6 +698,42 @@ def _enum_or_value(value: Any) -> Any:
     return value.value if hasattr(value, "value") else value
 
 
+def _apply_cui_redaction_to_compliance_artifacts(
+    *,
+    source_trace_records: list[dict[str, Any]],
+    section_records: list[dict[str, Any]],
+    review_packets: list[dict[str, Any]],
+) -> None:
+    """Apply deterministic redaction transforms for CUI export artifacts."""
+    for record in source_trace_records:
+        record["document_title"] = "[REDACTED]"
+        record["document_filename"] = "[REDACTED]"
+        record["citation"] = "[REDACTED]" if record.get("citation") else None
+        record["notes"] = "[REDACTED]" if record.get("notes") else None
+
+    for section in section_records:
+        if section.get("requirement_id"):
+            section["requirement_id"] = "[REDACTED]"
+
+    for packet in review_packets:
+        if packet.get("proposal_title"):
+            packet["proposal_title"] = "[REDACTED]"
+        action_queue = packet.get("action_queue")
+        if isinstance(action_queue, list):
+            for item in action_queue:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("recommended_action"):
+                    item["recommended_action"] = "[REDACTED]"
+                if item.get("rationale"):
+                    item["rationale"] = "[REDACTED]"
+        exit_criteria = packet.get("recommended_exit_criteria")
+        if isinstance(exit_criteria, list):
+            packet["recommended_exit_criteria"] = [
+                "[REDACTED]" if criterion else criterion for criterion in exit_criteria
+            ]
+
+
 @router.get("/rfps/{rfp_id}/compliance-matrix/xlsx")
 async def export_compliance_matrix_xlsx(
     rfp_id: int,
@@ -757,6 +815,15 @@ async def export_proposal_compliance_package(
         current_user=current_user,
         session=session,
         request=request,
+    )
+    org_security_policy = await get_user_org_security_policy(current_user.id, session)
+    proposal_classification = str(_enum_or_value(proposal.classification)).lower()
+    is_cui_export = proposal_classification == "cui"
+    watermark_applied = bool(
+        is_cui_export and org_security_policy.get("apply_cui_watermark_to_sensitive_exports", True)
+    )
+    redaction_applied = bool(
+        is_cui_export and org_security_policy.get("apply_cui_redaction_to_sensitive_exports", False)
     )
 
     sections = list(
@@ -1003,6 +1070,13 @@ async def export_proposal_compliance_package(
             **simulation,
         }
 
+    if redaction_applied:
+        _apply_cui_redaction_to_compliance_artifacts(
+            source_trace_records=source_trace_records,
+            section_records=section_records,
+            review_packets=review_packets,
+        )
+
     manifest = _build_compliance_package_manifest(proposal, rfp, sections, matrix)
     manifest["summary"]["source_trace_links"] = len(source_trace_records)
     manifest["summary"]["section_decisions"] = len(section_decision_records)
@@ -1015,6 +1089,22 @@ async def export_proposal_compliance_package(
         "section_decisions": bool(section_decision_records),
         "review_packets": bool(review_packets),
         "bid_stress_test": bool(bid_stress_test_payload),
+        "classification_watermark": watermark_applied,
+        "cui_redaction": redaction_applied,
+    }
+    manifest["policy_actions"] = {
+        "watermark_applied": watermark_applied,
+        "redaction_applied": redaction_applied,
+        "watermark_targets": ["classification-watermark.txt"] if watermark_applied else [],
+        "redaction_targets": (
+            [
+                "source-trace.json",
+                "sections.json",
+                "reviews/review-packets.json",
+            ]
+            if redaction_applied
+            else []
+        ),
     }
 
     package_bytes = io.BytesIO()
@@ -1033,6 +1123,15 @@ async def export_proposal_compliance_package(
         archive.writestr("proposal.docx", docx_bytes)
         if matrix_bytes:
             archive.writestr("compliance-matrix.xlsx", matrix_bytes)
+        if watermark_applied:
+            archive.writestr(
+                "classification-watermark.txt",
+                (
+                    "CUI // CONTROLLED UNCLASSIFIED INFORMATION\n"
+                    "This package contains data governed by CUI handling controls.\n"
+                    "Distribution and retention must follow organization policy.\n"
+                ),
+            )
         archive.writestr(
             "README.txt",
             (
@@ -1046,6 +1145,8 @@ async def export_proposal_compliance_package(
                 "- reviews/review-outcomes.json: condensed review outcome metrics\n"
                 "- capture/bid-stress-test.json: FAR/Section M scenario simulation output\n"
                 "- manifest.json: package summary and coverage counts\n"
+                "- classification-watermark.txt: CUI package handling notice (when enabled)\n"
+                "- Redaction mode (CUI policy): source trace, sections, and review packet text are redacted\n"
             ),
         )
 

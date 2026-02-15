@@ -1,6 +1,13 @@
 import api from "./client";
 import type {
   CMMCStatus,
+  ComplianceCheckpointEvidenceCreate,
+  ComplianceCheckpointEvidenceItem,
+  ComplianceCheckpointEvidenceUpdate,
+  ComplianceCheckpointSignoff,
+  ComplianceCheckpointSignoffWrite,
+  ComplianceRegistryEvidenceItem,
+  ComplianceTrustMetrics,
   NISTOverview,
   DataPrivacyInfo,
   ComplianceAuditSummary,
@@ -48,6 +55,11 @@ export const complianceApi = {
     return data;
   },
 
+  getTrustMetrics: async (): Promise<ComplianceTrustMetrics> => {
+    const { data } = await api.get("/compliance/trust-metrics");
+    return data;
+  },
+
   getGovCloudProfile: async (): Promise<GovCloudDeploymentProfile> => {
     const { data } = await api.get("/compliance/govcloud-profile");
     return data;
@@ -65,17 +77,78 @@ export const complianceApi = {
     return data;
   },
 
-  exportTrustCenterEvidence: async (): Promise<Blob> => {
+  exportTrustCenterEvidenceWithOptions: async (params?: {
+    format?: "json" | "csv" | "pdf";
+    signed?: boolean;
+  }): Promise<Blob> => {
     const { data } = await api.get("/compliance/trust-center/evidence-export", {
+      params,
       responseType: "blob",
     });
     return data;
   },
 
-  exportThreePAOPackage: async (): Promise<Blob> => {
+  exportThreePAOPackage: async (params?: { signed?: boolean }): Promise<Blob> => {
     const { data } = await api.get("/compliance/three-pao-package", {
+      params,
       responseType: "blob",
     });
+    return data;
+  },
+
+  listCheckpointEvidence: async (
+    checkpointId: string
+  ): Promise<ComplianceCheckpointEvidenceItem[]> => {
+    const { data } = await api.get(`/compliance/readiness-checkpoints/${checkpointId}/evidence`);
+    return data;
+  },
+
+  createCheckpointEvidence: async (
+    checkpointId: string,
+    payload: ComplianceCheckpointEvidenceCreate
+  ): Promise<ComplianceCheckpointEvidenceItem> => {
+    const { data } = await api.post(
+      `/compliance/readiness-checkpoints/${checkpointId}/evidence`,
+      payload
+    );
+    return data;
+  },
+
+  updateCheckpointEvidence: async (
+    checkpointId: string,
+    linkId: number,
+    payload: ComplianceCheckpointEvidenceUpdate
+  ): Promise<ComplianceCheckpointEvidenceItem> => {
+    const { data } = await api.patch(
+      `/compliance/readiness-checkpoints/${checkpointId}/evidence/${linkId}`,
+      payload
+    );
+    return data;
+  },
+
+  getCheckpointSignoff: async (checkpointId: string): Promise<ComplianceCheckpointSignoff> => {
+    const { data } = await api.get(`/compliance/readiness-checkpoints/${checkpointId}/signoff`);
+    return data;
+  },
+
+  listRegistryEvidence: async (params?: {
+    scope?: "mine" | "organization";
+    evidence_type?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<ComplianceRegistryEvidenceItem[]> => {
+    const { data } = await api.get("/compliance-registry/evidence", { params });
+    return data;
+  },
+
+  upsertCheckpointSignoff: async (
+    checkpointId: string,
+    payload: ComplianceCheckpointSignoffWrite
+  ): Promise<ComplianceCheckpointSignoff> => {
+    const { data } = await api.put(
+      `/compliance/readiness-checkpoints/${checkpointId}/signoff`,
+      payload
+    );
     return data;
   },
 };

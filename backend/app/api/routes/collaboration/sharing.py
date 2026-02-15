@@ -39,6 +39,7 @@ from app.schemas.collaboration import (
     SharePresetApplyResponse,
     SharePresetCreate,
 )
+from app.services.audit_service import log_audit_event
 from app.services.auth_service import UserAuth
 
 from .constants import CONTRACT_FEED_CATALOG, CONTRACT_FEED_PRESETS
@@ -82,7 +83,31 @@ async def _enforce_step_up(
 ) -> None:
     supplied_code = get_step_up_code(request, explicit_step_up_code)
     if await verify_step_up_code(current_user.id, session, supplied_code):
+        await log_audit_event(
+            session,
+            user_id=current_user.id,
+            entity_type="security",
+            entity_id=current_user.id,
+            action="security.step_up.challenge_succeeded",
+            metadata={
+                "channel": "collaboration",
+                "detail": detail,
+            },
+        )
+        await session.commit()
         return
+    await log_audit_event(
+        session,
+        user_id=current_user.id,
+        entity_type="security",
+        entity_id=current_user.id,
+        action="security.step_up.challenge_failed",
+        metadata={
+            "channel": "collaboration",
+            "detail": detail,
+        },
+    )
+    await session.commit()
     raise HTTPException(
         status_code=403,
         detail=detail,

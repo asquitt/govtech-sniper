@@ -21,7 +21,9 @@ import { CapabilityHealthCard } from "./_components/CapabilityHealthCard";
 
 type OrgSecurityPolicyKey =
   | "require_step_up_for_sensitive_exports"
-  | "require_step_up_for_sensitive_shares";
+  | "require_step_up_for_sensitive_shares"
+  | "apply_cui_watermark_to_sensitive_exports"
+  | "apply_cui_redaction_to_sensitive_exports";
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -483,6 +485,46 @@ export default function AdminPage() {
               onChange={(event) =>
                 handlePolicyToggle(
                   "require_step_up_for_sensitive_shares",
+                  event.target.checked
+                )
+              }
+            />
+          </label>
+          <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
+            <div className="space-y-1">
+              <p className="text-sm text-foreground">Apply CUI watermark to sensitive exports</p>
+              <p className="text-xs text-muted-foreground">
+                Adds classification handling notice artifacts to CUI compliance packages.
+              </p>
+            </div>
+            <input
+              aria-label="CUI watermark toggle"
+              type="checkbox"
+              checked={org?.apply_cui_watermark_to_sensitive_exports ?? true}
+              disabled={loading || policySaving !== null}
+              onChange={(event) =>
+                handlePolicyToggle(
+                  "apply_cui_watermark_to_sensitive_exports",
+                  event.target.checked
+                )
+              }
+            />
+          </label>
+          <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2">
+            <div className="space-y-1">
+              <p className="text-sm text-foreground">Apply CUI redaction to sensitive exports</p>
+              <p className="text-xs text-muted-foreground">
+                Redacts sensitive evidence metadata from CUI package source-trace outputs.
+              </p>
+            </div>
+            <input
+              aria-label="CUI redaction toggle"
+              type="checkbox"
+              checked={org?.apply_cui_redaction_to_sensitive_exports ?? false}
+              disabled={loading || policySaving !== null}
+              onChange={(event) =>
+                handlePolicyToggle(
+                  "apply_cui_redaction_to_sensitive_exports",
                   event.target.checked
                 )
               }

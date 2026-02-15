@@ -3,6 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { collaborationApi } from "@/lib/api";
+import { isStepUpRequiredError } from "@/lib/api/error";
 import type {
   ContractFeedCatalogItem,
   ContractFeedPresetItem,
@@ -21,7 +22,6 @@ interface ShareDataFormProps {
   selectedPresetKey: string;
   selectedPartnerUserId: string;
   expirationDays: string;
-  stepUpCode: string;
   requiresApproval: boolean;
   isSharing: boolean;
   isApplyingPreset: boolean;
@@ -31,10 +31,13 @@ interface ShareDataFormProps {
   onSelectedPresetKeyChange: (key: string) => void;
   onSelectedPartnerUserIdChange: (id: string) => void;
   onExpirationDaysChange: (days: string) => void;
-  onStepUpCodeChange: (code: string) => void;
   onRequiresApprovalChange: (required: boolean) => void;
   onSharingChange: (sharing: boolean) => void;
   onApplyingPresetChange: (applying: boolean) => void;
+  onStepUpRequired: (
+    retryAction: (code: string) => Promise<void>,
+    options?: { title?: string; description?: string }
+  ) => void;
   onDataChanged: () => Promise<void>;
 }
 
@@ -49,7 +52,6 @@ export function ShareDataForm({
   selectedPresetKey,
   selectedPartnerUserId,
   expirationDays,
-  stepUpCode,
   requiresApproval,
   isSharing,
   isApplyingPreset,
@@ -59,10 +61,10 @@ export function ShareDataForm({
   onSelectedPresetKeyChange,
   onSelectedPartnerUserIdChange,
   onExpirationDaysChange,
-  onStepUpCodeChange,
   onRequiresApprovalChange,
   onSharingChange,
   onApplyingPresetChange,
+  onStepUpRequired,
   onDataChanged,
 }: ShareDataFormProps) {
   const scopedMemberOptions = Array.from(
@@ -108,18 +110,36 @@ export function ShareDataForm({
             disabled={isApplyingPreset || !selectedPresetKey}
             onClick={async () => {
               if (!selectedPresetKey) return;
-              onApplyingPresetChange(true);
+              const applyPreset = async (stepUpCode?: string) => {
+                onApplyingPresetChange(true);
+                try {
+                  await collaborationApi.applyContractFeedPreset(
+                    workspaceId,
+                    selectedPresetKey,
+                    stepUpCode
+                  );
+                  await onDataChanged();
+                } finally {
+                  onApplyingPresetChange(false);
+                }
+              };
               try {
-                await collaborationApi.applyContractFeedPreset(
-                  workspaceId,
-                  selectedPresetKey,
-                  stepUpCode || undefined
-                );
-                await onDataChanged();
-              } catch {
+                await applyPreset();
+              } catch (error) {
+                if (isStepUpRequiredError(error)) {
+                  onStepUpRequired(
+                    async (code) => {
+                      await applyPreset(code);
+                    },
+                    {
+                      title: "Step-Up Required for Preset Sharing",
+                      description:
+                        "Enter your current 6-digit MFA code to apply this contract feed preset.",
+                    }
+                  );
+                  return;
+                }
                 /* handled by interceptor */
-              } finally {
-                onApplyingPresetChange(false);
               }
             }}
           >
@@ -232,18 +252,6 @@ export function ShareDataForm({
             />
             Require approval
           </label>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Step-up code</label>
-            <input
-              aria-label="Step-up code"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
-              value={stepUpCode}
-              onChange={(event) => onStepUpCodeChange(event.target.value)}
-              placeholder="123456"
-            />
-          </div>
           <Button
             size="sm"
             disabled={
@@ -263,27 +271,45 @@ export function ShareDataForm({
               const expiresAt = expirationDays
                 ? new Date(Date.now() + Number.parseInt(expirationDays, 10) * 86_400_000)
                 : null;
-              onSharingChange(true);
+              const shareData = async (stepUpCode?: string) => {
+                onSharingChange(true);
+                try {
+                  await collaborationApi.shareData(workspaceId, {
+                    data_type: shareDataType,
+                    entity_id: entityId,
+                    requires_approval: requiresApproval,
+                    partner_user_id: selectedPartnerUserId
+                      ? Number.parseInt(selectedPartnerUserId, 10)
+                      : null,
+                    expires_at: expiresAt?.toISOString() ?? null,
+                    step_up_code: stepUpCode ?? null,
+                  });
+                  onShareEntityIdChange("");
+                  onExpirationDaysChange("");
+                  onSelectedPartnerUserIdChange("");
+                  onRequiresApprovalChange(false);
+                  await onDataChanged();
+                } finally {
+                  onSharingChange(false);
+                }
+              };
               try {
-                await collaborationApi.shareData(workspaceId, {
-                  data_type: shareDataType,
-                  entity_id: entityId,
-                  requires_approval: requiresApproval,
-                  partner_user_id: selectedPartnerUserId
-                    ? Number.parseInt(selectedPartnerUserId, 10)
-                    : null,
-                  expires_at: expiresAt?.toISOString() ?? null,
-                  step_up_code: stepUpCode || null,
-                });
-                onShareEntityIdChange("");
-                onExpirationDaysChange("");
-                onSelectedPartnerUserIdChange("");
-                onRequiresApprovalChange(false);
-                await onDataChanged();
-              } catch {
+                await shareData();
+              } catch (error) {
+                if (isStepUpRequiredError(error)) {
+                  onStepUpRequired(
+                    async (code) => {
+                      await shareData(code);
+                    },
+                    {
+                      title: "Step-Up Required for Sensitive Share",
+                      description:
+                        "Enter your current 6-digit MFA code to approve and publish this shared artifact.",
+                    }
+                  );
+                  return;
+                }
                 /* handled by interceptor */
-              } finally {
-                onSharingChange(false);
               }
             }}
           >

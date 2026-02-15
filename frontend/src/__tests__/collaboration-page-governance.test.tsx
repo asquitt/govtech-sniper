@@ -403,4 +403,161 @@ describe("CollaborationPage governance controls", () => {
     createObjectUrl.mockRestore();
     revokeObjectUrl.mockRestore();
   });
+
+  it("opens MFA modal for audit export step-up and retries with entered code", async () => {
+    vi.clearAllMocks();
+
+    const createObjectUrl = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValue("blob:mock-audit");
+    const revokeObjectUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    mockedCollaborationApi.listWorkspaces.mockResolvedValue([
+      {
+        id: 1,
+        owner_id: 10,
+        name: "Gov Workspace",
+        description: "Policy validation workspace",
+        member_count: 1,
+        created_at: "2026-02-10T12:00:00Z",
+        updated_at: "2026-02-10T12:00:00Z",
+      },
+    ]);
+    mockedCollaborationApi.listMembers.mockResolvedValue([]);
+    mockedCollaborationApi.listInvitations.mockResolvedValue([]);
+    mockedCollaborationApi.listSharedData.mockResolvedValue([]);
+    mockedCollaborationApi.listContractFeedCatalog.mockResolvedValue([]);
+    mockedCollaborationApi.listContractFeedPresets.mockResolvedValue([]);
+    mockedCollaborationApi.getShareGovernanceSummary.mockResolvedValue({
+      workspace_id: 1,
+      total_shared_items: 0,
+      pending_approval_count: 0,
+      approved_count: 0,
+      revoked_count: 0,
+      expired_count: 0,
+      expiring_7d_count: 0,
+      scoped_share_count: 0,
+      global_share_count: 0,
+    });
+    mockedCollaborationApi.getShareGovernanceTrends.mockResolvedValue({
+      workspace_id: 1,
+      days: 30,
+      sla_hours: 24,
+      overdue_pending_count: 0,
+      sla_approval_rate: 100,
+      points: [],
+    });
+    mockedCollaborationApi.getGovernanceAnomalies.mockResolvedValue([]);
+    mockedCollaborationApi.getComplianceDigestSchedule.mockResolvedValue({
+      workspace_id: 1,
+      user_id: 10,
+      frequency: "weekly",
+      day_of_week: 1,
+      hour_utc: 13,
+      minute_utc: 0,
+      channel: "in_app",
+      recipient_role: "all",
+      anomalies_only: false,
+      is_enabled: true,
+      last_sent_at: null,
+    });
+    mockedCollaborationApi.getComplianceDigestPreview.mockResolvedValue({
+      workspace_id: 1,
+      generated_at: "2026-02-10T12:04:00Z",
+      recipient_role: "all",
+      recipient_count: 0,
+      summary: {
+        workspace_id: 1,
+        total_shared_items: 0,
+        pending_approval_count: 0,
+        approved_count: 0,
+        revoked_count: 0,
+        expired_count: 0,
+        expiring_7d_count: 0,
+        scoped_share_count: 0,
+        global_share_count: 0,
+      },
+      trends: {
+        workspace_id: 1,
+        days: 30,
+        sla_hours: 24,
+        overdue_pending_count: 0,
+        sla_approval_rate: 100,
+        points: [],
+      },
+      anomalies: [],
+      schedule: {
+        workspace_id: 1,
+        user_id: 10,
+        frequency: "weekly",
+        day_of_week: 1,
+        hour_utc: 13,
+        minute_utc: 0,
+        channel: "in_app",
+        recipient_role: "all",
+        anomalies_only: false,
+        is_enabled: true,
+        last_sent_at: null,
+      },
+      delivery_summary: {
+        total_attempts: 0,
+        success_count: 0,
+        failed_count: 0,
+        retry_attempt_count: 0,
+        last_status: null,
+        last_failure_reason: null,
+        last_sent_at: null,
+      },
+    });
+    mockedCollaborationApi.getComplianceDigestDeliveries.mockResolvedValue({
+      workspace_id: 1,
+      user_id: 10,
+      summary: {
+        total_attempts: 0,
+        success_count: 0,
+        failed_count: 0,
+        retry_attempt_count: 0,
+        last_status: null,
+        last_failure_reason: null,
+        last_sent_at: null,
+      },
+      items: [],
+    });
+    mockedCollaborationApi.exportShareAuditCsv
+      .mockRejectedValueOnce({
+        response: { headers: { "x-step-up-required": "true" } },
+      })
+      .mockResolvedValueOnce(new Blob(["header\nvalue"], { type: "text/csv" }));
+
+    renderWithQueryClient(<CollaborationPage />);
+
+    await screen.findByRole("heading", { name: "Gov Workspace" });
+    fireEvent.click(screen.getByRole("button", { name: /Shared Data \(/ }));
+
+    expect(screen.queryByLabelText("Step-up code")).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByTestId("export-governance-audit"));
+
+    expect(
+      await screen.findByText("Step-Up Required for Audit Export")
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Step-up authentication code"), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+
+    await waitFor(() =>
+      expect(mockedCollaborationApi.exportShareAuditCsv).toHaveBeenNthCalledWith(
+        2,
+        1,
+        expect.objectContaining({
+          days: 30,
+          step_up_code: "123456",
+        })
+      )
+    );
+
+    createObjectUrl.mockRestore();
+    revokeObjectUrl.mockRestore();
+  });
 });

@@ -99,6 +99,52 @@ async def _enable_mfa(db_session: AsyncSession, user: User) -> str:
     return secret
 
 
+async def _add_source_trace_fixture(
+    db_session: AsyncSession,
+    *,
+    proposal_id: int,
+    user_id: int,
+) -> None:
+    proposal = (
+        await db_session.execute(select(Proposal).where(Proposal.id == proposal_id))
+    ).scalar_one()
+    section = ProposalSection(
+        proposal_id=proposal.id,
+        title="Technical Approach",
+        section_number="1.0",
+        requirement_id="REQ-001",
+        requirement_text="Contractor shall provide SOC operations support.",
+        display_order=1,
+        final_content="SOC operations support model.",
+    )
+    db_session.add(section)
+    await db_session.flush()
+
+    document = KnowledgeBaseDocument(
+        user_id=user_id,
+        title="SOC Support Playbook",
+        document_type=DocumentType.TECHNICAL_SPEC,
+        original_filename="soc-playbook.pdf",
+        file_path="/tmp/soc-playbook.pdf",
+        file_size_bytes=2048,
+        mime_type="application/pdf",
+        processing_status=ProcessingStatus.READY,
+        full_text="SOC operations playbook and staffing model.",
+    )
+    db_session.add(document)
+    await db_session.flush()
+
+    db_session.add(
+        SectionEvidence(
+            section_id=section.id,  # type: ignore[arg-type]
+            document_id=document.id,  # type: ignore[arg-type]
+            citation="SOC Playbook, Section 2.1",
+            notes="Primary evidence for staffing model.",
+        )
+    )
+    await db_session.commit()
+
+
 class TestPolicyEnforcement:
     """Integration tests for policy engine on export endpoints."""
 
@@ -442,3 +488,105 @@ class TestPolicyEnforcement:
         stress_test = json.loads(archive.read("capture/bid-stress-test.json").decode("utf-8"))
         assert stress_test["baseline"]["overall_score"] > 0
         assert len(stress_test["scenarios"]) >= 1
+
+    @pytest.mark.asyncio
+    async def test_cui_compliance_package_applies_watermark_and_redaction_when_enabled(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+    ):
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(
+            db_session,
+            user.id,
+            OrgRole.ADMIN,
+            org_settings={
+                "apply_cui_watermark_to_sensitive_exports": True,
+                "apply_cui_redaction_to_sensitive_exports": True,
+            },
+        )
+        secret = await _enable_mfa(db_session, user)
+        proposal_id = await _setup_proposal(db_session, user.id, "cui")
+        await _add_source_trace_fixture(
+            db_session,
+            proposal_id=proposal_id,
+            user_id=user.id,
+        )
+
+        response = await client.get(
+            f"/api/v1/export/proposals/{proposal_id}/compliance-package/zip",
+            headers={**auth_headers, "X-Step-Up-Code": pyotp.TOTP(secret).now()},
+        )
+        assert response.status_code == 200
+
+        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        names = set(archive.namelist())
+        assert "classification-watermark.txt" in names
+
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        assert manifest["policy_actions"]["watermark_applied"] is True
+        assert manifest["policy_actions"]["redaction_applied"] is True
+        assert "source-trace.json" in manifest["policy_actions"]["redaction_targets"]
+        assert manifest["artifacts"]["classification_watermark"] is True
+        assert manifest["artifacts"]["cui_redaction"] is True
+
+        source_trace = json.loads(archive.read("source-trace.json").decode("utf-8"))
+        assert source_trace[0]["document_title"] == "[REDACTED]"
+        assert source_trace[0]["document_filename"] == "[REDACTED]"
+        assert source_trace[0]["citation"] == "[REDACTED]"
+        assert source_trace[0]["notes"] == "[REDACTED]"
+
+        sections = json.loads(archive.read("sections.json").decode("utf-8"))
+        assert sections[0]["requirement_id"] == "[REDACTED]"
+
+    @pytest.mark.asyncio
+    async def test_cui_compliance_package_leaves_content_unchanged_when_policy_disabled(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session: AsyncSession,
+    ):
+        user = (await db_session.execute(select(User).limit(1))).scalar_one()
+        await _set_org_role(
+            db_session,
+            user.id,
+            OrgRole.ADMIN,
+            org_settings={
+                "apply_cui_watermark_to_sensitive_exports": False,
+                "apply_cui_redaction_to_sensitive_exports": False,
+            },
+        )
+        secret = await _enable_mfa(db_session, user)
+        proposal_id = await _setup_proposal(db_session, user.id, "cui")
+        await _add_source_trace_fixture(
+            db_session,
+            proposal_id=proposal_id,
+            user_id=user.id,
+        )
+
+        response = await client.get(
+            f"/api/v1/export/proposals/{proposal_id}/compliance-package/zip",
+            headers={**auth_headers, "X-Step-Up-Code": pyotp.TOTP(secret).now()},
+        )
+        assert response.status_code == 200
+
+        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        names = set(archive.namelist())
+        assert "classification-watermark.txt" not in names
+
+        manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+        assert manifest["policy_actions"]["watermark_applied"] is False
+        assert manifest["policy_actions"]["redaction_applied"] is False
+        assert manifest["policy_actions"]["redaction_targets"] == []
+        assert manifest["artifacts"]["classification_watermark"] is False
+        assert manifest["artifacts"]["cui_redaction"] is False
+
+        source_trace = json.loads(archive.read("source-trace.json").decode("utf-8"))
+        assert source_trace[0]["document_title"] == "SOC Support Playbook"
+        assert source_trace[0]["document_filename"] == "soc-playbook.pdf"
+        assert source_trace[0]["citation"] == "SOC Playbook, Section 2.1"
+        assert source_trace[0]["notes"] == "Primary evidence for staffing model."
+
+        sections = json.loads(archive.read("sections.json").decode("utf-8"))
+        assert sections[0]["requirement_id"] == "REQ-001"

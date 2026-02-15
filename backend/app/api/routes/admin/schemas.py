@@ -32,6 +32,8 @@ class OrgUpdate(BaseModel):
     data_retention_days: int | None = None
     require_step_up_for_sensitive_exports: bool | None = None
     require_step_up_for_sensitive_shares: bool | None = None
+    apply_cui_watermark_to_sensitive_exports: bool | None = None
+    apply_cui_redaction_to_sensitive_exports: bool | None = None
 
 
 class MemberRoleUpdate(BaseModel):

@@ -46,6 +46,7 @@ class ComplianceControl(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
+    organization_id: int | None = Field(default=None, foreign_key="organizations.id", index=True)
 
     framework: ControlFramework
     control_id: str = Field(max_length=50)  # e.g. "AC-1", "3.1.1"
@@ -67,6 +68,7 @@ class ComplianceEvidence(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
+    organization_id: int | None = Field(default=None, foreign_key="organizations.id", index=True)
 
     title: str = Field(max_length=255)
     evidence_type: EvidenceType
@@ -94,3 +96,52 @@ class ControlEvidenceLink(SQLModel, table=True):
     notes: str | None = Field(default=None, max_length=500)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class CheckpointEvidenceStatus(str, Enum):
+    SUBMITTED = "submitted"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class CheckpointSignoffStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ComplianceCheckpointEvidenceLink(SQLModel, table=True):
+    """Maps a readiness checkpoint to evidence artifacts for assessor workflows."""
+
+    __tablename__ = "compliance_checkpoint_evidence_links"
+
+    id: int | None = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organizations.id", index=True)
+    checkpoint_id: str = Field(max_length=120, index=True)
+    evidence_id: int = Field(foreign_key="compliance_evidence.id", index=True)
+    status: CheckpointEvidenceStatus = Field(default=CheckpointEvidenceStatus.SUBMITTED)
+    notes: str | None = Field(default=None, sa_column=Column(Text))
+    linked_by_user_id: int = Field(foreign_key="users.id")
+    reviewer_user_id: int | None = Field(default=None, foreign_key="users.id")
+    reviewer_notes: str | None = Field(default=None, sa_column=Column(Text))
+    reviewed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ComplianceCheckpointSignoff(SQLModel, table=True):
+    """Assessor sign-off state for each readiness checkpoint."""
+
+    __tablename__ = "compliance_checkpoint_signoffs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organizations.id", index=True)
+    checkpoint_id: str = Field(max_length=120, index=True)
+    status: CheckpointSignoffStatus = Field(default=CheckpointSignoffStatus.PENDING)
+    assessor_name: str = Field(max_length=255)
+    assessor_org: str | None = Field(default=None, max_length=255)
+    notes: str | None = Field(default=None, sa_column=Column(Text))
+    signed_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    signed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

@@ -12,11 +12,12 @@ vi.mock("@/lib/api/compliance", () => ({
     getComplianceAuditSummary: vi.fn(),
     getReadiness: vi.fn(),
     getReadinessCheckpoints: vi.fn(),
+    getTrustMetrics: vi.fn(),
     getGovCloudProfile: vi.fn(),
     getSOC2Readiness: vi.fn(),
     getTrustCenter: vi.fn(),
     updateTrustCenterPolicy: vi.fn(),
-    exportTrustCenterEvidence: vi.fn(),
+    exportTrustCenterEvidenceWithOptions: vi.fn(),
     exportThreePAOPackage: vi.fn(),
   },
 }));
@@ -121,9 +122,27 @@ describe("CompliancePage", () => {
           third_party_required: true,
           evidence_items_ready: 9,
           evidence_items_total: 24,
+          evidence_source: "registry",
+          evidence_last_updated_at: "2026-02-14T10:00:00Z",
+          assessor_signoff_status: "approved",
+          assessor_signoff_by: "Accredited 3PAO",
+          assessor_signed_at: "2026-02-14T10:30:00Z",
         },
       ],
       generated_at: "2026-02-14T12:00:00Z",
+    });
+    mockedComplianceApi.getTrustMetrics.mockResolvedValue({
+      generated_at: "2026-02-14T12:00:00Z",
+      window_days: 30,
+      checkpoint_evidence_completeness_rate: 68.2,
+      checkpoint_signoff_completion_rate: 40,
+      trust_export_success_rate_30d: 95,
+      trust_export_successes_30d: 19,
+      trust_export_failures_30d: 1,
+      step_up_challenge_success_rate_30d: 83.3,
+      step_up_challenge_successes_30d: 5,
+      step_up_challenge_failures_30d: 1,
+      trust_ci_pass_rate_30d: null,
     });
     mockedComplianceApi.getGovCloudProfile.mockResolvedValue({
       program_id: "govcloud_deployment",
@@ -181,7 +200,7 @@ describe("CompliancePage", () => {
     });
     mockedComplianceApi.getTrustCenter.mockResolvedValue(baseTrustCenter);
     mockedComplianceApi.updateTrustCenterPolicy.mockResolvedValue(baseTrustCenter);
-    mockedComplianceApi.exportTrustCenterEvidence.mockResolvedValue(
+    mockedComplianceApi.exportTrustCenterEvidenceWithOptions.mockResolvedValue(
       new Blob([JSON.stringify({ ok: true })], { type: "application/json" })
     );
     mockedComplianceApi.exportThreePAOPackage.mockResolvedValue(
@@ -256,9 +275,32 @@ describe("CompliancePage", () => {
     expect(
       screen.getByText("3PAO readiness checkpoint and assessor onboarding")
     ).toBeInTheDocument();
+    expect(screen.getByText("Evidence completeness")).toBeInTheDocument();
+    expect(screen.getByText("68.2%")).toBeInTheDocument();
+    expect(screen.getByText("Source: registry")).toBeInTheDocument();
+    expect(screen.getByText("Assessor sign-off: approved")).toBeInTheDocument();
+    expect(screen.getByText("Assessor: Accredited 3PAO")).toBeInTheDocument();
     expect(screen.getByText("GovCloud Deployment Profile")).toBeInTheDocument();
     expect(screen.getByText("SSO federation and privileged access cutover")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Export 3PAO Readiness Package" })).toBeInTheDocument();
+  });
+
+  it("exports trust evidence using selected format and signed options", async () => {
+    render(<CompliancePage />);
+    expect(await screen.findByText("AI & Data Trust Center")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Trust export format"), {
+      target: { value: "csv" },
+    });
+    fireEvent.click(screen.getByLabelText("Signed trust export toggle"));
+    fireEvent.click(screen.getByRole("button", { name: "Export Trust Evidence" }));
+
+    await waitFor(() => {
+      expect(mockedComplianceApi.exportTrustCenterEvidenceWithOptions).toHaveBeenCalledWith({
+        format: "csv",
+        signed: true,
+      });
+    });
   });
 
   it("exports the 3PAO readiness package", async () => {
