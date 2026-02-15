@@ -1,7 +1,7 @@
 """Add industry events table."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "016"
 down_revision = "015"
@@ -20,7 +20,9 @@ def upgrade() -> None:
         sa.Column("date", sa.DateTime, nullable=False),
         sa.Column("location", sa.String(500), nullable=True),
         sa.Column("registration_url", sa.String(500), nullable=True),
-        sa.Column("related_rfp_id", sa.Integer, sa.ForeignKey("rfps.id"), nullable=True, index=True),
+        sa.Column(
+            "related_rfp_id", sa.Integer, sa.ForeignKey("rfps.id"), nullable=True, index=True
+        ),
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("source", sa.String(100), nullable=True),
         sa.Column("is_archived", sa.Boolean, nullable=False, server_default="false"),

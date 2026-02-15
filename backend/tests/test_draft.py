@@ -282,6 +282,66 @@ class TestDraftProposals:
         assert generate_data["task_id"].startswith("sync-")
 
     @pytest.mark.asyncio
+    async def test_generate_outline_sync_fallback_when_worker_unavailable(
+        self,
+        client: AsyncClient,
+        db_session,
+        test_user: User,
+        test_rfp: RFP,
+        monkeypatch,
+    ):
+        from app.api.routes.draft import generation, outline
+
+        monkeypatch.setattr(generation, "_celery_broker_available", lambda: True)
+        monkeypatch.setattr(generation, "_celery_worker_available", lambda: False)
+        monkeypatch.setattr(outline.settings, "mock_ai", True)
+        monkeypatch.setattr(outline.settings, "gemini_api_key", None)
+
+        matrix = ComplianceMatrix(
+            rfp_id=test_rfp.id,
+            requirements=[
+                {
+                    "id": "REQ-OUT-001",
+                    "section": "L.4",
+                    "requirement_text": "Provide management approach.",
+                    "importance": "mandatory",
+                    "category": "Management",
+                }
+            ],
+            total_requirements=1,
+            mandatory_count=1,
+            addressed_count=0,
+        )
+        db_session.add(matrix)
+        await db_session.commit()
+
+        create_proposal = await client.post(
+            "/api/v1/draft/proposals",
+            params={"user_id": test_user.id},
+            json={"rfp_id": test_rfp.id, "title": "Sync Outline Proposal"},
+        )
+        assert create_proposal.status_code == 200
+        proposal_id = create_proposal.json()["id"]
+
+        generate_outline = await client.post(
+            f"/api/v1/draft/proposals/{proposal_id}/generate-outline",
+            params={"user_id": test_user.id},
+        )
+        assert generate_outline.status_code == 200
+        generate_payload = generate_outline.json()
+        assert generate_payload["status"] == "completed"
+        assert generate_payload["task_id"]
+
+        outline_response = await client.get(
+            f"/api/v1/draft/proposals/{proposal_id}/outline",
+            params={"user_id": test_user.id},
+        )
+        assert outline_response.status_code == 200
+        outline_payload = outline_response.json()
+        assert outline_payload["status"] == "draft"
+        assert len(outline_payload["sections"]) >= 1
+
+    @pytest.mark.asyncio
     async def test_generate_section_returns_429_when_gemini_quota_is_exhausted(
         self,
         client: AsyncClient,

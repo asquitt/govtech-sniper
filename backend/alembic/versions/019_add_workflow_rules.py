@@ -1,7 +1,7 @@
 """Add workflow rules and execution history tables."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "019"
 down_revision = "017"
@@ -27,7 +27,9 @@ def upgrade() -> None:
     op.create_table(
         "workflow_executions",
         sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("rule_id", sa.Integer, sa.ForeignKey("workflow_rules.id"), nullable=False, index=True),
+        sa.Column(
+            "rule_id", sa.Integer, sa.ForeignKey("workflow_rules.id"), nullable=False, index=True
+        ),
         sa.Column("triggered_at", sa.DateTime, nullable=False, index=True),
         sa.Column("entity_type", sa.String(50), nullable=False),
         sa.Column("entity_id", sa.Integer, nullable=False),

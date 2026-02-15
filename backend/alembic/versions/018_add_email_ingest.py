@@ -1,7 +1,7 @@
 """Add email ingest configs and ingested emails tables."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "018"
 down_revision = "017"
@@ -28,13 +28,21 @@ def upgrade() -> None:
     op.create_table(
         "ingested_emails",
         sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("config_id", sa.Integer, sa.ForeignKey("email_ingest_configs.id"), nullable=False, index=True),
+        sa.Column(
+            "config_id",
+            sa.Integer,
+            sa.ForeignKey("email_ingest_configs.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("message_id", sa.String(500), nullable=False, unique=True),
         sa.Column("subject", sa.String(500), nullable=False),
         sa.Column("sender", sa.String(255), nullable=False),
         sa.Column("received_at", sa.DateTime, nullable=False),
         sa.Column("body_text", sa.Text, nullable=True),
-        sa.Column("processing_status", sa.String(20), nullable=False, server_default="pending", index=True),
+        sa.Column(
+            "processing_status", sa.String(20), nullable=False, server_default="pending", index=True
+        ),
         sa.Column("created_rfp_id", sa.Integer, sa.ForeignKey("rfps.id"), nullable=True),
         sa.Column("error_message", sa.Text, nullable=True),
         sa.Column("created_at", sa.DateTime, nullable=False),

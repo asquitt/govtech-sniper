@@ -1,7 +1,7 @@
 """Add saved_reports table for custom reporting."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "022"
 down_revision = "021"

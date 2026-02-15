@@ -7,10 +7,12 @@ Generate and manage structured proposal outlines.
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from kombu.exceptions import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import UserAuth, get_current_user_optional, resolve_user_id
+from app.config import settings
 from app.database import get_session
 from app.models.outline import OutlineSection, OutlineStatus, ProposalOutline
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
@@ -66,6 +68,40 @@ async def _get_outline_or_404(
     return proposal, outline
 
 
+async def _run_outline_generation_sync(
+    *,
+    proposal_id: int,
+    resolved_user_id: int,
+    session: AsyncSession,
+) -> dict:
+    """
+    Execute outline generation synchronously in local/mock environments where no
+    Celery worker is available.
+    """
+    from app.tasks.generation_tasks import generate_proposal_outline_async
+
+    sync_task_id = f"sync-outline-{proposal_id}-{int(datetime.utcnow().timestamp())}"
+    sync_result = await generate_proposal_outline_async(
+        proposal_id=proposal_id,
+        user_id=resolved_user_id,
+        task_id=sync_task_id,
+        session_override=session,
+    )
+    payload = sync_result if isinstance(sync_result, dict) else {}
+    status = payload.get("status", "completed")
+    message = (
+        "Outline generation completed synchronously."
+        if status == "completed"
+        else "Outline generation executed synchronously."
+    )
+
+    return {
+        "task_id": sync_task_id,
+        "message": message,
+        "status": status,
+    }
+
+
 @router.post("/proposals/{proposal_id}/generate-outline")
 async def generate_outline(
     proposal_id: int,
@@ -76,14 +112,39 @@ async def generate_outline(
     """Trigger AI outline generation from compliance matrix."""
     resolved_user_id = resolve_user_id(user_id, current_user)
 
-    proposal, _ = await _get_outline_or_404(proposal_id, resolved_user_id, session)
+    await _get_outline_or_404(proposal_id, resolved_user_id, session)
 
+    from app.api.routes.draft.generation import _celery_broker_available, _celery_worker_available
     from app.tasks.generation_tasks import generate_proposal_outline
 
-    task = generate_proposal_outline.delay(
-        proposal_id=proposal_id,
-        user_id=resolved_user_id,
+    # Keep outline generation deterministic in local/dev when broker or worker is unavailable.
+    should_fallback_sync = (settings.debug or settings.mock_ai) and (
+        not _celery_broker_available() or not _celery_worker_available()
     )
+    if should_fallback_sync:
+        return await _run_outline_generation_sync(
+            proposal_id=proposal_id,
+            resolved_user_id=resolved_user_id,
+            session=session,
+        )
+
+    try:
+        task = generate_proposal_outline.delay(
+            proposal_id=proposal_id,
+            user_id=resolved_user_id,
+        )
+    except OperationalError as exc:
+        if settings.debug or settings.mock_ai:
+            return await _run_outline_generation_sync(
+                proposal_id=proposal_id,
+                resolved_user_id=resolved_user_id,
+                session=session,
+            )
+        raise HTTPException(
+            status_code=503,
+            detail="Outline generation worker unavailable. Please try again shortly.",
+        ) from exc
+
     return {"task_id": task.id, "message": "Outline generation started", "status": "generating"}
 
 

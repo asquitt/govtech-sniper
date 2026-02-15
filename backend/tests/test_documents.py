@@ -7,6 +7,7 @@ Tests for document management in the knowledge base.
 import pytest
 from httpx import AsyncClient
 
+from app.config import settings
 from app.models.knowledge_base import KnowledgeBaseDocument
 
 
@@ -60,6 +61,87 @@ class TestDocumentList:
         )
         assert response.status_code == 200
         assert len(response.json()["documents"]) == 0
+
+
+class TestDocumentUpload:
+    """Tests for document upload behavior."""
+
+    @pytest.mark.asyncio
+    async def test_upload_text_document_processes_inline_with_sync_fallback(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session,
+        monkeypatch,
+    ):
+        from app.api.routes import documents as document_routes
+
+        monkeypatch.setattr(
+            document_routes, "_should_process_documents_synchronously", lambda: True
+        )
+
+        response = await client.post(
+            "/api/v1/documents",
+            headers=auth_headers,
+            files={"file": ("inline.txt", b"Inline processing text", "text/plain")},
+            data={
+                "title": "Inline Processing Upload",
+                "document_type": "other",
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["processing_status"] == "ready"
+
+        uploaded = await db_session.get(KnowledgeBaseDocument, payload["id"])
+        assert uploaded is not None
+        status_value = (
+            uploaded.processing_status.value
+            if hasattr(uploaded.processing_status, "value")
+            else uploaded.processing_status
+        )
+        assert status_value == "ready"
+        assert uploaded.full_text == "Inline processing text"
+
+    @pytest.mark.asyncio
+    async def test_upload_document_falls_back_when_upload_dir_is_read_only(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        db_session,
+        monkeypatch,
+        tmp_path,
+    ):
+        read_only_root = tmp_path / "readonly_upload_root"
+        read_only_root.mkdir()
+        read_only_root.chmod(0o555)
+
+        original_upload_dir = settings.upload_dir
+        monkeypatch.setattr(settings, "upload_dir", str(read_only_root))
+
+        try:
+            response = await client.post(
+                "/api/v1/documents",
+                headers=auth_headers,
+                files={"file": ("upload.txt", b"Capability statement", "text/plain")},
+                data={
+                    "title": "Read-Only Upload",
+                    "document_type": "capability_statement",
+                },
+            )
+        finally:
+            # Restore write permissions for tmp cleanup.
+            read_only_root.chmod(0o755)
+            monkeypatch.setattr(settings, "upload_dir", original_upload_dir)
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["id"] > 0
+
+        uploaded = await db_session.get(KnowledgeBaseDocument, payload["id"])
+        assert uploaded is not None
+        assert "/rfp-sniper-uploads/" in uploaded.file_path.replace("\\", "/")
 
 
 class TestDocumentDetail:
@@ -131,6 +213,38 @@ class TestDocumentUpdate:
 
 class TestDocumentDelete:
     """Tests for document deletion."""
+
+    @pytest.mark.asyncio
+    async def test_delete_document_with_chunks_created_by_inline_processing(
+        self,
+        client: AsyncClient,
+        auth_headers: dict,
+        monkeypatch,
+    ):
+        from app.api.routes import documents as document_routes
+
+        monkeypatch.setattr(
+            document_routes, "_should_process_documents_synchronously", lambda: True
+        )
+
+        upload_response = await client.post(
+            "/api/v1/documents",
+            headers=auth_headers,
+            files={"file": ("delete-inline.txt", b"Delete inline chunk", "text/plain")},
+            data={
+                "title": "Delete Inline Document",
+                "document_type": "other",
+            },
+        )
+        assert upload_response.status_code == 200
+        uploaded = upload_response.json()
+        assert uploaded["processing_status"] == "ready"
+
+        delete_response = await client.delete(
+            f"/api/v1/documents/{uploaded['id']}",
+            headers=auth_headers,
+        )
+        assert delete_response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_delete_document_success(

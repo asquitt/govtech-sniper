@@ -1,7 +1,7 @@
 """Add marketplace columns to proposal_templates table."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "021"
 down_revision = "020"

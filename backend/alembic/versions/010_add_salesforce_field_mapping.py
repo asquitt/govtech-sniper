@@ -3,8 +3,8 @@
 Revision ID: 010
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "010"
 down_revision = "008"
@@ -16,7 +16,13 @@ def upgrade() -> None:
     op.create_table(
         "salesforce_field_mappings",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("integration_id", sa.Integer(), sa.ForeignKey("integrations.id"), nullable=False, index=True),
+        sa.Column(
+            "integration_id",
+            sa.Integer(),
+            sa.ForeignKey("integrations.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("sniper_field", sa.String(255), nullable=False),
         sa.Column("salesforce_field", sa.String(255), nullable=False),
         sa.Column("direction", sa.String(10), nullable=False, server_default="both"),

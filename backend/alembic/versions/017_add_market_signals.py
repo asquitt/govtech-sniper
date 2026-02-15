@@ -1,7 +1,7 @@
 """Add market signals and signal subscriptions tables."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "017"
 down_revision = "016"

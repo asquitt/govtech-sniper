@@ -3,8 +3,8 @@
 Revision ID: 011
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "011"
 down_revision = "010"
@@ -16,7 +16,9 @@ def upgrade() -> None:
     op.create_table(
         "proposal_reviews",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("proposal_id", sa.Integer(), sa.ForeignKey("proposals.id"), nullable=False, index=True),
+        sa.Column(
+            "proposal_id", sa.Integer(), sa.ForeignKey("proposals.id"), nullable=False, index=True
+        ),
         sa.Column("review_type", sa.String(10), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="scheduled"),
         sa.Column("scheduled_date", sa.DateTime(), nullable=True),
@@ -30,8 +32,16 @@ def upgrade() -> None:
     op.create_table(
         "review_assignments",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("review_id", sa.Integer(), sa.ForeignKey("proposal_reviews.id"), nullable=False, index=True),
-        sa.Column("reviewer_user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False, index=True),
+        sa.Column(
+            "review_id",
+            sa.Integer(),
+            sa.ForeignKey("proposal_reviews.id"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "reviewer_user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False, index=True
+        ),
         sa.Column("status", sa.String(20), nullable=False, server_default="pending"),
         sa.Column("assigned_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )
@@ -39,8 +49,20 @@ def upgrade() -> None:
     op.create_table(
         "review_comments",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("review_id", sa.Integer(), sa.ForeignKey("proposal_reviews.id"), nullable=False, index=True),
-        sa.Column("section_id", sa.Integer(), sa.ForeignKey("proposal_sections.id"), nullable=True, index=True),
+        sa.Column(
+            "review_id",
+            sa.Integer(),
+            sa.ForeignKey("proposal_reviews.id"),
+            nullable=False,
+            index=True,
+        ),
+        sa.Column(
+            "section_id",
+            sa.Integer(),
+            sa.ForeignKey("proposal_sections.id"),
+            nullable=True,
+            index=True,
+        ),
         sa.Column("reviewer_user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
         sa.Column("comment_text", sa.Text(), nullable=False),
         sa.Column("severity", sa.String(20), nullable=False, server_default="minor"),

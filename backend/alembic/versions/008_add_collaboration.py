@@ -3,8 +3,8 @@
 Revision ID: 008
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "008"
 down_revision = "007"
@@ -27,7 +27,13 @@ def upgrade() -> None:
     op.create_table(
         "workspace_invitations",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey("shared_workspaces.id"), nullable=False, index=True),
+        sa.Column(
+            "workspace_id",
+            sa.Integer(),
+            sa.ForeignKey("shared_workspaces.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("email", sa.String(255), nullable=False, index=True),
         sa.Column("role", sa.String(20), nullable=False, server_default="viewer"),
         sa.Column("token", sa.String(255), nullable=False, unique=True),
@@ -40,7 +46,13 @@ def upgrade() -> None:
     op.create_table(
         "workspace_members",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey("shared_workspaces.id"), nullable=False, index=True),
+        sa.Column(
+            "workspace_id",
+            sa.Integer(),
+            sa.ForeignKey("shared_workspaces.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False, index=True),
         sa.Column("role", sa.String(20), nullable=False, server_default="viewer"),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
@@ -49,7 +61,13 @@ def upgrade() -> None:
     op.create_table(
         "shared_data_permissions",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("workspace_id", sa.Integer(), sa.ForeignKey("shared_workspaces.id"), nullable=False, index=True),
+        sa.Column(
+            "workspace_id",
+            sa.Integer(),
+            sa.ForeignKey("shared_workspaces.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("data_type", sa.String(50), nullable=False),
         sa.Column("entity_id", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),

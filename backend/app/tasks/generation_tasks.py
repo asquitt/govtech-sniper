@@ -5,9 +5,12 @@ Celery tasks for proposal section generation.
 """
 
 import asyncio
+from collections.abc import Callable
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_celery_session_context
 from app.models.knowledge_base import KnowledgeBaseDocument, ProcessingStatus
@@ -29,6 +32,16 @@ def run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+@asynccontextmanager
+async def _outline_session_context(session_override: AsyncSession | None):
+    if session_override is not None:
+        yield session_override
+        return
+
+    async with get_celery_session_context() as celery_session:
+        yield celery_session
 
 
 @celery_app.task(
@@ -366,6 +379,133 @@ def refresh_context_cache(
     return run_async(_refresh())
 
 
+async def generate_proposal_outline_async(
+    *,
+    proposal_id: int,
+    user_id: int,
+    task_id: str,
+    retry_handler: Callable[[Exception], None] | None = None,
+    session_override: AsyncSession | None = None,
+) -> dict:
+    """Generate a structured outline from a proposal's compliance matrix."""
+    import json
+
+    gemini_service = GeminiService()
+
+    async with _outline_session_context(session_override) as session:
+        from sqlmodel import select
+
+        # Get proposal and RFP
+        proposal_result = await session.execute(
+            select(Proposal).where(
+                Proposal.id == proposal_id,
+                Proposal.user_id == user_id,
+            )
+        )
+        proposal = proposal_result.scalar_one_or_none()
+        if not proposal:
+            return {"task_id": task_id, "status": "error", "error": "Proposal not found"}
+
+        # Get compliance matrix
+        matrix_result = await session.execute(
+            select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == proposal.rfp_id)
+        )
+        matrix = matrix_result.scalar_one_or_none()
+        if not matrix or not matrix.requirements:
+            return {"task_id": task_id, "status": "error", "error": "No compliance matrix"}
+
+        # Get RFP summary
+        rfp_result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
+        rfp = rfp_result.scalar_one_or_none()
+        rfp_summary = rfp.summary or rfp.title if rfp else ""
+
+        # Create or update outline
+        outline_result = await session.execute(
+            select(ProposalOutline).where(ProposalOutline.proposal_id == proposal_id)
+        )
+        outline = outline_result.scalar_one_or_none()
+        if not outline:
+            outline = ProposalOutline(
+                proposal_id=proposal_id,
+                status=OutlineStatus.GENERATING,
+            )
+            session.add(outline)
+            await session.flush()
+        else:
+            outline.status = OutlineStatus.GENERATING
+            # Delete existing sections
+            existing = await session.execute(
+                select(OutlineSection).where(OutlineSection.outline_id == outline.id)
+            )
+            for section in existing.scalars().all():
+                await session.delete(section)
+
+        await session.commit()
+
+        # Generate outline via Gemini
+        try:
+            result = await gemini_service.generate_outline(
+                requirements_json=json.dumps(matrix.requirements),
+                rfp_summary=rfp_summary,
+            )
+        except Exception as e:
+            logger.error(f"Outline generation failed: {e}")
+            outline.status = OutlineStatus.DRAFT
+            await session.commit()
+            if retry_handler is not None:
+                retry_handler(e)
+            raise
+
+        # Save sections
+        outline.raw_ai_response = json.dumps(result)
+        outline.status = OutlineStatus.DRAFT
+        outline.updated_at = datetime.utcnow()
+
+        def save_sections(sections_data, parent_id=None, order_start=0):
+            """Recursively save outline sections."""
+            saved = []
+            for i, s in enumerate(sections_data):
+                section = OutlineSection(
+                    outline_id=outline.id,
+                    parent_id=parent_id,
+                    title=s.get("title", "Untitled"),
+                    description=s.get("description"),
+                    mapped_requirement_ids=s.get("mapped_requirement_ids", []),
+                    display_order=order_start + i,
+                    estimated_pages=s.get("estimated_pages"),
+                )
+                session.add(section)
+                saved.append((section, s.get("children", [])))
+            return saved
+
+        # First level
+        top_level = save_sections(result.get("sections", []))
+        await session.flush()
+
+        # Second level (children)
+        for section, children in top_level:
+            if children:
+                child_saved = save_sections(children, parent_id=section.id)
+                await session.flush()
+                for child_section, grandchildren in child_saved:
+                    if grandchildren:
+                        save_sections(grandchildren, parent_id=child_section.id)
+
+        await session.commit()
+
+        logger.info(
+            "Outline generated",
+            proposal_id=proposal_id,
+            outline_id=outline.id,
+        )
+
+        return {
+            "task_id": task_id,
+            "status": "completed",
+            "outline_id": outline.id,
+        }
+
+
 @celery_app.task(
     bind=True,
     name="app.tasks.generation_tasks.generate_proposal_outline",
@@ -382,119 +522,11 @@ def generate_proposal_outline(
     logger.info("Generating outline", task_id=task_id, proposal_id=proposal_id)
 
     async def _generate():
-        import json
-
-        gemini_service = GeminiService()
-
-        async with get_celery_session_context() as session:
-            from sqlmodel import select
-
-            # Get proposal and RFP
-            proposal_result = await session.execute(
-                select(Proposal).where(
-                    Proposal.id == proposal_id,
-                    Proposal.user_id == user_id,
-                )
-            )
-            proposal = proposal_result.scalar_one_or_none()
-            if not proposal:
-                return {"task_id": task_id, "status": "error", "error": "Proposal not found"}
-
-            # Get compliance matrix
-            matrix_result = await session.execute(
-                select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == proposal.rfp_id)
-            )
-            matrix = matrix_result.scalar_one_or_none()
-            if not matrix or not matrix.requirements:
-                return {"task_id": task_id, "status": "error", "error": "No compliance matrix"}
-
-            # Get RFP summary
-            rfp_result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
-            rfp = rfp_result.scalar_one_or_none()
-            rfp_summary = rfp.summary or rfp.title if rfp else ""
-
-            # Create or update outline
-            outline_result = await session.execute(
-                select(ProposalOutline).where(ProposalOutline.proposal_id == proposal_id)
-            )
-            outline = outline_result.scalar_one_or_none()
-            if not outline:
-                outline = ProposalOutline(
-                    proposal_id=proposal_id,
-                    status=OutlineStatus.GENERATING,
-                )
-                session.add(outline)
-                await session.flush()
-            else:
-                outline.status = OutlineStatus.GENERATING
-                # Delete existing sections
-                existing = await session.execute(
-                    select(OutlineSection).where(OutlineSection.outline_id == outline.id)
-                )
-                for section in existing.scalars().all():
-                    await session.delete(section)
-
-            await session.commit()
-
-            # Generate outline via Gemini
-            try:
-                result = await gemini_service.generate_outline(
-                    requirements_json=json.dumps(matrix.requirements),
-                    rfp_summary=rfp_summary,
-                )
-            except Exception as e:
-                logger.error(f"Outline generation failed: {e}")
-                outline.status = OutlineStatus.DRAFT
-                await session.commit()
-                raise self.retry(exc=e)
-
-            # Save sections
-            outline.raw_ai_response = json.dumps(result)
-            outline.status = OutlineStatus.DRAFT
-            outline.updated_at = datetime.utcnow()
-
-            def save_sections(sections_data, parent_id=None, order_start=0):
-                """Recursively save outline sections."""
-                saved = []
-                for i, s in enumerate(sections_data):
-                    section = OutlineSection(
-                        outline_id=outline.id,
-                        parent_id=parent_id,
-                        title=s.get("title", "Untitled"),
-                        description=s.get("description"),
-                        mapped_requirement_ids=s.get("mapped_requirement_ids", []),
-                        display_order=order_start + i,
-                        estimated_pages=s.get("estimated_pages"),
-                    )
-                    session.add(section)
-                    saved.append((section, s.get("children", [])))
-                return saved
-
-            # First level
-            top_level = save_sections(result.get("sections", []))
-            await session.flush()
-
-            # Second level (children)
-            for section, children in top_level:
-                if children:
-                    child_saved = save_sections(children, parent_id=section.id)
-                    await session.flush()
-                    for child_section, grandchildren in child_saved:
-                        if grandchildren:
-                            save_sections(grandchildren, parent_id=child_section.id)
-
-            await session.commit()
-
-            logger.info(
-                "Outline generated",
-                proposal_id=proposal_id,
-                outline_id=outline.id,
-            )
-
-            return {
-                "task_id": task_id,
-                "status": "completed",
-                "outline_id": outline.id,
-            }
+        return await generate_proposal_outline_async(
+            proposal_id=proposal_id,
+            user_id=user_id,
+            task_id=task_id,
+            retry_handler=lambda exc: self.retry(exc=exc),
+        )
 
     return run_async(_generate())

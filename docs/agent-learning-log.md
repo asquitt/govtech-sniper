@@ -491,3 +491,17 @@ Format:
 - Root cause: Local deterministic validation reused a stale SQLite `dev.db` whose schema lagged current models (missing columns such as `shared_data_permissions.requires_approval` and `onboarding_progress.step_timestamps`), which caused background `500` responses and delayed/failed UI refreshes.
 - Prevention checklist: For local Playwright trust validation, run against a fresh per-run SQLite file (or apply migrations before startup) and verify schema-dependent background endpoints are clean before asserting UI state transitions.
 - Verification added: Restarted backend with fresh `/tmp/trust-e2e.db`, reran trust Playwright specs (`compliance-readiness.spec.ts`, `collaboration-workflow.spec.ts`), and reran `RUN_TRUST_PLAYWRIGHT=true ./scripts/run_trust_ci_suite.sh` successfully.
+
+### 2026-02-15
+- Date: 2026-02-15
+- Mistake: Compliance readiness Playwright spec failed intermittently in full-suite runs while passing in isolation.
+- Root cause: The test assumed a viewer-only policy state and asserted a read-only notice that is legitimately absent when the shared authenticated user has org-admin policy permissions.
+- Prevention checklist: In shared-session E2E suites, assert role-dependent UI branches as valid alternatives instead of hard-coding one branch; always rerun full-suite after patching isolated failures.
+- Verification added: Updated `compliance-readiness.spec.ts` to accept either read-only notice or admin save control, then reran full Playwright (`74/75`, `1` skipped) and trust lane Playwright (`2/2`) successfully.
+
+### 2026-02-15
+- Date: 2026-02-15
+- Mistake: Knowledge-base upload/delete flow could fail in deterministic local environments with read-only upload roots and inline-processed chunks.
+- Root cause: Upload path creation assumed writable configured root (`/app` in some runtimes), and delete path removed document rows before explicitly cleaning linked chunk rows created by inline processing.
+- Prevention checklist: For file-backed features, implement writable-path fallback for local/CI runtimes and explicitly clean dependent rows before parent deletes unless DB-level cascade is guaranteed; add regression coverage for both paths.
+- Verification added: Added upload directory temp fallback, synchronous text processing fallback for debug/mock no-worker mode, explicit chunk delete before document delete, backend regressions in `test_documents.py`, and validated in Playwright `knowledge-base-workflow.spec.ts`.

@@ -4,18 +4,26 @@ RFP Sniper - Document Management Routes
 Knowledge Base document upload and management.
 """
 
+import errno
 import os
+import tempfile
 from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
 from app.config import settings
 from app.database import get_session
-from app.models.knowledge_base import DocumentType, KnowledgeBaseDocument, ProcessingStatus
+from app.models.knowledge_base import (
+    DocumentChunk,
+    DocumentType,
+    KnowledgeBaseDocument,
+    ProcessingStatus,
+)
 from app.models.proposal import DataClassification
 from app.schemas.knowledge_base import (
     DocumentListItem,
@@ -35,6 +43,104 @@ from app.services.webhook_service import dispatch_webhook_event
 
 router = APIRouter(prefix="/documents", tags=["Knowledge Base"])
 logger = structlog.get_logger(__name__)
+
+
+def _ensure_upload_dir(user_id: int) -> str:
+    """
+    Ensure an upload directory exists for a user.
+
+    Falls back to a writable temp path when the configured upload root is read-only
+    in local/CI environments.
+    """
+    primary_dir = os.path.join(settings.upload_dir, str(user_id))
+    try:
+        os.makedirs(primary_dir, exist_ok=True)
+        return primary_dir
+    except OSError as exc:
+        recoverable = {errno.EROFS, errno.EACCES, errno.ENOTDIR}
+        if exc.errno not in recoverable:
+            raise
+
+        fallback_dir = os.path.join(tempfile.gettempdir(), "rfp-sniper-uploads", str(user_id))
+        os.makedirs(fallback_dir, exist_ok=True)
+        logger.warning(
+            "Primary upload path unavailable; using temp fallback",
+            user_id=user_id,
+            primary_dir=primary_dir,
+            fallback_dir=fallback_dir,
+            error=str(exc),
+        )
+        return fallback_dir
+
+
+def _should_process_documents_synchronously() -> bool:
+    """
+    In debug/mock mode, fall back to synchronous processing when Celery is
+    unavailable so local/E2E flows remain deterministic.
+    """
+    if not (settings.debug or settings.mock_ai):
+        return False
+
+    from app.api.routes.draft.generation import _celery_broker_available, _celery_worker_available
+
+    return not _celery_broker_available() or not _celery_worker_available()
+
+
+async def _process_text_document_inline(
+    *,
+    session: AsyncSession,
+    document: KnowledgeBaseDocument,
+    file_content: bytes,
+) -> None:
+    full_text = file_content.decode("utf-8", errors="ignore").strip()
+    if not full_text:
+        raise ValueError("No text extracted from document")
+
+    document.processing_status = ProcessingStatus.PROCESSING
+    document.processing_error = None
+    await session.commit()
+
+    await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+    session.add(
+        DocumentChunk(
+            document_id=document.id,
+            content=full_text,
+            page_number=1,
+            start_char=0,
+            end_char=len(full_text),
+            chunk_index=0,
+            word_count=len(full_text.split()),
+        )
+    )
+
+    document.full_text = full_text
+    document.page_count = 1
+    document.extracted_metadata = {"source": "text"}
+    document.processing_status = ProcessingStatus.READY
+    document.processed_at = datetime.utcnow()
+
+    try:
+        await index_entity(
+            session,
+            user_id=document.user_id,
+            entity_type="knowledge_doc",
+            entity_id=document.id,
+            text=compose_knowledge_document_text(
+                title=document.title,
+                document_type=document.document_type.value,
+                description=document.description,
+                full_text=document.full_text,
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Knowledge document semantic indexing failed",
+            document_id=document.id,
+            error=str(exc),
+        )
+
+    await session.commit()
+    await session.refresh(document)
 
 
 @router.get("", response_model=DocumentListResponse)
@@ -178,8 +284,7 @@ async def upload_document(
 
     # Save file
     resolved_user_id = resolve_user_id(user_id, current_user)
-    upload_dir = os.path.join(settings.upload_dir, str(resolved_user_id))
-    os.makedirs(upload_dir, exist_ok=True)
+    upload_dir = _ensure_upload_dir(resolved_user_id)
 
     # Generate unique filename
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -225,17 +330,33 @@ async def upload_document(
     await session.commit()
     await session.refresh(document)
 
-    # Queue processing task (non-fatal if broker unavailable)
-    try:
-        from app.tasks.document_tasks import process_document
+    # Queue processing task (non-fatal if broker unavailable). In local/mock mode
+    # without a worker, process text uploads inline for deterministic E2E behavior.
+    if _should_process_documents_synchronously() and file.content_type == "text/plain":
+        try:
+            await _process_text_document_inline(
+                session=session,
+                document=document,
+                file_content=file_content,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Synchronous text document processing failed",
+                document_id=document.id,
+                error=str(exc),
+            )
 
-        process_document.delay(document.id)
-    except Exception:
-        import structlog
+    if document.processing_status != ProcessingStatus.READY:
+        try:
+            from app.tasks.document_tasks import process_document
 
-        structlog.get_logger().warning(
-            "Failed to queue document processing", document_id=document.id
-        )
+            process_document.delay(document.id)
+        except Exception:
+            logger.warning("Failed to queue document processing", document_id=document.id)
+
+    message = "Document uploaded. Processing will begin shortly."
+    if document.processing_status == ProcessingStatus.READY:
+        message = "Document uploaded and processed."
 
     return DocumentUploadResponse(
         id=document.id,
@@ -243,7 +364,7 @@ async def upload_document(
         original_filename=document.original_filename,
         file_size_bytes=document.file_size_bytes,
         processing_status=document.processing_status,
-        message="Document uploaded. Processing will begin shortly.",
+        message=message,
     )
 
 
@@ -364,6 +485,7 @@ async def delete_document(
         logger.warning(
             "Knowledge document embedding cleanup failed", document_id=document.id, error=str(exc)
         )
+    await session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
     await session.delete(document)
     await session.commit()
 

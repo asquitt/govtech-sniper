@@ -3,8 +3,8 @@
 Revision ID: 006
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "006"
 down_revision = "005"
@@ -27,7 +27,9 @@ def upgrade() -> None:
         sa.Column("source", sa.String(20), nullable=False, server_default="manual"),
         sa.Column("source_url", sa.Text(), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("linked_rfp_id", sa.Integer(), sa.ForeignKey("rfps.id"), nullable=True, index=True),
+        sa.Column(
+            "linked_rfp_id", sa.Integer(), sa.ForeignKey("rfps.id"), nullable=True, index=True
+        ),
         sa.Column("match_score", sa.Float(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
@@ -37,7 +39,13 @@ def upgrade() -> None:
         "forecast_alerts",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False, index=True),
-        sa.Column("forecast_id", sa.Integer(), sa.ForeignKey("procurement_forecasts.id"), nullable=False, index=True),
+        sa.Column(
+            "forecast_id",
+            sa.Integer(),
+            sa.ForeignKey("procurement_forecasts.id"),
+            nullable=False,
+            index=True,
+        ),
         sa.Column("rfp_id", sa.Integer(), sa.ForeignKey("rfps.id"), nullable=False, index=True),
         sa.Column("match_score", sa.Float(), nullable=False, server_default="0"),
         sa.Column("match_reason", sa.Text(), nullable=True),

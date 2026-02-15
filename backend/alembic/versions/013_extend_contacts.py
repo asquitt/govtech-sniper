@@ -3,8 +3,8 @@
 Revision ID: 013
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "013"
 down_revision = "010"
@@ -18,8 +18,13 @@ def upgrade() -> None:
     op.add_column("opportunity_contacts", sa.Column("title", sa.String(255), nullable=True))
     op.add_column("opportunity_contacts", sa.Column("department", sa.String(255), nullable=True))
     op.add_column("opportunity_contacts", sa.Column("location", sa.String(255), nullable=True))
-    op.add_column("opportunity_contacts", sa.Column("source", sa.String(50), nullable=True, server_default="manual"))
-    op.add_column("opportunity_contacts", sa.Column("extraction_confidence", sa.Float(), nullable=True))
+    op.add_column(
+        "opportunity_contacts",
+        sa.Column("source", sa.String(50), nullable=True, server_default="manual"),
+    )
+    op.add_column(
+        "opportunity_contacts", sa.Column("extraction_confidence", sa.Float(), nullable=True)
+    )
     op.add_column("opportunity_contacts", sa.Column("linked_rfp_ids", sa.JSON(), nullable=True))
     op.create_index("ix_opportunity_contacts_agency", "opportunity_contacts", ["agency"])
 
@@ -32,7 +37,12 @@ def upgrade() -> None:
         sa.Column("office", sa.String(255), nullable=True),
         sa.Column("address", sa.Text(), nullable=True),
         sa.Column("website", sa.String(500), nullable=True),
-        sa.Column("primary_contact_id", sa.Integer(), sa.ForeignKey("opportunity_contacts.id"), nullable=True),
+        sa.Column(
+            "primary_contact_id",
+            sa.Integer(),
+            sa.ForeignKey("opportunity_contacts.id"),
+            nullable=True,
+        ),
         sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
     )

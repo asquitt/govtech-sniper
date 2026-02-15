@@ -12,11 +12,23 @@ test.describe("Compliance Readiness", () => {
     await expect(page.getByText("FedRAMP Moderate", { exact: true })).toBeVisible();
     await expect(page.getByText("Salesforce AppExchange Listing")).toBeVisible();
     await expect(page.getByText("Microsoft AppSource Listing")).toBeVisible();
-    await expect(
-      page.getByText(
-        "Visibility is enabled for all users. Organization owners/admins can edit these controls."
-      )
-    ).toBeVisible();
+    const readonlyPolicyNotice = page.getByText(
+      "Visibility is enabled for all users. Organization owners/admins can edit these controls."
+    );
+    const savePolicyControlsButton = page.getByRole("button", { name: /Save policy controls/i });
+    await expect
+      .poll(async () => {
+        const readonlyNoticeCount = await readonlyPolicyNotice.count();
+        const saveButtonCount = await savePolicyControlsButton.count();
+        return readonlyNoticeCount + saveButtonCount;
+      })
+      .toBeGreaterThan(0);
+    if (await readonlyPolicyNotice.count()) {
+      await expect(readonlyPolicyNotice).toBeVisible();
+    }
+    if (await savePolicyControlsButton.count()) {
+      await expect(savePolicyControlsButton).toBeVisible();
+    }
     await expect(page.getByRole("button", { name: "Export Trust Evidence" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Public Trust Center ↗" })).toBeVisible();
 

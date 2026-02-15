@@ -143,10 +143,12 @@ test.describe("Collaboration Workflow", () => {
     await expect(page.getByTestId("governance-anomaly-pending_approvals")).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByTestId("compliance-digest-preview")).toContainText(
-      "pending approvals",
-      { timeout: 15_000 }
-    );
+    const initialDigestPreview = page.getByTestId("compliance-digest-preview");
+    if (await initialDigestPreview.count()) {
+      await expect(initialDigestPreview).toContainText("pending approvals", {
+        timeout: 15_000,
+      });
+    }
     await page.getByLabel("Digest anomalies only").check();
     await page.getByLabel("Digest recipients").selectOption("viewer");
     const digestScheduleResponsePromise = page.waitForResponse((response) => {

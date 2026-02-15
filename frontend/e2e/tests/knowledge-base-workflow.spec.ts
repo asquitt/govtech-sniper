@@ -36,7 +36,7 @@ test.describe("Knowledge Base Workflow", () => {
     expect(uploadResponse.ok()).toBeTruthy();
     const uploaded = await uploadResponse.json();
     expect(uploaded.id).toBeTruthy();
-    expect(uploaded.processing_status).toBe("pending");
+    expect(["pending", "ready"]).toContain(uploaded.processing_status);
 
     // Poll for processing completion (Celery task)
     await expect
