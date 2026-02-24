@@ -29,6 +29,7 @@ function ScoreBar({ score, label }: { score: number | null; label: string }) {
 export function QualityScorecard({ proposalId }: { proposalId: number }) {
   const [scorecard, setScorecard] = useState<ScorecardType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +38,10 @@ export function QualityScorecard({ proposalId }: { proposalId: number }) {
       .then((data) => {
         if (!cancelled) setScorecard(data);
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error("Failed to load scorecard:", err);
+        if (!cancelled) setError("Failed to load scorecard");
+      })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -53,6 +57,17 @@ export function QualityScorecard({ proposalId }: { proposalId: number }) {
           <BarChart3 className="h-4 w-4" /> Quality Scorecard
         </h3>
         <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border p-4">
+        <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+          <BarChart3 className="h-4 w-4" /> Quality Scorecard
+        </h3>
+        <p className="text-sm text-destructive">{error}</p>
       </div>
     );
   }

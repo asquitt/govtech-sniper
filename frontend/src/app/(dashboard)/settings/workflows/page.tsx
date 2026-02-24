@@ -185,6 +185,7 @@ export default function WorkflowsPage() {
                 <input
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   placeholder="Rule name"
+                  aria-label="Rule name"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                 />
@@ -200,6 +201,7 @@ export default function WorkflowsPage() {
                 <input
                   className="rounded-md border border-border bg-background px-3 py-2 text-sm"
                   placeholder="Priority (0-99)"
+                  aria-label="Priority"
                   type="number"
                   value={formPriority}
                   onChange={(e) => setFormPriority(e.target.value)}
@@ -214,6 +216,7 @@ export default function WorkflowsPage() {
                     <input
                       className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
                       placeholder="Field (e.g. score)"
+                      aria-label="Condition field"
                       value={cond.field}
                       onChange={(e) => updateCondition(idx, { field: e.target.value })}
                     />
@@ -229,6 +232,7 @@ export default function WorkflowsPage() {
                     <input
                       className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
                       placeholder="Value"
+                      aria-label="Condition value"
                       value={typeof cond.value === "string" ? cond.value : String(cond.value)}
                       onChange={(e) => updateCondition(idx, { value: e.target.value })}
                     />
@@ -265,6 +269,7 @@ export default function WorkflowsPage() {
                     <input
                       className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
                       placeholder="Param value"
+                      aria-label="Action parameter value"
                       value={action.params.value != null ? String(action.params.value) : ""}
                       onChange={(e) => updateAction(idx, { params: { ...action.params, value: e.target.value } })}
                     />
@@ -315,6 +320,9 @@ export default function WorkflowsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <button
+                        role="switch"
+                        aria-checked={rule.is_enabled}
+                        aria-label={`Toggle ${rule.name}`}
                         onClick={() => handleToggle(rule)}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                           rule.is_enabled ? "bg-primary" : "bg-muted"

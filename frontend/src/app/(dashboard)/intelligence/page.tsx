@@ -26,7 +26,7 @@ export default function IntelligencePage() {
     resources: ResourceAllocation;
   }
 
-  const { data, loading } = useAsyncData<IntelligenceData>(
+  const { data, loading, error } = useAsyncData<IntelligenceData>(
     async () => {
       const [k, wl, b, f, r] = await Promise.all([
         intelligenceApi.getKPIs(),
@@ -53,6 +53,11 @@ export default function IntelligencePage() {
         description="Market intelligence, win/loss analysis, and pipeline forecasting"
       />
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {error && (
+          <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
+            Failed to load intelligence data. Please try again.
+          </div>
+        )}
         {/* KPI Cards Row */}
         <KPICards data={kpis} loading={loading} />
 

@@ -19,6 +19,7 @@ import { ExportButton } from "./_components/ExportButton";
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [winRate, setWinRate] = useState<WinRateData | null>(null);
   const [pipeline, setPipeline] = useState<PipelineByStageData | null>(null);
   const [conversion, setConversion] = useState<ConversionRatesData | null>(null);
@@ -27,6 +28,7 @@ export default function AnalyticsPage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [wr, pl, cv, ta, nc] = await Promise.all([
         analyticsApi.getWinRate(),
@@ -42,6 +44,7 @@ export default function AnalyticsPage() {
       setNaics(nc);
     } catch (err) {
       console.error("Failed to load analytics:", err);
+      setError("Failed to load analytics data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -59,6 +62,18 @@ export default function AnalyticsPage() {
         actions={<ExportButton />}
       />
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {error && (
+          <div role="alert" className="rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={fetchAll}
+              className="ml-4 underline hover:no-underline"
+              aria-label="Retry loading analytics"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {/* KPI Cards Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <WinRateCard data={winRate} loading={loading} />

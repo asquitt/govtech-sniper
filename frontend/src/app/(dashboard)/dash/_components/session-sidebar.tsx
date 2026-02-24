@@ -43,6 +43,7 @@ export function SessionSidebar() {
                 </span>
                 <button
                   className="opacity-0 group-hover:opacity-100 p-1 hover:text-destructive transition-opacity"
+                  aria-label="Delete session"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteSession(session.id);
