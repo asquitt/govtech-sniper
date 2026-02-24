@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.rfp import RFP, RFPStatus
 from app.services.auth_service import UserAuth
@@ -75,7 +75,11 @@ async def list_data_sources(
     ]
 
 
-@router.post("/{provider_name}/search", response_model=SearchResponse)
+@router.post(
+    "/{provider_name}/search",
+    response_model=SearchResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def search_provider(
     provider_name: str,
     params: SearchParams,
@@ -92,7 +96,11 @@ async def search_provider(
     return SearchResponse(provider=provider_name, count=len(results), results=results)
 
 
-@router.post("/{provider_name}/ingest", response_model=IngestResponse)
+@router.post(
+    "/{provider_name}/ingest",
+    response_model=IngestResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def ingest_from_provider(
     provider_name: str,
     params: SearchParams,
@@ -112,9 +120,12 @@ async def ingest_from_provider(
     skipped = 0
 
     for opp in results:
-        # Skip duplicates by external_id used as solicitation_number
+        # Skip duplicates by external_id used as solicitation_number (scoped to user)
         existing = await session.execute(
-            select(RFP).where(RFP.solicitation_number == opp.external_id)
+            select(RFP).where(
+                RFP.solicitation_number == opp.external_id,
+                RFP.user_id == current_user.id,
+            )
         )
         if existing.scalar_one_or_none():
             skipped += 1

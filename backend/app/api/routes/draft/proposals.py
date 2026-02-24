@@ -66,14 +66,16 @@ async def create_proposal(
     This initializes the proposal structure. Use the sections
     endpoints to add content.
     """
-    # Verify RFP exists
-    result = await session.execute(select(RFP).where(RFP.id == proposal.rfp_id))
+    resolved_user_id = resolve_user_id(user_id, current_user)
+
+    # Verify RFP exists and user owns it
+    result = await session.execute(
+        select(RFP).where(RFP.id == proposal.rfp_id, RFP.user_id == resolved_user_id)
+    )
     rfp = result.scalar_one_or_none()
 
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {proposal.rfp_id} not found")
-
-    resolved_user_id = resolve_user_id(user_id, current_user)
 
     # Create proposal
     new_proposal = Proposal(

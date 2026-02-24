@@ -29,7 +29,10 @@ async def list_activity(
     """Paginated activity feed for a proposal."""
     stmt = (
         select(ActivityFeedEntry)
-        .where(ActivityFeedEntry.proposal_id == proposal_id)
+        .where(
+            ActivityFeedEntry.proposal_id == proposal_id,
+            ActivityFeedEntry.user_id == current_user.id,
+        )
         .order_by(ActivityFeedEntry.created_at.desc())
     )
     if activity_type:

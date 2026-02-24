@@ -562,7 +562,7 @@ async def get_slo_metrics(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    _ = current_user
+    user_id = current_user.id
     metrics = get_metrics().get_all()
     counters = metrics.get("counters", {})
     histograms = metrics.get("histograms", {})
@@ -585,7 +585,10 @@ async def get_slo_metrics(
             func.count(IntegrationSyncRun.id).label("count"),
         )
         .join(IntegrationConfig, IntegrationConfig.id == IntegrationSyncRun.integration_id)
-        .where(IntegrationSyncRun.started_at >= start_date)
+        .where(
+            IntegrationConfig.user_id == user_id,
+            IntegrationSyncRun.started_at >= start_date,
+        )
         .group_by(IntegrationSyncRun.status)
     )
     sync_totals = {"total": 0, "failed": 0}

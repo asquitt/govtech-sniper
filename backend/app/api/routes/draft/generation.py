@@ -616,11 +616,11 @@ async def generate_all_proposal_sections(
     if not settings.gemini_api_key and not settings.mock_ai:
         raise HTTPException(status_code=503, detail="Gemini API key not configured")
 
-    # Verify proposal exists
+    # Verify proposal exists and user owns it
     result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
 
-    if not proposal:
+    if not proposal or proposal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
 
     # Queue batch generation

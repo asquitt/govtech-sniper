@@ -363,7 +363,7 @@ class SectionAssignPayload(BaseModel):
 async def assign_section(
     section_id: int,
     payload: SectionAssignPayload,
-    current_user: UserAuth = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ProposalSectionRead:
     """Assign or unassign a user to a proposal section."""
@@ -372,6 +372,13 @@ async def assign_section(
     )
     section = section_result.scalar_one_or_none()
     if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    proposal_result = await session.execute(
+        select(Proposal).where(Proposal.id == section.proposal_id)
+    )
+    proposal = proposal_result.scalar_one_or_none()
+    if not proposal or proposal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Section not found")
 
     section.assigned_to_user_id = payload.assigned_to_user_id

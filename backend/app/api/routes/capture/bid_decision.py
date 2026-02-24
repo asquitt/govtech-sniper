@@ -126,7 +126,9 @@ async def submit_human_vote(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Submit a human team member's bid/no-bid vote."""
-    result = await session.execute(select(RFP).where(RFP.id == rfp_id))
+    result = await session.execute(
+        select(RFP).where(RFP.id == rfp_id, RFP.user_id == current_user.id)
+    )
     rfp = result.scalar_one_or_none()
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
@@ -165,6 +167,12 @@ async def list_scorecards(
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     """List all scorecards (AI + human) for an RFP."""
+    rfp_result = await session.execute(
+        select(RFP).where(RFP.id == rfp_id, RFP.user_id == current_user.id)
+    )
+    if not rfp_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
     result = await session.execute(
         select(BidScorecard)
         .where(BidScorecard.rfp_id == rfp_id)
@@ -197,6 +205,12 @@ async def get_bid_summary(
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Get aggregated bid decision summary with vote counts."""
+    rfp_result = await session.execute(
+        select(RFP).where(RFP.id == rfp_id, RFP.user_id == current_user.id)
+    )
+    if not rfp_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
     result = await session.execute(select(BidScorecard).where(BidScorecard.rfp_id == rfp_id))
     scorecards = result.scalars().all()
 

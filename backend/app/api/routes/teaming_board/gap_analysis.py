@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.schemas.teaming import CapabilityGapResult
 from app.services.auth_service import UserAuth
@@ -17,6 +17,7 @@ async def get_gap_analysis(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> CapabilityGapResult:
     """AI-powered capability gap analysis for an RFP."""
     result = await analyze_capability_gaps(rfp_id, current_user.id, session)

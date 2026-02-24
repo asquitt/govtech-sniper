@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.api.deps import get_current_user_optional
+from app.api.deps import check_rate_limit, get_current_user_optional
 from app.services.auth_service import UserAuth
 from app.services.draft_benchmark import (
     BENCHMARK_SCENARIOS,
@@ -66,7 +66,11 @@ async def list_scenarios(
     return [ScenarioResponse(**s) for s in BENCHMARK_SCENARIOS]
 
 
-@router.post("/score", response_model=ScoreResponse)
+@router.post(
+    "/score",
+    response_model=ScoreResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def score_section(
     request: ScoreRequest,
     current_user: UserAuth | None = Depends(get_current_user_optional),
@@ -89,7 +93,11 @@ async def score_section(
     )
 
 
-@router.post("/score-batch", response_model=BenchmarkResultResponse)
+@router.post(
+    "/score-batch",
+    response_model=BenchmarkResultResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def score_batch(
     rfp_type: str,
     sections: list[ScoreRequest],
