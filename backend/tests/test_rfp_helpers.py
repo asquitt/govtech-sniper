@@ -4,7 +4,7 @@ RFP Route Helper Unit Tests
 Tests for pure helper functions in rfps.py route module.
 """
 
-from app.api.routes.rfps import _as_text, _impact_level, _impact_profile, _tokenize
+from app.api.routes.rfps.helpers import _as_text, _impact_level, _impact_profile, _tokenize
 
 
 class TestAsText:
