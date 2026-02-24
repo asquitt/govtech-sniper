@@ -38,7 +38,7 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-@router.get("", response_model=list[RFPListItem])
+@router.get("/", response_model=list[RFPListItem])
 async def list_rfps(
     user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
     status: RFPStatus | None = Query(None, description="Filter by status"),
@@ -165,7 +165,7 @@ async def get_rfp(
     return RFPRead.model_validate(rfp)
 
 
-@router.post("", response_model=RFPRead)
+@router.post("/", response_model=RFPRead)
 async def create_rfp(
     rfp_data: RFPCreate,
     user_id: int | None = Query(None, description="User ID (optional if authenticated)"),

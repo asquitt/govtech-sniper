@@ -58,7 +58,7 @@ async def list_integration_providers(
     return definitions
 
 
-@router.get("", response_model=list[IntegrationResponse])
+@router.get("/", response_model=list[IntegrationResponse])
 async def list_integrations(
     provider: IntegrationProvider | None = Query(None),
     current_user: UserAuth = Depends(get_current_user),
@@ -87,7 +87,7 @@ async def list_integrations(
     return response
 
 
-@router.post("", response_model=IntegrationResponse)
+@router.post("/", response_model=IntegrationResponse)
 async def create_integration(
     payload: IntegrationCreate,
     current_user: UserAuth = Depends(get_current_user),

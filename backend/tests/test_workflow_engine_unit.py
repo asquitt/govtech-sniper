@@ -1,13 +1,20 @@
 """
 Workflow Engine Unit Tests
 ===========================
-Tests for pure helper functions: _to_float, _match_condition, _rule_matches.
-No database or async — only deterministic logic.
+Tests for pure helper functions: _to_float, _match_condition, _rule_matches,
+and build_capture_context. No database or async — only deterministic logic.
 """
 
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.services.workflow_engine import _match_condition, _rule_matches, _to_float
+from app.services.workflow_engine import (
+    _match_condition,
+    _rule_matches,
+    _to_float,
+    build_capture_context,
+)
 
 # =============================================================================
 # _to_float
@@ -132,3 +139,83 @@ class TestRuleMatches:
     def test_missing_field_fails(self):
         rule = _mock_rule([{"field": "missing", "operator": "equals", "value": "x"}])
         assert _rule_matches(rule, {"other": "y"}) is False
+
+    def test_condition_with_empty_field_key(self):
+        rule = _mock_rule([{"field": "", "operator": "equals", "value": "x"}])
+        assert _rule_matches(rule, {"": "x"}) is True
+
+
+# =============================================================================
+# build_capture_context
+# =============================================================================
+
+
+def _mock_capture_plan(**overrides):
+    defaults = {
+        "id": 1,
+        "rfp_id": 10,
+        "owner_id": 100,
+        "stage": SimpleNamespace(value="prospecting"),
+        "bid_decision": SimpleNamespace(value="undecided"),
+        "win_probability": 0.65,
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def _mock_rfp(**overrides):
+    defaults = {
+        "title": "Cyber Services",
+        "agency": "DoD",
+        "naics_code": "541512",
+        "estimated_value": 500000,
+        "response_deadline": datetime.utcnow() + timedelta(days=30),
+    }
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+class TestBuildCaptureContext:
+    def test_basic_fields(self):
+        plan = _mock_capture_plan()
+        rfp = _mock_rfp()
+        ctx = build_capture_context(plan, rfp)
+
+        assert ctx["capture_plan_id"] == 1
+        assert ctx["rfp_id"] == 10
+        assert ctx["owner_id"] == 100
+        assert ctx["stage"] == "prospecting"
+        assert ctx["bid_decision"] == "undecided"
+        assert ctx["win_probability"] == 0.65
+        assert ctx["rfp_title"] == "Cyber Services"
+        assert ctx["agency"] == "DoD"
+        assert ctx["naics_code"] == "541512"
+        assert ctx["estimated_value"] == 500000
+
+    def test_days_to_deadline(self):
+        plan = _mock_capture_plan()
+        rfp = _mock_rfp(response_deadline=datetime.utcnow() + timedelta(days=30))
+        ctx = build_capture_context(plan, rfp)
+        assert ctx["days_to_deadline"] >= 29
+
+    def test_no_rfp(self):
+        plan = _mock_capture_plan()
+        ctx = build_capture_context(plan, None)
+
+        assert ctx["rfp_title"] is None
+        assert ctx["agency"] is None
+        assert ctx["naics_code"] is None
+        assert ctx["estimated_value"] is None
+        assert ctx["days_to_deadline"] is None
+
+    def test_rfp_without_deadline(self):
+        plan = _mock_capture_plan()
+        rfp = _mock_rfp(response_deadline=None)
+        ctx = build_capture_context(plan, rfp)
+        assert ctx["days_to_deadline"] is None
+
+    def test_past_deadline_negative(self):
+        plan = _mock_capture_plan()
+        rfp = _mock_rfp(response_deadline=datetime.utcnow() - timedelta(days=5))
+        ctx = build_capture_context(plan, rfp)
+        assert ctx["days_to_deadline"] < 0
