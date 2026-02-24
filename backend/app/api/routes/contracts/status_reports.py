@@ -69,7 +69,7 @@ async def export_status_report(
     if not report:
         raise HTTPException(status_code=404, detail="Status report not found")
 
-    report_payload = StatusReportRead.model_validate(report).model_dump()
+    report_payload = StatusReportRead.model_validate(report).model_dump(mode="json")
 
     if format == "json":
         return JSONResponse(content=report_payload)

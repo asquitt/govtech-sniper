@@ -176,6 +176,7 @@ async def list_scorecards(
         {
             "id": sc.id,
             "rfp_id": sc.rfp_id,
+            "user_id": sc.user_id,
             "overall_score": sc.overall_score,
             "recommendation": sc.recommendation.value if sc.recommendation else None,
             "confidence": sc.confidence,
