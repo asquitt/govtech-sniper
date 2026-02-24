@@ -4,26 +4,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Inbox,
-  Send,
-  Mail,
-  MailOpen,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  AlertCircle,
-  Bell,
-  Forward,
-} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Inbox, Send, AlertCircle } from "lucide-react";
 import { collaborationApi } from "@/lib/api";
 import type {
   InboxMessage,
@@ -31,166 +13,9 @@ import type {
   SharedWorkspace,
   InboxMessageType,
 } from "@/types";
-
-// ---------------------------------------------------------------------------
-// Message type badge
-// ---------------------------------------------------------------------------
-
-function MessageTypeBadge({ type }: { type: InboxMessageType }) {
-  const config: Record<InboxMessageType, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-    general: { label: "General", variant: "secondary" },
-    opportunity_alert: { label: "Opportunity", variant: "default" },
-    rfp_forward: { label: "RFP Forward", variant: "outline" },
-  };
-  const { label, variant } = config[type] ?? config.general;
-  return <Badge variant={variant}>{label}</Badge>;
-}
-
-function MessageTypeIcon({ type }: { type: InboxMessageType }) {
-  switch (type) {
-    case "opportunity_alert":
-      return <Bell className="w-4 h-4 text-blue-500" />;
-    case "rfp_forward":
-      return <Forward className="w-4 h-4 text-purple-500" />;
-    default:
-      return <Mail className="w-4 h-4 text-muted-foreground" />;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Compose modal (inline)
-// ---------------------------------------------------------------------------
-
-function ComposeForm({
-  onSend,
-  onCancel,
-  sending,
-}: {
-  onSend: (subject: string, body: string, messageType: InboxMessageType) => void;
-  onCancel: () => void;
-  sending: boolean;
-}) {
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [messageType, setMessageType] = useState<InboxMessageType>("general");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!subject.trim() || !body.trim()) return;
-    onSend(subject.trim(), body.trim(), messageType);
-  };
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">New Message</CardTitle>
-        <CardDescription>Send a message to the workspace inbox</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-foreground">Type</label>
-            <select
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={messageType}
-              onChange={(e) => setMessageType(e.target.value as InboxMessageType)}
-            >
-              <option value="general">General</option>
-              <option value="opportunity_alert">Opportunity Alert</option>
-              <option value="rfp_forward">RFP Forward</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground">Subject</label>
-            <input
-              type="text"
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              placeholder="Message subject..."
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground">Body</label>
-            <textarea
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[100px]"
-              placeholder="Write your message..."
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              required
-            />
-          </div>
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={sending || !subject.trim() || !body.trim()}>
-              <Send className="w-3 h-3 mr-1" />
-              {sending ? "Sending..." : "Send"}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Message detail
-// ---------------------------------------------------------------------------
-
-function MessageDetail({
-  message,
-  onClose,
-  onDelete,
-}: {
-  message: InboxMessage;
-  onClose: () => void;
-  onDelete: (id: number) => void;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <MessageTypeIcon type={message.message_type} />
-              <CardTitle className="text-base">{message.subject}</CardTitle>
-            </div>
-            <CardDescription>
-              From {message.sender_name ?? message.sender_email ?? `User #${message.sender_id}`}
-              {" "}&middot;{" "}
-              {new Date(message.created_at).toLocaleString()}
-            </CardDescription>
-          </div>
-          <div className="flex gap-1">
-            <MessageTypeBadge type={message.message_type} />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="whitespace-pre-wrap text-sm text-foreground">{message.body}</div>
-        <div className="flex gap-2 justify-between pt-2 border-t">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <ChevronLeft className="w-3 h-3 mr-1" /> Back
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => onDelete(message.id)}
-          >
-            <Trash2 className="w-3 h-3 mr-1" /> Delete
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
+import { ComposeForm } from "./_components/compose-form";
+import { MessageDetail } from "./_components/message-detail";
+import { MessageList } from "./_components/message-list";
 
 export default function WorkspaceInboxPage() {
   const searchParams = useSearchParams();
@@ -369,90 +194,14 @@ export default function WorkspaceInboxPage() {
 
         {/* Message list */}
         {!selectedMessage && !composing && selectedWorkspaceId && (
-          <>
-            {loading && (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  Loading messages...
-                </CardContent>
-              </Card>
-            )}
-
-            {!loading && inbox && inbox.items.length === 0 && (
-              <Card>
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  <MailOpen className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                  <p>No messages yet. Send the first message to this workspace.</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {!loading && inbox && inbox.items.length > 0 && (
-              <div className="space-y-1">
-                {inbox.items.map((msg) => (
-                  <button
-                    key={msg.id}
-                    onClick={() => handleMarkRead(msg)}
-                    className={`w-full text-left px-4 py-3 rounded-md border transition-colors hover:bg-accent/50 flex items-start gap-3 ${
-                      msg.is_read ? "bg-background" : "bg-accent/20 border-primary/20"
-                    }`}
-                  >
-                    <div className="mt-0.5">
-                      {msg.is_read ? (
-                        <MailOpen className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <Mail className="w-4 h-4 text-primary" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-sm truncate ${
-                            msg.is_read ? "font-normal" : "font-semibold"
-                          }`}
-                        >
-                          {msg.subject}
-                        </span>
-                        <MessageTypeBadge type={msg.message_type} />
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {msg.sender_name ?? msg.sender_email ?? `User #${msg.sender_id}`}
-                        {" "}&middot;{" "}
-                        {new Date(msg.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {!loading && inbox && totalPages > 1 && (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-sm text-muted-foreground">
-                  Page {page} of {totalPages} ({inbox.total} messages)
-                </span>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    <ChevronLeft className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    <ChevronRight className="w-3 h-3" />
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+          <MessageList
+            inbox={inbox}
+            loading={loading}
+            page={page}
+            totalPages={totalPages}
+            onSelectMessage={handleMarkRead}
+            onPageChange={setPage}
+          />
         )}
       </main>
     </>

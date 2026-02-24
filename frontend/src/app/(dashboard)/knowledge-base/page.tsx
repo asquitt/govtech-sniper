@@ -3,55 +3,21 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Upload,
-  FileText,
   FolderOpen,
-  MoreHorizontal,
   RefreshCw,
-  CheckCircle2,
-  Clock,
   AlertCircle,
-  Award,
-  Briefcase,
-  FileCheck,
-  Users,
   Search,
   Filter,
   Loader2,
-  Sparkles,
   X,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { formatDate, formatFileSize, cn } from "@/lib/utils";
 import { documentApi, draftApi } from "@/lib/api";
-import type { KnowledgeBaseDocument, DocumentType, ProcessingStatus } from "@/types";
-
-const documentTypeConfig: Record<
-  DocumentType,
-  { label: string; icon: React.ElementType; color: string }
-> = {
-  resume: { label: "Resume", icon: Users, color: "text-blue-400" },
-  past_performance: { label: "Past Performance", icon: Award, color: "text-amber-400" },
-  capability_statement: { label: "Capability", icon: Briefcase, color: "text-emerald-400" },
-  technical_spec: { label: "Technical", icon: FileCheck, color: "text-violet-400" },
-  case_study: { label: "Case Study", icon: FileText, color: "text-cyan-400" },
-  certification: { label: "Certification", icon: Award, color: "text-orange-400" },
-  contract: { label: "Contract", icon: FileText, color: "text-pink-400" },
-  other: { label: "Other", icon: FileText, color: "text-gray-400" },
-};
-
-const statusConfig: Record<
-  ProcessingStatus,
-  { label: string; icon: React.ElementType; color: string }
-> = {
-  pending: { label: "Pending", icon: Clock, color: "text-muted-foreground" },
-  processing: { label: "Processing", icon: Loader2, color: "text-warning" },
-  ready: { label: "Ready", icon: CheckCircle2, color: "text-accent" },
-  error: { label: "Error", icon: AlertCircle, color: "text-destructive" },
-};
+import type { KnowledgeBaseDocument } from "@/types";
+import { KBStatsCards } from "./_components/stats-cards";
+import { DocumentGrid } from "./_components/document-grid";
+import { UploadDropzone } from "./_components/upload-dropzone";
 
 export default function KnowledgeBasePage() {
   const [documents, setDocuments] = useState<KnowledgeBaseDocument[]>([]);
@@ -109,17 +75,12 @@ export default function KnowledgeBasePage() {
     setUploadError(null);
 
     try {
-      // Get document types
       const types = await documentApi.getTypes();
       const defaultType = types[0]?.value || "other";
-
-      // Upload the file
       await documentApi.upload(file, {
         title: file.name.replace(/\.[^/.]+$/, ""),
         document_type: defaultType,
       });
-
-      // Refresh the list
       await fetchDocuments();
     } catch (err) {
       console.error("Upload failed:", err);
@@ -222,62 +183,12 @@ export default function KnowledgeBasePage() {
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Documents</p>
-                  <p className="text-2xl font-bold">{stats.total}</p>
-                </div>
-                <FolderOpen className="w-8 h-8 text-muted-foreground/30" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-accent/5 to-accent/10 border-accent/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Ready for AI</p>
-                  <p className="text-2xl font-bold text-accent">{stats.ready}</p>
-                </div>
-                <Sparkles className="w-8 h-8 text-accent/30" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Citations</p>
-                  <p className="text-2xl font-bold text-primary">
-                    {stats.totalCitations}
-                  </p>
-                </div>
-                <FileText className="w-8 h-8 text-primary/30" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Storage Used</p>
-                  <p className="text-2xl font-bold">
-                    {formatFileSize(stats.totalSize)}
-                  </p>
-                </div>
-                <div className="w-8 h-8 flex items-center justify-center">
-                  <Progress value={15} className="w-8 h-8 rounded-full" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <KBStatsCards
+          total={stats.total}
+          ready={stats.ready}
+          totalCitations={stats.totalCitations}
+          totalSize={stats.totalSize}
+        />
 
         {/* Search */}
         <div className="flex items-center gap-4 mb-4">
@@ -312,142 +223,17 @@ export default function KnowledgeBasePage() {
             </p>
           </div>
         ) : (
-          /* Documents Grid */
-          <div className="grid grid-cols-2 gap-4">
-            {filteredDocuments.map((doc) => {
-              const typeConfig = documentTypeConfig[doc.document_type] || documentTypeConfig.other;
-              const status = statusConfig[doc.processing_status] || statusConfig.pending;
-              const TypeIcon = typeConfig.icon;
-              const StatusIcon = status.icon;
-
-              return (
-                <Card
-                  key={doc.id}
-                  className="hover:border-primary/30 transition-colors cursor-pointer"
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      {/* Icon */}
-                      <div
-                        className={cn(
-                          "w-12 h-12 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0",
-                          typeConfig.color
-                        )}
-                      >
-                        <TypeIcon className="w-6 h-6" />
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="font-medium text-foreground truncate">
-                              {doc.title}
-                            </h3>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {doc.original_filename}
-                            </p>
-                          </div>
-                          <Button variant="ghost" size="icon" className="flex-shrink-0">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </div>
-
-                        {doc.description && (
-                          <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                            {doc.description}
-                          </p>
-                        )}
-
-                        <div className="flex items-center gap-4 mt-3">
-                          {/* Status */}
-                          <div className={cn("flex items-center gap-1 text-xs", status.color)}>
-                            <StatusIcon
-                              className={cn(
-                                "w-3 h-3",
-                                doc.processing_status === "processing" && "animate-spin"
-                              )}
-                            />
-                            {status.label}
-                          </div>
-
-                          {/* Metadata */}
-                          {doc.page_count && (
-                            <span className="text-xs text-muted-foreground">
-                              {doc.page_count} pages
-                            </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {formatFileSize(doc.file_size_bytes || 0)}
-                          </span>
-
-                          {/* Citations */}
-                          {doc.times_cited && doc.times_cited > 0 && (
-                            <div className="flex items-center gap-1 text-xs text-primary">
-                              <FileText className="w-3 h-3" />
-                              {doc.times_cited} citations
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Tags */}
-                        {doc.tags && doc.tags.length > 0 && (
-                          <div className="flex items-center gap-1 mt-2">
-                            {doc.tags.slice(0, 3).map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant="secondary"
-                                className="text-[10px] px-1.5"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <DocumentGrid documents={filteredDocuments} />
         )}
 
-        {/* Upload Dropzone */}
-        <Card
-          className={cn(
-            "mt-6 border-dashed transition-colors",
-            isDragOver && "border-primary bg-primary/5"
-          )}
+        <UploadDropzone
+          isDragOver={isDragOver}
+          isUploading={isUploading}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-        >
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
-                {isUploading ? (
-                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                ) : (
-                  <Upload className="w-8 h-8 text-muted-foreground" />
-                )}
-              </div>
-              <h3 className="font-medium mb-1">
-                {isUploading ? "Uploading..." : "Drop files here to upload"}
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                PDF, DOC, DOCX up to 50MB
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-              >
-                Browse Files
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          onBrowse={() => fileInputRef.current?.click()}
+        />
       </div>
     </div>
   );
