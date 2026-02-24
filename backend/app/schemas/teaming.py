@@ -4,7 +4,7 @@ RFP Sniper - Teaming Board Schemas
 Request/response models for teaming board and partner discovery.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -205,8 +205,8 @@ class NDARead(BaseModel):
     partner_id: int
     rfp_id: int | None = None
     status: str
-    signed_date: str | None = None
-    expiry_date: str | None = None
+    signed_date: date | None = None
+    expiry_date: date | None = None
     document_path: str | None = None
     notes: str | None = None
     created_at: datetime
