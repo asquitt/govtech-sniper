@@ -40,14 +40,13 @@ async def get_content_freshness(
     uid = resolve_user_id(user_id, current_user)
     now = datetime.utcnow()
 
-    docs = (
-        await session.exec(
-            select(KnowledgeBaseDocument).where(
-                KnowledgeBaseDocument.user_id == uid,
-                KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
-            )
+    result = await session.execute(
+        select(KnowledgeBaseDocument).where(
+            KnowledgeBaseDocument.user_id == uid,
+            KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
         )
-    ).all()
+    )
+    docs = result.scalars().all()
 
     freshness_report: list[dict] = []
     summary = {"fresh": 0, "aging": 0, "stale": 0, "outdated": 0}
@@ -102,14 +101,13 @@ async def get_gap_analysis(
     """
     uid = resolve_user_id(user_id, current_user)
 
-    docs = (
-        await session.exec(
-            select(KnowledgeBaseDocument).where(
-                KnowledgeBaseDocument.user_id == uid,
-                KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
-            )
+    result = await session.execute(
+        select(KnowledgeBaseDocument).where(
+            KnowledgeBaseDocument.user_id == uid,
+            KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
         )
-    ).all()
+    )
+    docs = result.scalars().all()
 
     # Document type coverage
     type_counts: dict[str, int] = {}
@@ -220,14 +218,13 @@ async def auto_tag_document(
     """
     uid = resolve_user_id(user_id, current_user)
 
-    doc = (
-        await session.exec(
-            select(KnowledgeBaseDocument).where(
-                KnowledgeBaseDocument.id == document_id,
-                KnowledgeBaseDocument.user_id == uid,
-            )
+    result = await session.execute(
+        select(KnowledgeBaseDocument).where(
+            KnowledgeBaseDocument.id == document_id,
+            KnowledgeBaseDocument.user_id == uid,
         )
-    ).first()
+    )
+    doc = result.scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -306,16 +303,15 @@ async def detect_duplicates(
     """
     uid = resolve_user_id(user_id, current_user)
 
-    docs = (
-        await session.exec(
-            select(KnowledgeBaseDocument)
-            .where(
-                KnowledgeBaseDocument.user_id == uid,
-                KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
-            )
-            .order_by(KnowledgeBaseDocument.title)
+    result = await session.execute(
+        select(KnowledgeBaseDocument)
+        .where(
+            KnowledgeBaseDocument.user_id == uid,
+            KnowledgeBaseDocument.processing_status == ProcessingStatus.READY,
         )
-    ).all()
+        .order_by(KnowledgeBaseDocument.title)
+    )
+    docs = result.scalars().all()
 
     duplicates: list[dict] = []
     seen: dict[str, list[dict]] = {}
@@ -332,7 +328,9 @@ async def detect_duplicates(
         entry = {
             "id": doc.id,
             "title": doc.title,
-            "type": doc.document_type.value,
+            "type": doc.document_type.value
+            if hasattr(doc.document_type, "value")
+            else str(doc.document_type),
             "size": doc.file_size_bytes,
         }
 
