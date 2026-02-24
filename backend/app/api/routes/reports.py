@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.api.utils import get_or_404
 from app.database import get_session
 from app.models.report import ReportType, SavedReport, ScheduleFrequency
@@ -255,6 +255,7 @@ async def generate_report(
     report_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> ReportDataResponse:
     report = await _get_accessible_report(report_id, current_user, session)
     report.last_generated_at = datetime.utcnow()

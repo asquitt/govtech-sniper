@@ -259,8 +259,10 @@ class SAMGovService:
                         break
                     except ValueError:
                         continue
-            except Exception:
-                pass
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    "Failed to parse deadline string", deadline_str=deadline_str, error=str(e)
+                )
 
         # Determine RFP type
         ptype = raw.get("type", "o").lower()

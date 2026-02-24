@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user, get_current_user_optional
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.capture import (
     BidScorecard,
@@ -66,8 +66,9 @@ class ScorecardResponse(BaseModel):
 @router.post("/scorecards/{rfp_id}/ai-evaluate")
 async def ai_evaluate_bid(
     rfp_id: int = Path(..., description="RFP ID"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> dict:
     """Run AI bid/no-bid evaluation for an RFP."""
     from app.services.bid_decision_service import BidDecisionService
@@ -76,6 +77,9 @@ async def ai_evaluate_bid(
     rfp = result.scalar_one_or_none()
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
+    if rfp.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to evaluate this RFP")
 
     profile_result = await session.execute(
         select(UserProfile).where(UserProfile.user_id == rfp.user_id)
@@ -113,7 +117,7 @@ async def ai_evaluate_bid(
 async def submit_human_vote(
     vote: HumanVoteRequest,
     rfp_id: int = Path(..., description="RFP ID"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Submit a human team member's bid/no-bid vote."""
@@ -122,7 +126,7 @@ async def submit_human_vote(
     if not rfp:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
-    scorer_id = current_user.id if current_user else None
+    scorer_id = current_user.id
 
     scorecard = BidScorecard(
         rfp_id=rfp_id,

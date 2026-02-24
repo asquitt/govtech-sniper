@@ -14,7 +14,12 @@ from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
+from app.api.deps import (
+    check_rate_limit,
+    get_current_user,
+    get_current_user_optional,
+    resolve_user_id,
+)
 from app.config import settings
 from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
@@ -186,6 +191,7 @@ async def generate_sections_from_matrix(
     proposal_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> dict:
     """
     Auto-generate proposal sections from the RFP's compliance matrix.
@@ -250,12 +256,12 @@ async def generate_sections_from_matrix(
 async def rewrite_section(
     section_id: int,
     request: RewriteRequest,
-    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> ProposalSectionRead:
     """Rewrite a section's content with a new tone or custom instructions."""
-    resolved_user_id = resolve_user_id(user_id, current_user)
+    resolved_user_id = current_user.id
 
     section_result = await session.execute(
         select(ProposalSection).where(ProposalSection.id == section_id)
@@ -331,12 +337,12 @@ async def rewrite_section(
 async def expand_section(
     section_id: int,
     request: ExpandRequest,
-    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> ProposalSectionRead:
     """Expand a section's content with more detail."""
-    resolved_user_id = resolve_user_id(user_id, current_user)
+    resolved_user_id = current_user.id
 
     section_result = await session.execute(
         select(ProposalSection).where(ProposalSection.id == section_id)
@@ -580,11 +586,11 @@ async def generate_section_draft(
 @router.post("/proposals/{proposal_id}/generate-all")
 async def generate_all_proposal_sections(
     proposal_id: int,
-    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
     max_words: int = Query(500, ge=100, le=2000),
     tone: str = Query("professional", pattern="^(professional|technical|executive)$"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> dict:
     """
     Generate all pending sections for a proposal.
@@ -601,12 +607,10 @@ async def generate_all_proposal_sections(
     if not proposal:
         raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
 
-    resolved_user_id = resolve_user_id(user_id, current_user)
-
     # Queue batch generation
     task = generate_all_sections.delay(
         proposal_id=proposal_id,
-        user_id=resolved_user_id,
+        user_id=current_user.id,
         max_words_per_section=max_words,
         tone=tone,
     )
@@ -621,9 +625,9 @@ async def generate_all_proposal_sections(
 
 @router.post("/refresh-cache")
 async def trigger_cache_refresh(
-    user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
     ttl_hours: int = Query(24, ge=1, le=168, description="Cache TTL in hours"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> dict:
     """
     Refresh the Gemini context cache for a user's Knowledge Base.
@@ -631,10 +635,8 @@ async def trigger_cache_refresh(
     Call this after uploading new documents to ensure they're included
     in the AI's context during generation.
     """
-    resolved_user_id = resolve_user_id(user_id, current_user)
-
     task = refresh_context_cache.delay(
-        user_id=resolved_user_id,
+        user_id=current_user.id,
         ttl_hours=ttl_hours,
     )
 

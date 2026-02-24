@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.config import settings
 from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection
@@ -444,6 +444,7 @@ _REWRITE_PROMPTS = {
 async def ai_rewrite(
     payload: AIRewritePayload,
     current_user: UserAuth = Depends(get_current_user),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> AIRewriteResponse:
     """AI rewrite content (shorten/expand/improve) using Gemini Flash."""
     content = payload.content

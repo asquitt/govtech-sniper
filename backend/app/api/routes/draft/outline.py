@@ -11,7 +11,13 @@ from kombu.exceptions import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import UserAuth, get_current_user_optional, resolve_user_id
+from app.api.deps import (
+    UserAuth,
+    check_rate_limit,
+    get_current_user,
+    get_current_user_optional,
+    resolve_user_id,
+)
 from app.config import settings
 from app.database import get_session
 from app.models.outline import OutlineSection, OutlineStatus, ProposalOutline
@@ -105,12 +111,12 @@ async def _run_outline_generation_sync(
 @router.post("/proposals/{proposal_id}/generate-outline")
 async def generate_outline(
     proposal_id: int,
-    user_id: int | None = Query(None),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> dict:
     """Trigger AI outline generation from compliance matrix."""
-    resolved_user_id = resolve_user_id(user_id, current_user)
+    resolved_user_id = current_user.id
 
     await _get_outline_or_404(proposal_id, resolved_user_id, session)
 

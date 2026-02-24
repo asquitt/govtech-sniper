@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.graphics import GraphicsRequestStatus, ProposalGraphicRequest
 from app.models.proposal import Proposal
@@ -211,6 +211,7 @@ async def generate_graphic_endpoint(
     payload: GraphicGeneratePayload,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> GraphicGenerateResponse:
     """Generate a Mermaid diagram from content using AI."""
     result = await generate_graphic(
