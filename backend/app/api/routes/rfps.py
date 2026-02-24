@@ -215,6 +215,7 @@ async def list_rfps(
 @router.get("/{rfp_id}", response_model=RFPRead)
 async def get_rfp(
     rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> RFPRead:
     """
@@ -223,7 +224,7 @@ async def get_rfp(
     result = await session.execute(select(RFP).where(RFP.id == rfp_id))
     rfp = result.scalar_one_or_none()
 
-    if not rfp:
+    if not rfp or rfp.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
     return RFPRead.model_validate(rfp)
@@ -698,6 +699,7 @@ async def create_rfp(
 async def update_rfp(
     rfp_id: int,
     update_data: RFPUpdate,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> RFPRead:
     """
@@ -706,7 +708,7 @@ async def update_rfp(
     result = await session.execute(select(RFP).where(RFP.id == rfp_id))
     rfp = result.scalar_one_or_none()
 
-    if not rfp:
+    if not rfp or rfp.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
     # Apply updates
@@ -765,6 +767,7 @@ async def update_rfp(
 @router.delete("/{rfp_id}")
 async def delete_rfp(
     rfp_id: int,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
@@ -773,7 +776,7 @@ async def delete_rfp(
     result = await session.execute(select(RFP).where(RFP.id == rfp_id))
     rfp = result.scalar_one_or_none()
 
-    if not rfp:
+    if not rfp or rfp.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
     await log_audit_event(
@@ -860,6 +863,7 @@ async def compute_match_score(
 @router.post("/{rfp_id}/upload-pdf")
 async def upload_rfp_pdf(
     rfp_id: int,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """

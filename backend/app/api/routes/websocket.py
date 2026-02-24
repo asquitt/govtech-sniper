@@ -808,7 +808,10 @@ async def export_websocket_diagnostics(
 
 
 @router.get("/ws/task/{task_id}/status")
-async def get_task_status_http(task_id: str) -> dict:
+async def get_task_status_http(
+    task_id: str,
+    _current_user: UserAuth = Depends(get_current_user),
+) -> dict:
     """
     HTTP fallback for getting task status.
     Use this if WebSocket is not available.

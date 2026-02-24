@@ -152,6 +152,7 @@ async def submit_human_vote(
 @router.get("/scorecards/{rfp_id}")
 async def list_scorecards(
     rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict]:
     """List all scorecards (AI + human) for an RFP."""
@@ -182,6 +183,7 @@ async def list_scorecards(
 @router.get("/scorecards/{rfp_id}/summary")
 async def get_bid_summary(
     rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Get aggregated bid decision summary with vote counts."""

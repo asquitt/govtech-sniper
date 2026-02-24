@@ -14,7 +14,7 @@ from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user_optional, resolve_user_id
+from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
 from app.config import settings
 from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
@@ -184,6 +184,7 @@ async def _run_synchronous_generation(
 @router.post("/proposals/{proposal_id}/generate-from-matrix")
 async def generate_sections_from_matrix(
     proposal_id: int,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
@@ -195,7 +196,7 @@ async def generate_sections_from_matrix(
     result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
 
-    if not proposal:
+    if not proposal or proposal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
 
     # Get compliance matrix
@@ -645,7 +646,10 @@ async def trigger_cache_refresh(
 
 
 @router.get("/{task_id}/status")
-async def get_generation_status(task_id: str) -> dict:
+async def get_generation_status(
+    task_id: str,
+    current_user: UserAuth = Depends(get_current_user),
+) -> dict:
     """
     Get the status of a generation task.
     """

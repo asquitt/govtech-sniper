@@ -14,7 +14,12 @@ from kombu.exceptions import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import check_rate_limit, get_current_user_optional, resolve_user_id
+from app.api.deps import (
+    check_rate_limit,
+    get_current_user,
+    get_current_user_optional,
+    resolve_user_id,
+)
 from app.config import settings
 from app.database import get_session
 from app.models.rfp import RFP, RFPStatus
@@ -228,7 +233,10 @@ async def trigger_sam_ingest(
 
 
 @router.get("/sam/status/{task_id}")
-async def get_ingest_status(task_id: str) -> dict:
+async def get_ingest_status(
+    task_id: str,
+    current_user: UserAuth = Depends(get_current_user),
+) -> dict:
     """
     Get the status of an ingest task.
 
@@ -268,11 +276,12 @@ async def get_ingest_status(task_id: str) -> dict:
         }
 
 
-@router.post("/sam/quick-search")
+@router.post("/sam/quick-search", dependencies=[Depends(check_rate_limit)])
 async def quick_search_sam(
     keywords: str = Query(..., min_length=1, description="Search keywords"),
     limit: int = Query(10, ge=1, le=50, description="Maximum results"),
     days_back: int = Query(30, ge=1, le=365, description="Days to look back"),
+    current_user: UserAuth = Depends(get_current_user),
 ) -> dict:
     """
     Quick synchronous search of SAM.gov (for preview/testing).

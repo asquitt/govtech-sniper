@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 
-from app.api.deps import get_current_user_optional, resolve_user_id
+from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
 from app.config import settings
 from app.database import get_session
 from app.models.rfp import RFP, ComplianceMatrix, RFPStatus
@@ -43,10 +43,20 @@ async def _get_rfp_user_id(session: AsyncSession, rfp_id: int) -> int | None:
     return result.scalar_one_or_none()
 
 
+async def _verify_rfp_ownership(session: AsyncSession, rfp_id: int, current_user: UserAuth) -> None:
+    """Verify the current user owns the RFP. Raises 404 if not found or not owned."""
+    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
+    if rfp_user_id is None:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+    if rfp_user_id != current_user.id:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+
+
 @router.post("/{rfp_id}", response_model=AnalyzeResponse)
 async def trigger_rfp_analysis(
     rfp_id: int = Path(..., description="RFP ID to analyze"),
     force_reanalyze: bool = Query(False, description="Re-analyze even if already done"),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AnalyzeResponse:
     """
@@ -66,11 +76,13 @@ async def trigger_rfp_analysis(
             detail="Gemini API key not configured. Set GEMINI_API_KEY environment variable.",
         )
 
-    # Verify RFP exists
+    # Verify RFP exists and user owns it
     result = await session.execute(select(RFP).where(RFP.id == rfp_id))
     rfp = result.scalar_one_or_none()
 
     if not rfp:
+        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+    if rfp.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
     # Check if already analyzed
@@ -104,10 +116,14 @@ async def trigger_rfp_analysis(
 async def get_analysis_status(
     rfp_id: int = Path(..., description="RFP ID"),
     task_id: str = Path(..., description="Task ID from analyze endpoint"),
+    current_user: UserAuth = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
     Get the status of an analysis task.
     """
+    await _verify_rfp_ownership(session, rfp_id, current_user)
+
     from celery.result import AsyncResult
 
     from app.tasks.celery_app import celery_app
@@ -148,6 +164,7 @@ async def get_analysis_status(
 @router.get("/{rfp_id}/matrix", response_model=ComplianceMatrixRead)
 async def get_compliance_matrix(
     rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ComplianceMatrixRead:
     """
@@ -156,9 +173,7 @@ async def get_compliance_matrix(
     Returns all requirements with their importance levels,
     categories, and addressed status.
     """
-    rfp_exists = await session.execute(select(RFP.id).where(RFP.id == rfp_id))
-    if rfp_exists.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+    await _verify_rfp_ownership(session, rfp_id, current_user)
 
     # Get the compliance matrix
     result = await session.execute(
@@ -201,8 +216,10 @@ async def get_compliance_matrix(
 @router.get("/{rfp_id}/gaps", response_model=ComplianceGapSummary)
 async def get_compliance_gaps(
     rfp_id: int = Path(..., description="RFP ID"),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ComplianceGapSummary:
+    await _verify_rfp_ownership(session, rfp_id, current_user)
     result = await session.execute(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
     )
@@ -272,18 +289,18 @@ def _normalize_requirement_status(data: dict) -> dict:
 async def add_compliance_requirement(
     rfp_id: int,
     requirement: ComplianceRequirementCreate,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ComplianceMatrixRead:
     """
     Add a new requirement to the compliance matrix.
     """
+    await _verify_rfp_ownership(session, rfp_id, current_user)
     result = await session.execute(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
     )
     matrix = result.scalar_one_or_none()
-    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
-    if rfp_user_id is None:
-        raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
+    rfp_user_id = current_user.id
 
     if not matrix:
         matrix = ComplianceMatrix(
@@ -350,11 +367,13 @@ async def update_compliance_requirement(
     rfp_id: int,
     requirement_id: str,
     update: ComplianceRequirementUpdate,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ComplianceMatrixRead:
     """
     Update a requirement in the compliance matrix.
     """
+    await _verify_rfp_ownership(session, rfp_id, current_user)
     result = await session.execute(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
     )
@@ -364,7 +383,7 @@ async def update_compliance_requirement(
             status_code=404,
             detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
         )
-    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
+    rfp_user_id = current_user.id
 
     update_data = update.model_dump(exclude_unset=True)
     update_data = _normalize_requirement_status(update_data)
@@ -419,11 +438,13 @@ async def update_compliance_requirement(
 async def delete_compliance_requirement(
     rfp_id: int,
     requirement_id: str,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
     Delete a requirement from the compliance matrix.
     """
+    await _verify_rfp_ownership(session, rfp_id, current_user)
     result = await session.execute(
         select(ComplianceMatrix).where(ComplianceMatrix.rfp_id == rfp_id)
     )
@@ -433,7 +454,7 @@ async def delete_compliance_requirement(
             status_code=404,
             detail=f"Compliance matrix not found for RFP {rfp_id}. Run analysis first.",
         )
-    rfp_user_id = await _get_rfp_user_id(session, rfp_id)
+    rfp_user_id = current_user.id
 
     original_len = len(matrix.requirements)
     matrix.requirements = [req for req in matrix.requirements if req.get("id") != requirement_id]

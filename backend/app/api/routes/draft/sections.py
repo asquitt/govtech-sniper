@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
-from app.api.deps import get_current_user_optional, resolve_user_id
+from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
 from app.database import get_session
 from app.models.activity import ActivityType
 from app.models.proposal import (
@@ -41,6 +41,7 @@ logger = structlog.get_logger(__name__)
 async def create_section(
     proposal_id: int,
     section: ProposalSectionCreate,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ProposalSectionRead:
     """
@@ -49,11 +50,11 @@ async def create_section(
     Sections can be created manually or auto-generated from
     the compliance matrix.
     """
-    # Verify proposal exists
+    # Verify proposal exists and user owns it
     result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
 
-    if not proposal:
+    if not proposal or proposal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"Proposal {proposal_id} not found")
 
     # Create section

@@ -1,7 +1,30 @@
-# AGENTS.md
+# GovTech Sniper (Orbitr) - Proposal Automation Platform
 
 ## Mission
 Build a GovTech proposal automation platform that is reliable, secure, and delightful for customers. Quality, correctness, and speed to value are non-negotiable.
+
+## Live URLs
+- **App**: http://localhost:3000 (frontend dev)
+- **API**: http://localhost:8000 (backend dev)
+- **Site ID**: 10bdefa6-4a74-4ac8-9e97-e1b0fb2d0b9b
+
+## Architecture
+```
+backend/app/
+├── api/routes/       # 50+ routers (auth, draft/, capture/, collaboration/, contracts/, etc.)
+├── services/         # 60+ services (ai_engine, gemini_service/, data_providers/, etc.)
+├── tasks/            # 8 Celery task modules (ingest, analysis, generation, documents, etc.)
+├── models/           # SQLAlchemy/SQLModel models
+├── core/             # config, database, deps, auth, rate_limiting
+└── schemas/          # Pydantic request/response schemas
+
+frontend/src/
+├── app/(dashboard)/  # 37+ App Router pages
+├── components/       # layout/, ui/, shared components
+├── hooks/            # Custom hooks
+├── lib/api/          # API client modules
+└── types/            # TypeScript definitions
+```
 
 ## Agent Behavior
 - Default to the best action without asking multiple questions.
@@ -13,6 +36,57 @@ Build a GovTech proposal automation platform that is reliable, secure, and delig
 - No broken builds, no flaky tests.
 - Prefer simple, correct, and maintainable solutions.
 - Security and data integrity are first-class.
+
+## Proactive Issue Resolution (MANDATORY)
+
+**When you discover ANY issue during investigation — fix it immediately. Do not just explain it and move on.**
+
+If during debugging or testing you find:
+- A bug in unrelated code → **FIX IT**
+- A misconfiguration → **FIX IT**
+- Dead code or orphaned imports → **CLEAN IT UP**
+- A missing auth guard or rate limiter → **ADD IT**
+- Documentation that's wrong → **CORRECT IT**
+
+**DO NOT:**
+- Explain the issue and leave it unfixed
+- Say "this should be X but it's Y" without changing it
+- Note a problem "for later" and continue
+- Wait for the user to explicitly ask you to fix discovered issues
+
+**If you can identify the problem, you can fix it. If you can fix it, you must fix it.**
+
+## Dead Code & Orphan Prevention (MANDATORY)
+
+### When Your Changes Create Orphans — Clean Up Immediately
+When your changes make files, components, imports, or functions unused, **delete them in the same commit**:
+- You replaced `ComponentA` with `ComponentB` → delete `ComponentA.tsx`
+- You moved logic from `old_service.py` → delete `old_service.py`
+- You stopped importing `useOldHook` → remove it from exports
+
+### When Moving or Refactoring Files
+1. Grep for old import path before deleting/moving
+2. Update `__init__.py` / `index.ts` re-exports
+3. Update router registrations in `main.py`
+4. Run type checks after
+
+## NEVER Mark Tasks Complete Without Verification (CRITICAL)
+
+**NEVER claim something is working or mark a task complete without ACTUALLY verifying it.**
+
+### Verification Requirements
+1. **API responses**: curl the endpoint, check the response
+2. **UI changes**: Use Playwright MCP or build check to verify
+3. **Security fixes**: Verify unauthorized access is rejected (401/403)
+4. **Celery tasks**: Check logs, verify execution completed
+
+### When Verification Fails
+1. Diagnose the root cause
+2. Fix the underlying issue
+3. Re-run and verify again
+4. Only then report success
+
+**If you cannot verify, say so explicitly. Never fabricate verification results.**
 
 ## Testing Requirements (Comprehensive)
 Every feature must include:
@@ -53,8 +127,11 @@ Every feature must include:
 
 ## Security and Compliance
 - Treat all data as sensitive (CUI-level handling).
-- Enforce RBAC checks on all protected endpoints.
+- Enforce RBAC checks on ALL protected endpoints — no exceptions.
 - Log security-relevant events (auth, access, data export).
+- Every endpoint that reads/writes user data MUST use `Depends(get_current_user)`.
+- Every endpoint that reads specific resources MUST verify ownership (no IDOR).
+- All AI/expensive endpoints MUST use `Depends(check_rate_limit)`.
 
 ## Documentation
 - Update docs when behavior changes.
@@ -63,6 +140,32 @@ Every feature must include:
 ## UX and Product Fit
 - Optimize for enterprise workflows (Word, SharePoint, SSO).
 - Every workflow must reduce time and increase compliance confidence.
+
+## File Placement Rules (MANDATORY)
+
+### Backend
+| File Type | Location |
+|-----------|----------|
+| API router | `app/api/routes/` (or subdirectory if 3+ related files) |
+| Service | `app/services/` |
+| Model | `app/models/` |
+| Task | `app/tasks/` |
+| Schema | `app/schemas/` |
+
+### Frontend
+| File Type | Location |
+|-----------|----------|
+| Page route | `src/app/(dashboard)/feature/page.tsx` |
+| Page sub-component | `src/app/(dashboard)/feature/_components/` |
+| Shared component | `src/components/` |
+| Hook | `src/hooks/` |
+| API client | `src/lib/api/` |
+| Types | `src/types/` |
+
+### Before Creating Any New File
+1. Check if a product subdirectory exists — use it
+2. Don't scatter related files — colocate by feature
+3. If moving files, update all imports and re-exports
 
 ## Mandatory Pre-Commit Testing (ENFORCED)
 

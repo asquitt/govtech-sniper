@@ -187,6 +187,7 @@ async def use_template(
 
 @router.post("/seed-system-templates")
 async def seed_system_templates(
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """

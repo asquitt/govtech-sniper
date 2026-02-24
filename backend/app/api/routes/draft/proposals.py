@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user_optional, resolve_user_id
+from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
 from app.database import get_session
 from app.models.proposal import Proposal
 from app.models.rfp import RFP
@@ -39,6 +39,7 @@ async def list_proposals(
 @router.get("/proposals/{proposal_id}", response_model=ProposalRead)
 async def get_proposal(
     proposal_id: int,
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> ProposalRead:
     """
@@ -46,7 +47,7 @@ async def get_proposal(
     """
     result = await session.execute(select(Proposal).where(Proposal.id == proposal_id))
     proposal = result.scalar_one_or_none()
-    if not proposal:
+    if not proposal or proposal.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Proposal not found")
 
     return ProposalRead.from_orm_with_completion(proposal)
