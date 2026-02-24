@@ -348,6 +348,7 @@ async def check_section_compliance(
     section_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> ComplianceCheckResult:
     """Check section content against its requirements using FAR compliance rules."""
     section = await _get_section_for_user(section_id, current_user.id, session)

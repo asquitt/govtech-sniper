@@ -641,6 +641,8 @@ async def resolve_comment(
     """
     Mark a comment as resolved.
     """
+    from app.models.proposal import Proposal, ProposalSection
+
     comment_result = await session.execute(
         select(ProposalComment).where(ProposalComment.id == comment_id)
     )
@@ -648,6 +650,23 @@ async def resolve_comment(
 
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
+
+    # Verify the user owns the comment or has access to the proposal
+    if comment.user_id != current_user.id:
+        # Check if user has team membership on the proposal's team
+        section = (
+            await session.execute(
+                select(ProposalSection).where(ProposalSection.id == comment.proposal_section_id)
+            )
+        ).scalar_one_or_none()
+        if section:
+            proposal = (
+                await session.execute(select(Proposal).where(Proposal.id == section.proposal_id))
+            ).scalar_one_or_none()
+            if not proposal or proposal.user_id != current_user.id:
+                raise HTTPException(status_code=404, detail="Comment not found")
+        else:
+            raise HTTPException(status_code=404, detail="Comment not found")
 
     comment.is_resolved = True
     comment.resolved_by = current_user.id

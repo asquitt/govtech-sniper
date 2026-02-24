@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -217,6 +217,16 @@ async def create_debrief(
 ) -> dict:
     """Create a win/loss debrief for a capture plan."""
     from app.models.capture import DebriefSource
+
+    # Verify user owns the capture plan (IDOR protection)
+    plan_result = await session.execute(
+        select(CapturePlan).where(
+            CapturePlan.id == capture_plan_id,
+            CapturePlan.owner_id == current_user.id,
+        )
+    )
+    if not plan_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Capture plan not found")
 
     debrief = WinLossDebrief(
         capture_plan_id=capture_plan_id,

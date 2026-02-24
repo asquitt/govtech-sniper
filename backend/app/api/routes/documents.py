@@ -15,7 +15,12 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
+from app.api.deps import (
+    check_rate_limit,
+    get_current_user,
+    get_current_user_optional,
+    resolve_user_id,
+)
 from app.config import settings
 from app.database import get_session
 from app.models.knowledge_base import (
@@ -182,16 +187,13 @@ async def list_document_types() -> list[dict]:
 
 @router.get("/stats")
 async def get_document_stats(
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
     Get document statistics for the current user.
     """
     from sqlalchemy import func
-
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
 
     total_result = await session.execute(
         select(func.count(KnowledgeBaseDocument.id)).where(
@@ -560,11 +562,16 @@ async def list_past_performances(
     return PastPerformanceListResponse(documents=data, total=len(data))
 
 
-@router.post("/past-performances/match/{rfp_id}", response_model=MatchResponse)
+@router.post(
+    "/past-performances/match/{rfp_id}",
+    response_model=MatchResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 @router.post(
     "/documents/past-performances/match/{rfp_id}",
     response_model=MatchResponse,
     include_in_schema=False,
+    dependencies=[Depends(check_rate_limit)],
 )
 async def match_past_performance(
     rfp_id: int,
@@ -589,12 +596,15 @@ async def match_past_performance(
 
 
 @router.post(
-    "/past-performances/{document_id}/narrative/{rfp_id}", response_model=NarrativeResponse
+    "/past-performances/{document_id}/narrative/{rfp_id}",
+    response_model=NarrativeResponse,
+    dependencies=[Depends(check_rate_limit)],
 )
 @router.post(
     "/documents/past-performances/{document_id}/narrative/{rfp_id}",
     response_model=NarrativeResponse,
     include_in_schema=False,
+    dependencies=[Depends(check_rate_limit)],
 )
 async def generate_past_performance_narrative(
     document_id: int,

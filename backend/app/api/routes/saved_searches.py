@@ -12,7 +12,7 @@ from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.rfp import RFP, RFPStatus
 from app.models.saved_search import SavedSearch
@@ -244,6 +244,7 @@ async def run_saved_search(
     limit: int = Query(100, ge=1, le=500),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> SavedSearchRunResponse:
     result = await session.execute(
         select(SavedSearch).where(

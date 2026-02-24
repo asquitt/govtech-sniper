@@ -13,7 +13,12 @@ from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
+from app.api.deps import (
+    check_rate_limit,
+    get_current_user,
+    get_current_user_optional,
+    resolve_user_id,
+)
 from app.database import get_session
 from app.models.opportunity_snapshot import SAMOpportunitySnapshot
 from app.models.proposal import Proposal, ProposalSection
@@ -813,10 +818,10 @@ async def delete_rfp(
     return {"message": f"RFP {rfp_id} deleted"}
 
 
-@router.post("/{rfp_id}/match-score")
+@router.post("/{rfp_id}/match-score", dependencies=[Depends(check_rate_limit)])
 async def compute_match_score(
     rfp_id: int = Path(..., description="RFP ID"),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """Compute AI match score for an RFP against the user's profile."""
@@ -825,7 +830,7 @@ async def compute_match_score(
 
     result = await session.execute(select(RFP).where(RFP.id == rfp_id))
     rfp = result.scalar_one_or_none()
-    if not rfp:
+    if not rfp or rfp.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
     profile_result = await session.execute(

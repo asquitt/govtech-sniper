@@ -141,6 +141,35 @@ async def review_dashboard(
 # ---------------------------------------------------------------------------
 
 
+async def _verify_proposal_ownership(
+    proposal_id: int,
+    user_id: int,
+    session: AsyncSession,
+) -> Proposal:
+    """Verify the user owns the proposal. Raises 404 if not found or not owned."""
+    result = await session.execute(
+        select(Proposal).where(
+            Proposal.id == proposal_id,
+            Proposal.user_id == user_id,
+        )
+    )
+    proposal = result.scalar_one_or_none()
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+    return proposal
+
+
+async def _verify_review_ownership(
+    review_id: int,
+    user_id: int,
+    session: AsyncSession,
+) -> ProposalReview:
+    """Load a review and verify the user owns its parent proposal."""
+    review = await get_or_404(session, ProposalReview, review_id, "Review not found")
+    await _verify_proposal_ownership(review.proposal_id, user_id, session)
+    return review
+
+
 @router.post(
     "/proposals/{proposal_id}/reviews",
     response_model=ReviewRead,
@@ -153,6 +182,7 @@ async def schedule_review(
     session: AsyncSession = Depends(get_session),
 ) -> ReviewRead:
     """Schedule a color team review (pink/red/gold) for a proposal."""
+    await _verify_proposal_ownership(proposal_id, current_user.id, session)
     review = ProposalReview(
         proposal_id=proposal_id,
         review_type=ReviewType(payload.review_type),
@@ -194,6 +224,7 @@ async def list_reviews(
     session: AsyncSession = Depends(get_session),
 ) -> list[ReviewRead]:
     """List all reviews for a proposal."""
+    await _verify_proposal_ownership(proposal_id, current_user.id, session)
     result = await session.execute(
         select(ProposalReview)
         .where(ProposalReview.proposal_id == proposal_id)
@@ -216,7 +247,7 @@ async def assign_reviewer(
     session: AsyncSession = Depends(get_session),
 ) -> AssignmentRead:
     """Assign a reviewer to a review."""
-    await get_or_404(session, ProposalReview, review_id, "Review not found")
+    await _verify_review_ownership(review_id, current_user.id, session)
 
     assignment = ReviewAssignment(
         review_id=review_id,
@@ -255,7 +286,7 @@ async def add_comment(
     session: AsyncSession = Depends(get_session),
 ) -> CommentRead:
     """Add a review comment."""
-    await get_or_404(session, ProposalReview, review_id, "Review not found")
+    await _verify_review_ownership(review_id, current_user.id, session)
 
     comment = ReviewComment(
         review_id=review_id,
@@ -292,7 +323,7 @@ async def list_comments(
     session: AsyncSession = Depends(get_session),
 ) -> list[CommentRead]:
     """List comments for a review."""
-    await get_or_404(session, ProposalReview, review_id, "Review not found")
+    await _verify_review_ownership(review_id, current_user.id, session)
 
     result = await session.execute(
         select(ReviewComment)
@@ -310,6 +341,20 @@ async def list_inline_comments(
     session: AsyncSession = Depends(get_session),
 ) -> list[CommentRead]:
     """List inline comments for a specific section (across all reviews)."""
+    # Verify the user owns the proposal that contains this section
+    from app.models.proposal import ProposalSection
+
+    section_result = await session.execute(
+        select(ProposalSection)
+        .join(Proposal)
+        .where(
+            ProposalSection.id == section_id,
+            Proposal.user_id == current_user.id,
+        )
+    )
+    if not section_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Section not found")
+
     result = await session.execute(
         select(ReviewComment)
         .where(
@@ -334,6 +379,7 @@ async def update_comment(
     Transitions: open→assigned, assigned→addressed, addressed→verified/closed,
     any→rejected.
     """
+    await _verify_review_ownership(review_id, current_user.id, session)
     result = await session.execute(
         select(ReviewComment).where(
             ReviewComment.id == comment_id,
@@ -390,7 +436,7 @@ async def get_scoring_summary(
     session: AsyncSession = Depends(get_session),
 ) -> ScoringSummary:
     """Aggregated scoring summary for a review."""
-    review = await get_or_404(session, ProposalReview, review_id, "Review not found")
+    review = await _verify_review_ownership(review_id, current_user.id, session)
 
     # Checklist pass rate
     checklist_result = await session.execute(
@@ -661,7 +707,7 @@ async def create_checklist_from_template(
     session: AsyncSession = Depends(get_session),
 ) -> list[ChecklistItemRead]:
     """Bulk-create checklist items from a review type template."""
-    await get_or_404(session, ProposalReview, review_id, "Review not found")
+    await _verify_review_ownership(review_id, current_user.id, session)
 
     template = get_checklist_template(payload.review_type)
     if not template:
@@ -692,7 +738,7 @@ async def list_checklist(
     session: AsyncSession = Depends(get_session),
 ) -> list[ChecklistItemRead]:
     """List checklist items for a review."""
-    await get_or_404(session, ProposalReview, review_id, "Review not found")
+    await _verify_review_ownership(review_id, current_user.id, session)
 
     result = await session.execute(
         select(ReviewChecklistItem)
@@ -711,6 +757,7 @@ async def update_checklist_item(
     session: AsyncSession = Depends(get_session),
 ) -> ChecklistItemRead:
     """Update a checklist item status or note."""
+    await _verify_review_ownership(review_id, current_user.id, session)
     result = await session.execute(
         select(ReviewChecklistItem).where(
             ReviewChecklistItem.id == item_id,
@@ -746,7 +793,7 @@ async def complete_review(
     session: AsyncSession = Depends(get_session),
 ) -> ReviewRead:
     """Complete a review with an overall score."""
-    review = await get_or_404(session, ProposalReview, review_id, "Review not found")
+    review = await _verify_review_ownership(review_id, current_user.id, session)
 
     review.status = ReviewStatus.COMPLETED
     review.completed_date = datetime.utcnow()

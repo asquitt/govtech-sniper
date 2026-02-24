@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 from sqlmodel import select
 
-from app.api.deps import get_current_user, get_current_user_optional, resolve_user_id
+from app.api.deps import check_rate_limit, get_current_user
 from app.config import settings
 from app.database import get_session
 from app.models.rfp import RFP, ComplianceMatrix, RFPStatus
@@ -52,7 +52,11 @@ async def _verify_rfp_ownership(session: AsyncSession, rfp_id: int, current_user
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
 
-@router.post("/{rfp_id}", response_model=AnalyzeResponse)
+@router.post(
+    "/{rfp_id}",
+    response_model=AnalyzeResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def trigger_rfp_analysis(
     rfp_id: int = Path(..., description="RFP ID to analyze"),
     force_reanalyze: bool = Query(False, description="Re-analyze even if already done"),
@@ -486,13 +490,10 @@ async def delete_compliance_requirement(
     return {"message": "Requirement deleted", "requirement_id": requirement_id}
 
 
-@router.post("/{rfp_id}/filter")
+@router.post("/{rfp_id}/filter", dependencies=[Depends(check_rate_limit)])
 async def trigger_killer_filter(
     rfp_id: int = Path(..., description="RFP ID to filter"),
-    user_id: int | None = Query(
-        None, description="User ID for profile lookup (optional if authenticated)"
-    ),
-    current_user: UserAuth | None = Depends(get_current_user_optional),
+    current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
     """
@@ -507,17 +508,15 @@ async def trigger_killer_filter(
             detail="Gemini API key not configured",
         )
 
-    # Verify RFP exists
+    # Verify RFP exists and user owns it (IDOR protection)
     result = await session.execute(select(RFP).where(RFP.id == rfp_id))
     rfp = result.scalar_one_or_none()
 
-    if not rfp:
+    if not rfp or rfp.user_id != current_user.id:
         raise HTTPException(status_code=404, detail=f"RFP {rfp_id} not found")
 
-    resolved_user_id = resolve_user_id(user_id, current_user)
-
     # Queue the filter task
-    task = run_killer_filter.delay(rfp_id=rfp_id, user_id=resolved_user_id)
+    task = run_killer_filter.delay(rfp_id=rfp_id, user_id=current_user.id)
 
     return {
         "task_id": task.id,
