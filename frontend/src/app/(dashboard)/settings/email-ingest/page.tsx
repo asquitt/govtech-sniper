@@ -4,24 +4,23 @@ import React, { useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { collaborationApi } from "@/lib/api";
 import { emailIngestApi } from "@/lib/api/email-ingest";
 import { useAsyncData } from "@/hooks/use-async-data";
 import type { SharedWorkspace } from "@/types";
 import type { EmailIngestConfig, IngestedEmail } from "@/types/email-ingest";
+import { AddConfigForm } from "./_components/AddConfigForm";
+import { ConfigList } from "./_components/ConfigList";
+import { EmailHistoryTable } from "./_components/EmailHistoryTable";
 
-const INPUT_CLASS =
-  "rounded-md border border-border bg-background px-3 py-2 text-sm w-full";
+interface EmailIngestData {
+  configs: EmailIngestConfig[];
+  history: IngestedEmail[];
+  historyTotal: number;
+  workspaces: SharedWorkspace[];
+}
 
 export default function EmailIngestPage() {
-  interface EmailIngestData {
-    configs: EmailIngestConfig[];
-    history: IngestedEmail[];
-    historyTotal: number;
-    workspaces: SharedWorkspace[];
-  }
-
   const { data, error: fetchError, refetch } = useAsyncData<EmailIngestData>(
     async () => {
       const [configsData, historyData, workspaceData] = await Promise.all([
@@ -161,21 +160,6 @@ export default function EmailIngestPage() {
     }
   };
 
-  const statusVariant = (
-    status: IngestedEmail["processing_status"]
-  ): "default" | "success" | "destructive" | "outline" => {
-    switch (status) {
-      case "processed":
-        return "success";
-      case "error":
-        return "destructive";
-      case "ignored":
-        return "outline";
-      default:
-        return "default";
-    }
-  };
-
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -214,129 +198,27 @@ export default function EmailIngestPage() {
           </div>
 
           {showForm && (
-            <Card className="border border-border">
-              <CardContent className="p-4">
-                <form onSubmit={handleAddConfig} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground" htmlFor="imap-server">
-                        IMAP Server
-                      </label>
-                      <input
-                        id="imap-server"
-                        className={INPUT_CLASS}
-                        placeholder="imap.gmail.com"
-                        value={imapServer}
-                        onChange={(e) => setImapServer(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground" htmlFor="imap-port">
-                        IMAP Port
-                      </label>
-                      <input
-                        id="imap-port"
-                        className={INPUT_CLASS}
-                        placeholder="993"
-                        type="number"
-                        value={imapPort}
-                        onChange={(e) => setImapPort(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground" htmlFor="email-address">
-                        Email Address
-                      </label>
-                      <input
-                        id="email-address"
-                        className={INPUT_CLASS}
-                        placeholder="capture@example.com"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground" htmlFor="email-password">
-                        App Password
-                      </label>
-                      <input
-                        id="email-password"
-                        className={INPUT_CLASS}
-                        placeholder="Password / App password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground" htmlFor="email-folder">
-                        Folder
-                      </label>
-                      <input
-                        id="email-folder"
-                        className={INPUT_CLASS}
-                        placeholder="INBOX"
-                        value={folder}
-                        onChange={(e) => setFolder(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground" htmlFor="workspace-routing">
-                        Team Workspace (Optional)
-                      </label>
-                      <select
-                        id="workspace-routing"
-                        className={INPUT_CLASS}
-                        value={workspaceId}
-                        onChange={(e) => setWorkspaceId(e.target.value)}
-                      >
-                        <option value="">No routing workspace</option>
-                        {workspaces.map((workspace) => (
-                          <option key={workspace.id} value={workspace.id}>
-                            {workspace.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={autoCreateRfps}
-                        onChange={(e) => setAutoCreateRfps(e.target.checked)}
-                      />
-                      Auto-create opportunities for qualified emails
-                    </label>
-                    <div className="space-y-1">
-                      <label
-                        className="text-xs text-muted-foreground"
-                        htmlFor="confidence-threshold"
-                      >
-                        Minimum RFP Confidence (0-1)
-                      </label>
-                      <input
-                        id="confidence-threshold"
-                        className={INPUT_CLASS}
-                        type="number"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={minConfidence}
-                        onChange={(e) => setMinConfidence(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? "Saving..." : "Save Configuration"}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+            <AddConfigForm
+              imapServer={imapServer}
+              imapPort={imapPort}
+              email={email}
+              password={password}
+              folder={folder}
+              workspaceId={workspaceId}
+              autoCreateRfps={autoCreateRfps}
+              minConfidence={minConfidence}
+              workspaces={workspaces}
+              loading={loading}
+              onImapServerChange={setImapServer}
+              onImapPortChange={setImapPort}
+              onEmailChange={setEmail}
+              onPasswordChange={setPassword}
+              onFolderChange={setFolder}
+              onWorkspaceIdChange={setWorkspaceId}
+              onAutoCreateRfpsChange={setAutoCreateRfps}
+              onMinConfidenceChange={setMinConfidence}
+              onSubmit={handleAddConfig}
+            />
           )}
 
           {configs.length === 0 && !showForm && (
@@ -345,148 +227,21 @@ export default function EmailIngestPage() {
             </p>
           )}
 
-          <div className="space-y-2">
-            {configs.map((config) => (
-              <Card key={config.id} className="border border-border">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">
-                      {config.email_address}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {config.imap_server}:{config.imap_port} / {config.folder}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Workspace:{" "}
-                      {config.workspace_id
-                        ? (workspaceById.get(config.workspace_id) ?? `#${config.workspace_id}`)
-                        : "none"}
-                      {" · "}
-                      Auto-create: {config.auto_create_rfps ? "enabled" : "disabled"}
-                      {" · "}
-                      Threshold: {config.min_rfp_confidence.toFixed(2)}
-                    </p>
-                    {config.last_checked_at && (
-                      <p className="text-xs text-muted-foreground">
-                        Last checked:{" "}
-                        {new Date(config.last_checked_at).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={config.is_enabled ? "success" : "outline"}
-                      className="cursor-pointer"
-                      onClick={() => handleToggle(config)}
-                    >
-                      {config.is_enabled ? "Enabled" : "Disabled"}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleTest(config.id)}
-                    >
-                      Test
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => handleDelete(config.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <ConfigList
+            configs={configs}
+            workspaceById={workspaceById}
+            onToggle={handleToggle}
+            onTest={handleTest}
+            onDelete={handleDelete}
+          />
         </div>
 
         {/* History table */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-foreground">
-            Ingested Emails ({historyTotal})
-          </h2>
-
-          {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No emails ingested yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="py-2 pr-4">Subject</th>
-                    <th className="py-2 pr-4">Sender</th>
-                    <th className="py-2 pr-4">Received</th>
-                    <th className="py-2 pr-4">Attachments</th>
-                    <th className="py-2 pr-4">Confidence</th>
-                    <th className="py-2 pr-4">Status</th>
-                    <th className="py-2 pr-4">Opportunity</th>
-                    <th className="py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="py-2 pr-4 max-w-[250px] truncate">
-                        {item.subject}
-                      </td>
-                      <td className="py-2 pr-4">{item.sender}</td>
-                      <td className="py-2 pr-4 whitespace-nowrap">
-                        {new Date(item.received_at).toLocaleDateString()}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {item.attachment_count > 0
-                          ? `${item.attachment_count} (${item.attachment_names.slice(0, 2).join(", ")})`
-                          : "0"}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {item.classification_confidence !== null
-                          ? item.classification_confidence.toFixed(2)
-                          : "—"}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <Badge variant={statusVariant(item.processing_status)}>
-                          {item.processing_status}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {item.created_rfp_id ? (
-                          <a
-                            className="text-primary underline"
-                            href={`/opportunities/${item.created_rfp_id}`}
-                          >
-                            #{item.created_rfp_id}
-                          </a>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="py-2">
-                        {(item.processing_status === "error" ||
-                          item.processing_status === "ignored") && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleReprocess(item.id)}
-                          >
-                            Reprocess
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <EmailHistoryTable
+          history={history}
+          historyTotal={historyTotal}
+          onReprocess={handleReprocess}
+        />
       </div>
     </div>
   );

@@ -1,29 +1,14 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { eventApi } from "@/lib/api";
 import type { EventAlert, IndustryEvent } from "@/types";
-
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  industry_day: "Industry Day",
-  pre_solicitation: "Pre-Solicitation",
-  conference: "Conference",
-  webinar: "Webinar",
-};
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
+import { EventAlerts } from "./_components/EventAlerts";
+import { NewEventForm } from "./_components/NewEventForm";
+import { EventCalendar } from "./_components/EventCalendar";
+import { EventList } from "./_components/EventList";
 
 function localDateKey(value: Date): string {
   const year = value.getFullYear();
@@ -171,6 +156,24 @@ export default function EventsPage() {
     year: "numeric",
   });
 
+  const handlePrevMonth = () => {
+    if (calendarMonth === 1) {
+      setCalendarMonth(12);
+      setCalendarYear((prev) => prev - 1);
+    } else {
+      setCalendarMonth((prev) => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (calendarMonth === 12) {
+      setCalendarMonth(1);
+      setCalendarYear((prev) => prev + 1);
+    } else {
+      setCalendarMonth((prev) => prev + 1);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -207,95 +210,24 @@ export default function EventsPage() {
           </div>
         )}
 
-        <Card data-testid="events-alerts-card">
-          <CardHeader>
-            <CardTitle>
-              Relevant Event Alerts <Badge variant="secondary">{alerts.length}</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {alerts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No high-confidence event alerts yet. Add agency and keyword preferences in Signals
-                subscription settings to improve matching.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {alerts.slice(0, 6).map((alert) => (
-                  <div
-                    key={alert.event.id}
-                    className="rounded-lg border p-3"
-                    data-testid="event-alert-row"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{alert.event.title}</p>
-                      <Badge variant="outline">{Math.round(alert.relevance_score)}%</Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      In {alert.days_until_event} day(s) • {alert.match_reasons.join(" • ")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <EventAlerts alerts={alerts} />
 
         {showForm && (
-          <Card>
-            <CardHeader>
-              <CardTitle>New Event</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <input
-                className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
-                placeholder="Event title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  className="border rounded-lg px-3 py-2 text-sm bg-background"
-                  type="datetime-local"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-                <select
-                  className="border rounded-lg px-3 py-2 text-sm bg-background"
-                  value={eventType}
-                  onChange={(e) => setEventType(e.target.value)}
-                >
-                  <option value="industry_day">Industry Day</option>
-                  <option value="pre_solicitation">Pre-Solicitation</option>
-                  <option value="conference">Conference</option>
-                  <option value="webinar">Webinar</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  className="border rounded-lg px-3 py-2 text-sm bg-background"
-                  placeholder="Agency"
-                  value={agency}
-                  onChange={(e) => setAgency(e.target.value)}
-                />
-                <input
-                  className="border rounded-lg px-3 py-2 text-sm bg-background"
-                  placeholder="Location"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                />
-              </div>
-              <input
-                className="w-full border rounded-lg px-3 py-2 text-sm bg-background"
-                placeholder="Description (optional)"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-              <Button size="sm" onClick={handleCreate}>
-                Create Event
-              </Button>
-            </CardContent>
-          </Card>
+          <NewEventForm
+            title={title}
+            agency={agency}
+            date={date}
+            eventType={eventType}
+            location={location}
+            description={description}
+            onTitleChange={setTitle}
+            onAgencyChange={setAgency}
+            onDateChange={setDate}
+            onEventTypeChange={setEventType}
+            onLocationChange={setLocation}
+            onDescriptionChange={setDescription}
+            onCreate={handleCreate}
+          />
         )}
 
         <div className="flex gap-2">
@@ -323,160 +255,22 @@ export default function EventsPage() {
         </div>
 
         {view === "calendar" ? (
-          <Card data-testid="events-calendar-card">
-            <CardHeader>
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle>Event Calendar • {calendarLabel}</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (calendarMonth === 1) {
-                        setCalendarMonth(12);
-                        setCalendarYear((prev) => prev - 1);
-                      } else {
-                        setCalendarMonth((prev) => prev - 1);
-                      }
-                    }}
-                  >
-                    Prev
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (calendarMonth === 12) {
-                        setCalendarMonth(1);
-                        setCalendarYear((prev) => prev + 1);
-                      } else {
-                        setCalendarMonth((prev) => prev + 1);
-                      }
-                    }}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {calendarLoading ? (
-                <div className="animate-pulse space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-16 bg-muted rounded" />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-7 gap-2" data-testid="events-calendar-grid">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayLabel) => (
-                    <div
-                      key={dayLabel}
-                      className="text-xs font-medium text-muted-foreground px-2 py-1"
-                    >
-                      {dayLabel}
-                    </div>
-                  ))}
-                  {calendarDays.map((day) => {
-                    const inCurrentMonth = day.getMonth() === calendarMonth - 1;
-                    const key = localDateKey(day);
-                    const dayEvents = calendarEventsByDay[key] || [];
-                    return (
-                      <div
-                        key={key}
-                        className={`min-h-[96px] rounded-md border p-2 ${
-                          inCurrentMonth ? "bg-background" : "bg-muted/30 text-muted-foreground"
-                        }`}
-                      >
-                        <p className="text-xs font-medium">{day.getDate()}</p>
-                        <div className="mt-1 space-y-1">
-                          {dayEvents.slice(0, 2).map((ev) => (
-                            <p
-                              key={ev.id}
-                              className="truncate rounded bg-primary/10 px-1.5 py-0.5 text-[10px]"
-                              title={ev.title}
-                            >
-                              {ev.title}
-                            </p>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <p className="text-[10px] text-muted-foreground">
-                              +{dayEvents.length - 2} more
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <EventCalendar
+            calendarLabel={calendarLabel}
+            calendarMonth={calendarMonth}
+            calendarLoading={calendarLoading}
+            calendarDays={calendarDays}
+            calendarEventsByDay={calendarEventsByDay}
+            onPrevMonth={handlePrevMonth}
+            onNextMonth={handleNextMonth}
+          />
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {view === "upcoming" ? "Upcoming Events" : "All Events"}{" "}
-                <Badge variant="secondary">{displayed.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="animate-pulse space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-16 bg-muted rounded" />
-                  ))}
-                </div>
-              ) : displayed.length === 0 ? (
-                <p className="text-muted-foreground text-sm text-center py-8">
-                  No events found. Add events to track industry days and conferences.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {displayed.map((ev) => (
-                    <div key={ev.id} className="border rounded-lg p-4" data-testid="event-list-row">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-medium">{ev.title}</p>
-                          <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
-                            <span>{formatDate(ev.date)}</span>
-                            {ev.agency && <span>{ev.agency}</span>}
-                            {ev.location && <span>{ev.location}</span>}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline">
-                            {EVENT_TYPE_LABELS[ev.event_type] || ev.event_type}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(ev.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                      {ev.description && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {ev.description}
-                        </p>
-                      )}
-                      {ev.registration_url && (
-                        <a
-                          href={ev.registration_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline mt-1 inline-block"
-                        >
-                          Register
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <EventList
+            view={view}
+            events={displayed}
+            loading={loading}
+            onDelete={handleDelete}
+          />
         )}
       </div>
     </div>

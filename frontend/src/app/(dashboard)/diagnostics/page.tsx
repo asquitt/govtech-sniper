@@ -2,8 +2,6 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Header } from "@/components/layout/header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { diagnosticsApi } from "@/lib/api";
 import { createWebSocket, tokenManager } from "@/lib/api/client";
@@ -15,6 +13,9 @@ import type {
   WebSocketDiagnosticsThresholds,
   WebSocketDiagnosticsSnapshot,
 } from "@/types";
+import { WebSocketTaskFeed } from "./_components/WebSocketTaskFeed";
+import { CollaborativeProbe } from "./_components/CollaborativeProbe";
+import { RecentEvents } from "./_components/RecentEvents";
 
 type SocketStatus = "connecting" | "connected" | "disconnected" | "error";
 
@@ -240,9 +241,6 @@ export default function DiagnosticsPage() {
   const filteredEvents =
     eventFilter === "all" ? events : events.filter((event) => event.type === eventFilter);
 
-  const parsedProposalId = Number(proposalId) || 0;
-  const parsedSectionId = Number(sectionId) || 0;
-
   const statusVariant =
     socketStatus === "connected"
       ? "success"
@@ -251,6 +249,26 @@ export default function DiagnosticsPage() {
         : socketStatus === "error"
           ? "destructive"
           : "outline";
+
+  const handleExportTelemetry = async () => {
+    setIsExportingTelemetry(true);
+    try {
+      const blob = await diagnosticsApi.exportWebsocketTelemetryCsv({
+        ...alertThresholds,
+        include_alerts: true,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "websocket_diagnostics.csv";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setIsExportingTelemetry(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -272,368 +290,47 @@ export default function DiagnosticsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        <Card className="border border-border">
-          <CardHeader>
-            <CardTitle>WebSocket Task Feed</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Connection status</p>
-                <Badge className="mt-1" variant={statusVariant}>
-                  {socketStatus}
-                </Badge>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Last message</p>
-                <p className="mt-1 font-medium">{lastMessageType}</p>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Task status</p>
-                <p className="mt-1 font-medium">{lastTaskStatus}</p>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Presence telemetry</p>
-                <p className="mt-1 font-medium">
-                  {presenceUsers.length} users / {locks.length} locks / {cursors.length} cursors
-                </p>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Active probe task id: <span className="font-mono">{diagnosticsTaskId}</span>
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Task-watch latency</p>
-                <p className="mt-1 font-medium" data-testid="telemetry-task-latency">
-                  {telemetry?.task_watch.avg_status_latency_ms != null
-                    ? `${telemetry.task_watch.avg_status_latency_ms}ms avg / ${telemetry.task_watch.p95_status_latency_ms ?? "n/a"}ms p95`
-                    : "n/a"}
-                </p>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Reconnect counts</p>
-                <p className="mt-1 font-medium" data-testid="telemetry-reconnect-count">
-                  server {telemetry?.connections.reconnect_count ?? 0} / local{" "}
-                  {manualReconnects}
-                </p>
-              </div>
-              <div className="rounded-md border border-border p-3">
-                <p className="text-xs text-muted-foreground">Event throughput</p>
-                <p className="mt-1 font-medium" data-testid="telemetry-throughput">
-                  in {telemetry?.event_throughput.inbound_events_per_minute ?? 0}/min, out{" "}
-                  {telemetry?.event_throughput.outbound_events_per_minute ?? 0}/min
-                </p>
-              </div>
-            </div>
-            <div className="rounded-md border border-border p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-foreground">
-                  Alert Threshold Evaluation
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isEvaluatingAlerts}
-                    onClick={() => {
-                      void fetchAlerts();
-                    }}
-                  >
-                    Evaluate Alerts
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isExportingTelemetry}
-                    onClick={async () => {
-                      setIsExportingTelemetry(true);
-                      try {
-                        const blob = await diagnosticsApi.exportWebsocketTelemetryCsv({
-                          ...alertThresholds,
-                          include_alerts: true,
-                        });
-                        const url = window.URL.createObjectURL(blob);
-                        const link = document.createElement("a");
-                        link.href = url;
-                        link.download = "websocket_diagnostics.csv";
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        window.URL.revokeObjectURL(url);
-                      } finally {
-                        setIsExportingTelemetry(false);
-                      }
-                    }}
-                    data-testid="diagnostics-export-telemetry"
-                  >
-                    Export Telemetry CSV
-                  </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-3">
-                <label className="space-y-1 text-muted-foreground">
-                  Max avg latency (ms)
-                  <input
-                    aria-label="Max avg latency threshold"
-                    type="number"
-                    className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
-                    value={alertThresholds.max_avg_status_latency_ms}
-                    onChange={(event) =>
-                      setAlertThresholds((prev) => ({
-                        ...prev,
-                        max_avg_status_latency_ms:
-                          Number.parseFloat(event.target.value) || 0,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="space-y-1 text-muted-foreground">
-                  Max reconnects
-                  <input
-                    aria-label="Max reconnect threshold"
-                    type="number"
-                    className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
-                    value={alertThresholds.max_reconnect_count}
-                    onChange={(event) =>
-                      setAlertThresholds((prev) => ({
-                        ...prev,
-                        max_reconnect_count:
-                          Number.parseInt(event.target.value, 10) || 0,
-                      }))
-                    }
-                  />
-                </label>
-                <label className="space-y-1 text-muted-foreground">
-                  Min active connections
-                  <input
-                    aria-label="Min active connection threshold"
-                    type="number"
-                    className="h-8 w-full rounded border border-input bg-background px-2 text-xs"
-                    value={alertThresholds.min_active_connection_count}
-                    onChange={(event) =>
-                      setAlertThresholds((prev) => ({
-                        ...prev,
-                        min_active_connection_count:
-                          Number.parseInt(event.target.value, 10) || 0,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
-              <p
-                className="text-xs text-muted-foreground"
-                data-testid="diagnostics-alert-count"
-              >
-                Breached alerts: {alertSnapshot?.breached_count ?? 0}
-              </p>
-              {alertSnapshot && alertSnapshot.alerts.length > 0 ? (
-                <div className="space-y-1">
-                  {alertSnapshot.alerts
-                    .filter((alert) => alert.breached)
-                    .slice(0, 5)
-                    .map((alert) => (
-                      <div
-                        key={alert.code}
-                        className="rounded border border-border/60 px-2 py-1 text-xs"
-                        data-testid={`diagnostics-alert-${alert.code}`}
-                      >
-                        {alert.code}: {alert.metric} ({alert.actual} vs {alert.threshold})
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No active alert breaches.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <WebSocketTaskFeed
+          socketStatus={socketStatus}
+          statusVariant={statusVariant}
+          lastMessageType={lastMessageType}
+          lastTaskStatus={lastTaskStatus}
+          presenceCount={presenceUsers.length}
+          lockCount={locks.length}
+          cursorCount={cursors.length}
+          diagnosticsTaskId={diagnosticsTaskId}
+          telemetry={telemetry}
+          manualReconnects={manualReconnects}
+          alertThresholds={alertThresholds}
+          onAlertThresholdsChange={setAlertThresholds}
+          alertSnapshot={alertSnapshot}
+          isEvaluatingAlerts={isEvaluatingAlerts}
+          isExportingTelemetry={isExportingTelemetry}
+          onEvaluateAlerts={() => void fetchAlerts()}
+          onExportTelemetry={() => void handleExportTelemetry()}
+        />
 
-        <Card className="border border-border">
-          <CardHeader>
-            <CardTitle>Collaborative Probe</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-              <label className="text-xs text-muted-foreground">
-                Proposal ID
-                <input
-                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                  value={proposalId}
-                  onChange={(event) => setProposalId(event.target.value)}
-                />
-              </label>
-              <label className="text-xs text-muted-foreground">
-                Section ID
-                <input
-                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                  value={sectionId}
-                  onChange={(event) => setSectionId(event.target.value)}
-                />
-              </label>
-              <label className="text-xs text-muted-foreground">
-                User label
-                <input
-                  className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1 text-sm"
-                  value={participantName}
-                  onChange={(event) => setParticipantName(event.target.value)}
-                />
-              </label>
-            </div>
+        <CollaborativeProbe
+          proposalId={proposalId}
+          sectionId={sectionId}
+          participantName={participantName}
+          onProposalIdChange={setProposalId}
+          onSectionIdChange={setSectionId}
+          onParticipantNameChange={setParticipantName}
+          onSendMessage={sendMessage}
+          presenceUsers={presenceUsers}
+          locks={locks}
+          cursors={cursors}
+        />
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  sendMessage({
-                    type: "join_document",
-                    proposal_id: parsedProposalId,
-                    user_name: participantName,
-                  })
-                }
-              >
-                Join Document
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  sendMessage({
-                    type: "leave_document",
-                    proposal_id: parsedProposalId,
-                  })
-                }
-              >
-                Leave Document
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  sendMessage({
-                    type: "lock_section",
-                    proposal_id: parsedProposalId,
-                    section_id: parsedSectionId,
-                    user_name: participantName,
-                  })
-                }
-              >
-                Lock Section
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  sendMessage({
-                    type: "unlock_section",
-                    proposal_id: parsedProposalId,
-                    section_id: parsedSectionId,
-                  })
-                }
-              >
-                Unlock Section
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  sendMessage({
-                    type: "cursor_update",
-                    proposal_id: parsedProposalId,
-                    section_id: parsedSectionId,
-                    user_name: participantName,
-                    position: Math.floor(Math.random() * 1000),
-                  })
-                }
-              >
-                Send Cursor
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className="rounded-md border border-border p-3 space-y-1">
-                <p className="font-medium text-foreground">Presence Users</p>
-                {presenceUsers.length === 0 ? (
-                  <p className="text-muted-foreground">No users joined.</p>
-                ) : (
-                  presenceUsers.map((user) => (
-                    <p key={user.user_id} className="text-muted-foreground">
-                      {user.user_name} ({user.user_id})
-                    </p>
-                  ))
-                )}
-              </div>
-              <div className="rounded-md border border-border p-3 space-y-1">
-                <p className="font-medium text-foreground">Section Locks</p>
-                {locks.length === 0 ? (
-                  <p className="text-muted-foreground">No active locks.</p>
-                ) : (
-                  locks.map((lock) => (
-                    <p key={`${lock.section_id}-${lock.user_id}`} className="text-muted-foreground">
-                      Section {lock.section_id} by {lock.user_name}
-                    </p>
-                  ))
-                )}
-              </div>
-              <div className="rounded-md border border-border p-3 space-y-1">
-                <p className="font-medium text-foreground">Cursor Telemetry</p>
-                {cursors.length === 0 ? (
-                  <p className="text-muted-foreground">No cursor updates.</p>
-                ) : (
-                  cursors.map((cursor) => (
-                    <p
-                      key={`${cursor.user_id}-${cursor.section_id ?? "none"}`}
-                      className="text-muted-foreground"
-                    >
-                      {cursor.user_name} @ section {cursor.section_id ?? "-"} pos {cursor.position}
-                    </p>
-                  ))
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle>Recent Events</CardTitle>
-              <select
-                aria-label="Event filter"
-                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-                value={eventFilter}
-                onChange={(event) =>
-                  setEventFilter(event.target.value as (typeof EVENT_FILTER_OPTIONS)[number])
-                }
-              >
-                {EVENT_FILTER_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {filteredEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No events captured yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {filteredEvents.map((item, index) => (
-                  <div
-                    key={`${item.timestamp}-${item.type}-${index}`}
-                    className="rounded-md border border-border px-3 py-2 text-xs"
-                  >
-                    <p className="font-medium">{item.type}</p>
-                    <p className="text-muted-foreground">{new Date(item.timestamp).toLocaleString()}</p>
-                    {item.detail ? <p className="text-muted-foreground">{item.detail}</p> : null}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <RecentEvents
+          events={filteredEvents}
+          eventFilter={eventFilter}
+          filterOptions={EVENT_FILTER_OPTIONS}
+          onFilterChange={(value) =>
+            setEventFilter(value as (typeof EVENT_FILTER_OPTIONS)[number])
+          }
+        />
       </div>
     </div>
   );
