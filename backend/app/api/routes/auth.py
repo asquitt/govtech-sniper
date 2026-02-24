@@ -429,7 +429,7 @@ async def get_current_user_info(
     )
 
 
-@router.put("/me")
+@router.put("/me", response_model=UserResponse)
 async def update_current_user(
     full_name: str | None = None,
     company_name: str | None = None,

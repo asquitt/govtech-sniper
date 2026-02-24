@@ -241,7 +241,10 @@ async def add_outline_section(
     )
 
 
-@router.patch("/proposals/{proposal_id}/outline/sections/{section_id}")
+@router.patch(
+    "/proposals/{proposal_id}/outline/sections/{section_id}",
+    response_model=OutlineSectionRead,
+)
 async def update_outline_section(
     proposal_id: int,
     section_id: int,

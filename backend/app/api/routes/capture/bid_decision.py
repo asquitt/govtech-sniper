@@ -158,7 +158,7 @@ async def submit_human_vote(
     }
 
 
-@router.get("/scorecards/{rfp_id}")
+@router.get("/scorecards/{rfp_id}", response_model=list[ScorecardResponse])
 async def list_scorecards(
     rfp_id: int = Path(..., description="RFP ID"),
     current_user: UserAuth = Depends(get_current_user),
