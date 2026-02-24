@@ -63,7 +63,7 @@ export function QualityScorecard({ proposalId }: { proposalId: number }) {
 
   if (error) {
     return (
-      <div className="rounded-lg border p-4">
+      <div className="rounded-lg border p-4" role="alert">
         <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
           <BarChart3 className="h-4 w-4" /> Quality Scorecard
         </h3>

@@ -26,7 +26,7 @@ export default function IntelligencePage() {
     resources: ResourceAllocation;
   }
 
-  const { data, loading, error } = useAsyncData<IntelligenceData>(
+  const { data, loading, error, refetch } = useAsyncData<IntelligenceData>(
     async () => {
       const [k, wl, b, f, r] = await Promise.all([
         intelligenceApi.getKPIs(),
@@ -54,8 +54,15 @@ export default function IntelligencePage() {
       />
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {error && (
-          <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-            Failed to load intelligence data. Please try again.
+          <div role="alert" className="rounded-md bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between">
+            <span>Failed to load intelligence data. Please try again.</span>
+            <button
+              onClick={refetch}
+              className="ml-4 underline hover:no-underline"
+              aria-label="Retry loading intelligence data"
+            >
+              Retry
+            </button>
           </div>
         )}
         {/* KPI Cards Row */}
