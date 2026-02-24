@@ -13,7 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.contact import AgencyContactDatabase, OpportunityContact
 from app.models.rfp import RFP
@@ -489,6 +489,7 @@ async def extract_contacts(
     auto_link: bool = Query(True, description="Persist extracted contacts and link to opportunity"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> list[ExtractedContactResponse]:
     """AI-extract contacts from an RFP's full text."""
     rfp_result = await session.execute(

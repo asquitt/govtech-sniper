@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.budget_intel import BudgetIntelligence
 from app.models.market_signal import MarketSignal, SignalSubscription, SignalType
@@ -373,6 +373,7 @@ async def ingest_news_signals(
     use_fallback_only: bool = Query(default=False),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> SignalIngestResponse:
     """Ingest news signals from curated government contracting sources."""
     now = datetime.utcnow()
@@ -445,6 +446,7 @@ async def ingest_budget_signals(
     limit: int = Query(default=25, ge=1, le=200),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> SignalIngestResponse:
     """Generate budget-intelligence signals from budget documents and notes."""
     subscription = await _get_subscription(session, current_user.id)
@@ -515,6 +517,7 @@ async def rescore_signals(
     unread_only: bool = Query(default=False),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> SignalRescoreResponse:
     """Recalculate relevance scores using the latest subscription profile."""
     subscription = await _get_subscription(session, current_user.id)
@@ -575,6 +578,7 @@ async def send_signal_digest(
     limit: int = Query(default=25, ge=1, le=100),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> SignalDigestSendResponse:
     """Simulate digest email delivery and return the payload sent to the user."""
     subscription = await _get_subscription(session, current_user.id)

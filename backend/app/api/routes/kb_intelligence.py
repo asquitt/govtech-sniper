@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import UserAuth, get_current_user, resolve_user_id
+from app.api.deps import UserAuth, check_rate_limit, get_current_user, resolve_user_id
 from app.database import get_session
 from app.models.knowledge_base import DocumentType, KnowledgeBaseDocument, ProcessingStatus
 
@@ -211,6 +211,7 @@ async def auto_tag_document(
     user_id: int | None = Query(default=None),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ):
     """
     Auto-tag a document based on its content and metadata.

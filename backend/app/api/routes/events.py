@@ -8,7 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.event import EventType, IndustryEvent
 from app.models.market_signal import SignalSubscription
@@ -229,6 +229,7 @@ async def ingest_events(
     include_curated: bool = Query(default=True),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> EventIngestResponse:
     """Create events from curated government sources and event-like RFP language."""
     now = datetime.utcnow()

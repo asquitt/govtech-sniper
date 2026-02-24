@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.api.deps import get_current_user
+from app.api.deps import check_rate_limit, get_current_user
 from app.database import get_session
 from app.models.award import AwardRecord
 from app.models.budget_intel import BudgetIntelligence
@@ -80,6 +80,7 @@ async def run_research_agent(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> AgentRunResponse:
     rfp = await _get_owned_rfp(session, current_user, rfp_id)
 
@@ -141,6 +142,7 @@ async def run_capture_planning_agent(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> AgentRunResponse:
     rfp = await _get_owned_rfp(session, current_user, rfp_id)
 
@@ -238,6 +240,7 @@ async def run_proposal_prep_agent(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> AgentRunResponse:
     rfp = await _get_owned_rfp(session, current_user, rfp_id)
 
@@ -310,6 +313,7 @@ async def run_competitive_intel_agent(
     rfp_id: int,
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> AgentRunResponse:
     rfp = await _get_owned_rfp(session, current_user, rfp_id)
 

@@ -271,6 +271,7 @@ async def simulate_bid_scenarios(
     rfp_id: int = Path(..., description="RFP ID"),
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
+    _rate_limit: None = Depends(check_rate_limit),
 ) -> dict:
     """
     Run deterministic stress-test scenarios against the latest scorecard.

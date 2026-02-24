@@ -4,13 +4,14 @@ RFP Sniper - Activity Feed Routes
 Paginated activity feed per proposal.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.activity import ActivityFeedEntry, ActivityType
+from app.models.proposal import Proposal
 from app.schemas.activity import ActivityFeedRead
 from app.services.auth_service import UserAuth
 
@@ -27,6 +28,12 @@ async def list_activity(
     session: AsyncSession = Depends(get_session),
 ) -> list[ActivityFeedRead]:
     """Paginated activity feed for a proposal."""
+    proposal_result = await session.execute(
+        select(Proposal).where(Proposal.id == proposal_id, Proposal.user_id == current_user.id)
+    )
+    if not proposal_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
     stmt = (
         select(ActivityFeedEntry)
         .where(
