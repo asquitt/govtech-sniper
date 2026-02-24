@@ -17,6 +17,7 @@ from app.api.deps import check_rate_limit, get_current_user
 from app.config import settings
 from app.database import get_session
 from app.models.user import ClearanceLevel, User, UserProfile, UserTier
+from app.schemas.generation import LogoutResponse, MessageResponse, StatusMessageResponse
 from app.services.audit_service import log_audit_event
 from app.services.auth_service import (
     TokenPair,
@@ -285,7 +286,7 @@ async def enroll_mfa(
     return MfaEnrollResponse(secret=secret, otpauth_url=otpauth_url)
 
 
-@router.post("/mfa/verify")
+@router.post("/mfa/verify", response_model=StatusMessageResponse)
 async def verify_mfa(
     payload: MfaVerifyRequest,
     current_user: UserAuth = Depends(get_current_user),
@@ -314,7 +315,7 @@ async def verify_mfa(
     return {"status": "ok", "message": "MFA enabled"}
 
 
-@router.post("/mfa/disable")
+@router.post("/mfa/disable", response_model=StatusMessageResponse)
 async def disable_mfa(
     payload: MfaDisableRequest,
     current_user: UserAuth = Depends(get_current_user),
@@ -376,7 +377,7 @@ async def refresh_token(
     return create_token_pair(user.id, user.email, user.tier.value)
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=LogoutResponse)
 async def logout(
     current_user: UserAuth = Depends(get_current_user),
 ) -> dict:
@@ -467,7 +468,7 @@ async def update_current_user(
     )
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     request: ChangePasswordRequest,
     current_user: UserAuth = Depends(get_current_user),

@@ -19,6 +19,11 @@ from app.models.capture import (
 )
 from app.models.rfp import RFP
 from app.models.user import UserProfile
+from app.schemas.generation import (
+    BidEvaluateResponse,
+    BidSummaryResponse,
+    BidVoteResponse,
+)
 from app.services.auth_service import UserAuth
 
 router = APIRouter()
@@ -63,7 +68,7 @@ class ScorecardResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.post("/scorecards/{rfp_id}/ai-evaluate")
+@router.post("/scorecards/{rfp_id}/ai-evaluate", response_model=BidEvaluateResponse)
 async def ai_evaluate_bid(
     rfp_id: int = Path(..., description="RFP ID"),
     current_user: UserAuth = Depends(get_current_user),
@@ -113,7 +118,7 @@ async def ai_evaluate_bid(
     }
 
 
-@router.post("/scorecards/{rfp_id}/vote")
+@router.post("/scorecards/{rfp_id}/vote", response_model=BidVoteResponse)
 async def submit_human_vote(
     vote: HumanVoteRequest,
     rfp_id: int = Path(..., description="RFP ID"),
@@ -184,7 +189,7 @@ async def list_scorecards(
     ]
 
 
-@router.get("/scorecards/{rfp_id}/summary")
+@router.get("/scorecards/{rfp_id}/summary", response_model=BidSummaryResponse)
 async def get_bid_summary(
     rfp_id: int = Path(..., description="RFP ID"),
     current_user: UserAuth = Depends(get_current_user),

@@ -24,6 +24,13 @@ from app.config import settings
 from app.database import get_session
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
 from app.models.rfp import ComplianceMatrix
+from app.schemas.generation import (
+    BatchGenerationResponse,
+    CacheRefreshResponse,
+    GenerationProgressResponse,
+    GenerationStatusResponse,
+    MatrixGenerationResponse,
+)
 from app.schemas.proposal import (
     DraftRequest,
     DraftResponse,
@@ -186,7 +193,10 @@ async def _run_synchronous_generation(
     }
 
 
-@router.post("/proposals/{proposal_id}/generate-from-matrix")
+@router.post(
+    "/proposals/{proposal_id}/generate-from-matrix",
+    response_model=MatrixGenerationResponse,
+)
 async def generate_sections_from_matrix(
     proposal_id: int,
     current_user: UserAuth = Depends(get_current_user),
@@ -414,7 +424,10 @@ async def expand_section(
     return ProposalSectionRead.model_validate(section)
 
 
-@router.get("/proposals/{proposal_id}/generation-progress")
+@router.get(
+    "/proposals/{proposal_id}/generation-progress",
+    response_model=GenerationProgressResponse,
+)
 async def get_generation_progress(
     proposal_id: int,
     user_id: int | None = Query(None, description="User ID (optional if authenticated)"),
@@ -583,7 +596,10 @@ async def generate_section_draft(
     )
 
 
-@router.post("/proposals/{proposal_id}/generate-all")
+@router.post(
+    "/proposals/{proposal_id}/generate-all",
+    response_model=BatchGenerationResponse,
+)
 async def generate_all_proposal_sections(
     proposal_id: int,
     max_words: int = Query(500, ge=100, le=2000),
@@ -623,7 +639,7 @@ async def generate_all_proposal_sections(
     }
 
 
-@router.post("/refresh-cache")
+@router.post("/refresh-cache", response_model=CacheRefreshResponse)
 async def trigger_cache_refresh(
     ttl_hours: int = Query(24, ge=1, le=168, description="Cache TTL in hours"),
     current_user: UserAuth = Depends(get_current_user),
@@ -647,7 +663,7 @@ async def trigger_cache_refresh(
     }
 
 
-@router.get("/{task_id}/status")
+@router.get("/{task_id}/status", response_model=GenerationStatusResponse)
 async def get_generation_status(
     task_id: str,
     current_user: UserAuth = Depends(get_current_user),

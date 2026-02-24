@@ -22,6 +22,12 @@ from app.config import settings
 from app.database import get_session
 from app.models.outline import OutlineSection, OutlineStatus, ProposalOutline
 from app.models.proposal import Proposal, ProposalSection, SectionStatus
+from app.schemas.generation import (
+    OutlineApproveResponse,
+    OutlineDeleteResponse,
+    OutlineReorderResponse,
+    OutlineTaskResponse,
+)
 from app.schemas.outline import (
     OutlineRead,
     OutlineReorderRequest,
@@ -108,7 +114,10 @@ async def _run_outline_generation_sync(
     }
 
 
-@router.post("/proposals/{proposal_id}/generate-outline")
+@router.post(
+    "/proposals/{proposal_id}/generate-outline",
+    response_model=OutlineTaskResponse,
+)
 async def generate_outline(
     proposal_id: int,
     current_user: UserAuth = Depends(get_current_user),
@@ -281,7 +290,10 @@ async def update_outline_section(
     )
 
 
-@router.delete("/proposals/{proposal_id}/outline/sections/{section_id}")
+@router.delete(
+    "/proposals/{proposal_id}/outline/sections/{section_id}",
+    response_model=OutlineDeleteResponse,
+)
 async def delete_outline_section(
     proposal_id: int,
     section_id: int,
@@ -319,7 +331,10 @@ async def delete_outline_section(
     return {"message": "Section deleted", "section_id": section_id}
 
 
-@router.put("/proposals/{proposal_id}/outline/reorder")
+@router.put(
+    "/proposals/{proposal_id}/outline/reorder",
+    response_model=OutlineReorderResponse,
+)
 async def reorder_outline(
     proposal_id: int,
     body: OutlineReorderRequest,
@@ -351,7 +366,10 @@ async def reorder_outline(
     return {"message": "Outline reordered", "sections_updated": len(body.items)}
 
 
-@router.post("/proposals/{proposal_id}/outline/approve")
+@router.post(
+    "/proposals/{proposal_id}/outline/approve",
+    response_model=OutlineApproveResponse,
+)
 async def approve_outline(
     proposal_id: int,
     user_id: int | None = Query(None),

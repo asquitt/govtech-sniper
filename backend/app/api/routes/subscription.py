@@ -11,6 +11,7 @@ from sqlmodel import select
 from app.api.deps import get_current_user
 from app.database import get_session
 from app.models.user import User
+from app.schemas.generation import SubscriptionStatusResponse
 from app.services.auth_service import UserAuth
 from app.services.subscription_service import (
     CheckoutSessionResponse,
@@ -54,7 +55,7 @@ async def usage(
     return await get_usage_stats(current_user.id, session)
 
 
-@router.get("/status")
+@router.get("/status", response_model=SubscriptionStatusResponse)
 async def subscription_status(
     current_user: UserAuth = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
