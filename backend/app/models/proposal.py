@@ -200,7 +200,7 @@ class ProposalSection(ProposalSectionBase, table=True):
     display_order: int = Field(default=0)
 
     # Section assignment
-    assigned_to_user_id: int | None = Field(default=None, foreign_key="users.id")
+    assigned_to_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
     assigned_at: datetime | None = None
 
     # Timestamps
@@ -253,7 +253,7 @@ class ProposalVersion(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     proposal_id: int = Field(foreign_key="proposals.id", index=True)
-    user_id: int = Field(foreign_key="users.id")
+    user_id: int = Field(foreign_key="users.id", index=True)
 
     # Version info
     version_number: int = Field(default=1)
@@ -264,7 +264,7 @@ class ProposalVersion(SQLModel, table=True):
     snapshot: dict = Field(default={}, sa_column=Column(JSON))
 
     # Section-specific changes (if applicable)
-    section_id: int | None = Field(default=None, foreign_key="proposal_sections.id")
+    section_id: int | None = Field(default=None, foreign_key="proposal_sections.id", index=True)
     section_snapshot: dict | None = Field(default=None, sa_column=Column(JSON))
 
     # Timestamps
@@ -281,7 +281,7 @@ class SectionVersion(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     section_id: int = Field(foreign_key="proposal_sections.id", index=True)
-    user_id: int = Field(foreign_key="users.id")
+    user_id: int = Field(foreign_key="users.id", index=True)
 
     # Version info
     version_number: int
@@ -317,7 +317,7 @@ class SubmissionPackage(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     proposal_id: int = Field(foreign_key="proposals.id", index=True)
-    owner_id: int | None = Field(default=None, foreign_key="users.id")
+    owner_id: int | None = Field(default=None, foreign_key="users.id", index=True)
 
     title: str = Field(max_length=255)
     status: SubmissionPackageStatus = Field(default=SubmissionPackageStatus.DRAFT)
@@ -351,7 +351,7 @@ class SectionEvidence(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     section_id: int = Field(foreign_key="proposal_sections.id", index=True)
     document_id: int = Field(foreign_key="knowledge_base_documents.id", index=True)
-    chunk_id: int | None = Field(default=None, foreign_key="document_chunks.id")
+    chunk_id: int | None = Field(default=None, foreign_key="document_chunks.id", index=True)
 
     citation: str | None = Field(default=None, sa_column=Column(Text))
     notes: str | None = Field(default=None, sa_column=Column(Text))

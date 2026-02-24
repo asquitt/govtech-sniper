@@ -34,6 +34,6 @@ class ActivityFeedEntry(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True)
     activity_type: ActivityType
     summary: str = Field(max_length=500)
-    section_id: int | None = Field(default=None, foreign_key="proposal_sections.id")
+    section_id: int | None = Field(default=None, foreign_key="proposal_sections.id", index=True)
     metadata_json: dict | None = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

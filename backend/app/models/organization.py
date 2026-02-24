@@ -110,7 +110,7 @@ class OrganizationInvitation(SQLModel, table=True):
     token: str = Field(max_length=255, unique=True, index=True)
     status: InvitationStatus = Field(default=InvitationStatus.PENDING)
     expires_at: datetime
-    accepted_user_id: int | None = Field(default=None, foreign_key="users.id")
+    accepted_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
     activated_at: datetime | None = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

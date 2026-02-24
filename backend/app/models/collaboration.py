@@ -87,7 +87,7 @@ class WorkspaceInvitation(SQLModel, table=True):
     token: str = Field(max_length=255, sa_column=Column(String(255), unique=True))
     expires_at: datetime
     is_accepted: bool = Field(default=False)
-    accepted_user_id: int | None = Field(default=None, foreign_key="users.id")
+    accepted_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -116,7 +116,7 @@ class SharedDataPermission(SQLModel, table=True):
     entity_id: int  # ID of the shared entity (rfp_id, proposal_id, etc.)
     requires_approval: bool = Field(default=False)
     approval_status: ShareApprovalStatus = Field(default=ShareApprovalStatus.APPROVED)
-    approved_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    approved_by_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
     approved_at: datetime | None = Field(default=None)
     expires_at: datetime | None = Field(default=None, index=True)
     partner_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
@@ -160,7 +160,7 @@ class WorkspaceComplianceDigestDelivery(SQLModel, table=True):
     status: ComplianceDigestDeliveryStatus = Field(default=ComplianceDigestDeliveryStatus.SUCCESS)
     attempt_number: int = Field(default=1, ge=1)
     retry_of_delivery_id: int | None = Field(
-        default=None, foreign_key="workspace_compliance_digest_deliveries.id"
+        default=None, foreign_key="workspace_compliance_digest_deliveries.id", index=True
     )
     channel: ComplianceDigestChannel = Field(default=ComplianceDigestChannel.IN_APP)
     recipient_role: ComplianceDigestRecipientRole = Field(default=ComplianceDigestRecipientRole.ALL)

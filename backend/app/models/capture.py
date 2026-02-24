@@ -199,7 +199,7 @@ class CaptureActivity(SQLModel, table=True):
     is_milestone: bool = Field(default=False)
     status: ActivityStatus = Field(default=ActivityStatus.PLANNED)
     sort_order: int = Field(default=0)
-    depends_on_id: int | None = Field(default=None, foreign_key="capture_activities.id")
+    depends_on_id: int | None = Field(default=None, foreign_key="capture_activities.id", index=True)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -282,7 +282,7 @@ class TeamingNDA(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
-    rfp_id: int | None = Field(default=None, foreign_key="rfps.id")
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id", index=True)
     status: NDAStatus = Field(default=NDAStatus.DRAFT)
     signed_date: date | None = None
     expiry_date: date | None = None
@@ -305,7 +305,7 @@ class TeamingPerformanceRating(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", index=True)
     partner_id: int = Field(foreign_key="teaming_partners.id", index=True)
-    rfp_id: int | None = Field(default=None, foreign_key="rfps.id")
+    rfp_id: int | None = Field(default=None, foreign_key="rfps.id", index=True)
     rating: int = Field(ge=1, le=5)  # overall 1-5
     responsiveness: int | None = Field(default=None, ge=1, le=5)
     quality: int | None = Field(default=None, ge=1, le=5)

@@ -94,14 +94,14 @@ class ReviewComment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     review_id: int = Field(foreign_key="proposal_reviews.id", index=True)
     section_id: int | None = Field(default=None, foreign_key="proposal_sections.id", index=True)
-    reviewer_user_id: int = Field(foreign_key="users.id")
+    reviewer_user_id: int = Field(foreign_key="users.id", index=True)
     comment_text: str = Field(sa_column=Column(Text))
     severity: CommentSeverity = Field(default=CommentSeverity.MINOR)
     status: CommentStatus = Field(default=CommentStatus.OPEN)
     resolution_note: str | None = Field(default=None, sa_column=Column(Text))
-    assigned_to_user_id: int | None = Field(default=None, foreign_key="users.id")
-    resolved_by_user_id: int | None = Field(default=None, foreign_key="users.id")
-    verified_by_user_id: int | None = Field(default=None, foreign_key="users.id")
+    assigned_to_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
+    resolved_by_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
+    verified_by_user_id: int | None = Field(default=None, foreign_key="users.id", index=True)
     resolved_at: datetime | None = None
     verified_at: datetime | None = None
 
