@@ -78,24 +78,39 @@ async def review_dashboard(
         .order_by(ProposalReview.created_at.desc())
     )
     reviews = reviews_result.scalars().all()
+    if not reviews:
+        return []
+
+    review_ids = [r.id for r in reviews]
+
+    # Batch: comment counts per review (avoids N+1)
+    comment_stats_result = await session.execute(
+        select(
+            ReviewComment.review_id,
+            func.count(ReviewComment.id),
+            func.count(ReviewComment.id).filter(ReviewComment.status == CommentStatus.OPEN),
+        )
+        .where(ReviewComment.review_id.in_(review_ids))
+        .group_by(ReviewComment.review_id)
+    )
+    comment_stats = {row[0]: (row[1], row[2]) for row in comment_stats_result.all()}
+
+    # Batch: assignment counts per review (avoids N+1)
+    assignment_stats_result = await session.execute(
+        select(
+            ReviewAssignment.review_id,
+            func.count(ReviewAssignment.id),
+            func.count(ReviewAssignment.id).filter(ReviewAssignment.status == "completed"),
+        )
+        .where(ReviewAssignment.review_id.in_(review_ids))
+        .group_by(ReviewAssignment.review_id)
+    )
+    assignment_stats = {row[0]: (row[1], row[2]) for row in assignment_stats_result.all()}
 
     items: list[ReviewDashboardItem] = []
     for review in reviews:
-        comment_counts = await session.execute(
-            select(
-                func.count(ReviewComment.id),
-                func.count(ReviewComment.id).filter(ReviewComment.status == CommentStatus.OPEN),
-            ).where(ReviewComment.review_id == review.id)
-        )
-        total_comments, open_comments = comment_counts.one()
-
-        assignment_counts = await session.execute(
-            select(
-                func.count(ReviewAssignment.id),
-                func.count(ReviewAssignment.id).filter(ReviewAssignment.status == "completed"),
-            ).where(ReviewAssignment.review_id == review.id)
-        )
-        total_assignments, completed_assignments = assignment_counts.one()
+        total_comments, open_comments = comment_stats.get(review.id, (0, 0))
+        total_assignments, completed_assignments = assignment_stats.get(review.id, (0, 0))
 
         items.append(
             ReviewDashboardItem(

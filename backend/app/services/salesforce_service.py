@@ -169,13 +169,16 @@ class SalesforceService:
         pulled = 0
         errors: list[str] = []
 
-        # Push: send capture plans to SF
+        # Push: send capture plans to SF (batch-load RFPs to avoid N+1)
         result = await session.execute(select(CapturePlan).where(CapturePlan.owner_id == user_id))
         plans = result.scalars().all()
 
+        rfp_ids = [p.rfp_id for p in plans]
+        rfp_result = await session.execute(select(RFP).where(RFP.id.in_(rfp_ids)))
+        rfp_map = {rfp.id: rfp for rfp in rfp_result.scalars().all()}
+
         for plan in plans:
-            rfp_result = await session.execute(select(RFP).where(RFP.id == plan.rfp_id))
-            rfp = rfp_result.scalar_one_or_none()
+            rfp = rfp_map.get(plan.rfp_id)
             if not rfp:
                 continue
             try:
