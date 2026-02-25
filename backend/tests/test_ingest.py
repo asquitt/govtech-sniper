@@ -218,6 +218,7 @@ class TestIngest:
     async def test_quick_search_returns_429_when_sam_is_rate_limited(
         self,
         client: AsyncClient,
+        auth_headers: dict,
         monkeypatch,
     ):
         monkeypatch.setattr(ingest_routes.settings, "mock_sam_gov", False)
@@ -236,6 +237,7 @@ class TestIngest:
         response = await client.post(
             "/api/v1/ingest/sam/quick-search",
             params={"keywords": "software", "limit": 5, "days_back": 30},
+            headers=auth_headers,
         )
 
         assert response.status_code == 429

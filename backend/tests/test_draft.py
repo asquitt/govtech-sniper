@@ -39,6 +39,7 @@ class TestDraftProposals:
         test_user: User,
         test_rfp: RFP,
         test_document,
+        auth_headers: dict,
     ):
         # Create proposal
         response = await client.post(
@@ -58,6 +59,7 @@ class TestDraftProposals:
                 "requirement_text": "Provide an approach to meet requirements.",
                 "display_order": 0,
             },
+            headers=auth_headers,
         )
         assert response.status_code == 200
         section_id = response.json()["id"]
@@ -126,6 +128,7 @@ class TestDraftProposals:
         db_session,
         test_user: User,
         test_rfp: RFP,
+        auth_headers: dict,
     ):
         matrix = ComplianceMatrix(
             rfp_id=test_rfp.id,
@@ -158,12 +161,16 @@ class TestDraftProposals:
         assert create_proposal.status_code == 200
         proposal_id = create_proposal.json()["id"]
 
-        first_run = await client.post(f"/api/v1/draft/proposals/{proposal_id}/generate-from-matrix")
+        first_run = await client.post(
+            f"/api/v1/draft/proposals/{proposal_id}/generate-from-matrix",
+            headers=auth_headers,
+        )
         assert first_run.status_code == 200
         assert first_run.json()["sections_created"] == 2
 
         second_run = await client.post(
-            f"/api/v1/draft/proposals/{proposal_id}/generate-from-matrix"
+            f"/api/v1/draft/proposals/{proposal_id}/generate-from-matrix",
+            headers=auth_headers,
         )
         assert second_run.status_code == 200
         assert second_run.json()["sections_created"] == 0
@@ -181,6 +188,7 @@ class TestDraftProposals:
         client: AsyncClient,
         test_user: User,
         test_rfp: RFP,
+        auth_headers: dict,
         monkeypatch,
     ):
         from app.api.routes.draft import generation
@@ -206,6 +214,7 @@ class TestDraftProposals:
                 "requirement_text": "Describe technical approach.",
                 "display_order": 0,
             },
+            headers=auth_headers,
         )
         assert create_section.status_code == 200
         section_id = create_section.json()["id"]
@@ -221,7 +230,9 @@ class TestDraftProposals:
         assert generate_data["section_id"] == section_id
         assert generate_data["task_id"].startswith("sync-")
 
-        status = await client.get(f"/api/v1/draft/{generate_data['task_id']}/status")
+        status = await client.get(
+            f"/api/v1/draft/{generate_data['task_id']}/status", headers=auth_headers
+        )
         assert status.status_code == 200
         status_data = status.json()
         assert status_data["status"] == "completed"
@@ -242,6 +253,7 @@ class TestDraftProposals:
         client: AsyncClient,
         test_user: User,
         test_rfp: RFP,
+        auth_headers: dict,
         monkeypatch,
     ):
         from app.api.routes.draft import generation
@@ -268,6 +280,7 @@ class TestDraftProposals:
                 "requirement_text": "Describe technical approach.",
                 "display_order": 0,
             },
+            headers=auth_headers,
         )
         assert create_section.status_code == 200
 
@@ -288,6 +301,7 @@ class TestDraftProposals:
         db_session,
         test_user: User,
         test_rfp: RFP,
+        auth_headers: dict,
         monkeypatch,
     ):
         from app.api.routes.draft import generation, outline
@@ -325,7 +339,7 @@ class TestDraftProposals:
 
         generate_outline = await client.post(
             f"/api/v1/draft/proposals/{proposal_id}/generate-outline",
-            params={"user_id": test_user.id},
+            headers=auth_headers,
         )
         assert generate_outline.status_code == 200
         generate_payload = generate_outline.json()
@@ -347,6 +361,7 @@ class TestDraftProposals:
         client: AsyncClient,
         test_user: User,
         test_rfp: RFP,
+        auth_headers: dict,
         monkeypatch,
     ):
         from app.api.routes.draft import generation
@@ -378,6 +393,7 @@ class TestDraftProposals:
                 "requirement_text": "Describe technical approach.",
                 "display_order": 0,
             },
+            headers=auth_headers,
         )
         assert create_section.status_code == 200
 
@@ -396,6 +412,7 @@ class TestDraftProposals:
         client: AsyncClient,
         test_user: User,
         test_rfp: RFP,
+        auth_headers: dict,
         monkeypatch,
     ):
         from app.api.routes.draft import generation
@@ -427,6 +444,7 @@ class TestDraftProposals:
                 "requirement_text": "Describe technical approach.",
                 "display_order": 0,
             },
+            headers=auth_headers,
         )
         assert create_section.status_code == 200
 

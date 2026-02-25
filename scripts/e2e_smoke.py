@@ -267,9 +267,7 @@ def main() -> int:
             print("Graphics request created.")
 
             # Export DOCX
-            resp = client.get(
-                f"{base_url}/api/v1/export/proposals/{proposal_id}/docx"
-            )
+            resp = client.get(f"{base_url}/api/v1/export/proposals/{proposal_id}/docx")
             if resp.status_code == 200:
                 print("DOCX export succeeded.")
             else:

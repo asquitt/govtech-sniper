@@ -37,10 +37,10 @@ class TestDocxExport:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.export.create_docx_proposal")
-    @patch("app.api.routes.export.evaluate")
-    @patch("app.api.routes.export.get_user_policy_role", new_callable=AsyncMock)
-    @patch("app.api.routes.export.log_audit_event", new_callable=AsyncMock)
+    @patch("app.api.routes.export.documents.create_docx_proposal")
+    @patch("app.api.routes.export.documents.evaluate")
+    @patch("app.api.routes.export.documents.get_user_policy_role", new_callable=AsyncMock)
+    @patch("app.api.routes.export.documents.log_audit_event", new_callable=AsyncMock)
     async def test_docx_export_success(
         self,
         mock_audit: AsyncMock,
@@ -142,10 +142,10 @@ class TestPdfExport:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.export.create_pdf_proposal")
-    @patch("app.api.routes.export.evaluate")
-    @patch("app.api.routes.export.get_user_policy_role", new_callable=AsyncMock)
-    @patch("app.api.routes.export.log_audit_event", new_callable=AsyncMock)
+    @patch("app.api.routes.export.documents.create_pdf_proposal")
+    @patch("app.api.routes.export.documents.evaluate")
+    @patch("app.api.routes.export.documents.get_user_policy_role", new_callable=AsyncMock)
+    @patch("app.api.routes.export.documents.log_audit_event", new_callable=AsyncMock)
     async def test_pdf_export_success(
         self,
         mock_audit: AsyncMock,
@@ -177,9 +177,9 @@ class TestPdfExport:
         assert ".pdf" in response.headers["Content-Disposition"]
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.export.evaluate")
-    @patch("app.api.routes.export.get_user_policy_role", new_callable=AsyncMock)
-    @patch("app.api.routes.export.log_audit_event", new_callable=AsyncMock)
+    @patch("app.api.routes.export.documents.evaluate")
+    @patch("app.api.routes.export.documents.get_user_policy_role", new_callable=AsyncMock)
+    @patch("app.api.routes.export.documents.log_audit_event", new_callable=AsyncMock)
     async def test_pdf_export_policy_deny(
         self,
         mock_audit: AsyncMock,
@@ -271,11 +271,11 @@ class TestCompliancePackageExport:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.export.create_docx_proposal")
-    @patch("app.api.routes.export.evaluate")
-    @patch("app.api.routes.export.get_user_policy_role", new_callable=AsyncMock)
-    @patch("app.api.routes.export.get_user_org_security_policy", new_callable=AsyncMock)
-    @patch("app.api.routes.export.log_audit_event", new_callable=AsyncMock)
+    @patch("app.api.routes.export.compliance.create_docx_proposal")
+    @patch("app.api.routes.export.compliance.evaluate")
+    @patch("app.api.routes.export.compliance.get_user_policy_role", new_callable=AsyncMock)
+    @patch("app.api.routes.export.compliance.get_user_org_security_policy", new_callable=AsyncMock)
+    @patch("app.api.routes.export.compliance.log_audit_event", new_callable=AsyncMock)
     async def test_zip_export_success(
         self,
         mock_audit: AsyncMock,

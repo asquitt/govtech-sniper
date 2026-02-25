@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.organization import (
     Organization,
-    OrganizationMembership,
-    OrganizationRole,
+    OrganizationMember,
+    OrgRole,
 )
 from app.models.user import User
 
@@ -33,10 +33,13 @@ async def test_org(db_session: AsyncSession, test_user: User) -> Organization:
     await db_session.commit()
     await db_session.refresh(org)
 
-    membership = OrganizationMembership(
+    test_user.organization_id = org.id
+    db_session.add(test_user)
+
+    membership = OrganizationMember(
         organization_id=org.id,
         user_id=test_user.id,
-        role=OrganizationRole.OWNER,
+        role=OrgRole.OWNER,
         is_active=True,
     )
     db_session.add(membership)
@@ -125,7 +128,7 @@ class TestInviteMember:
             json={"email": "newmember@example.com"},
             headers=auth_headers,
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 201
 
     @pytest.mark.asyncio
     async def test_invite_member_requires_auth(self, client: AsyncClient):

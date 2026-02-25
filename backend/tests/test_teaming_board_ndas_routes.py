@@ -89,27 +89,26 @@ class TestCreateNDA:
         assert data["notes"] == "Executed NDA for Project X"
 
     @pytest.mark.asyncio
-    async def test_create_nda_with_dates_serialization_bug(
+    async def test_create_nda_with_dates(
         self,
         client: AsyncClient,
         auth_headers: dict,
         partner: TeamingPartner,
     ) -> None:
-        """Known bug: NDARead expects str for dates but the route stores date objects.
-        This results in a pydantic ValidationError during response serialization.
-        The ASGI test transport propagates the exception rather than returning 500."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="signed_date"):
-            await client.post(
-                f"{BASE}/ndas",
-                headers=auth_headers,
-                json={
-                    "partner_id": partner.id,
-                    "signed_date": "2025-01-15",
-                    "expiry_date": "2026-01-15",
-                },
-            )
+        """NDARead schema uses date types for signed_date/expiry_date."""
+        resp = await client.post(
+            f"{BASE}/ndas",
+            headers=auth_headers,
+            json={
+                "partner_id": partner.id,
+                "signed_date": "2025-01-15",
+                "expiry_date": "2026-01-15",
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["signed_date"] == "2025-01-15"
+        assert data["expiry_date"] == "2026-01-15"
 
 
 class TestListNDAs:
@@ -227,25 +226,25 @@ class TestUpdateNDA:
         assert resp.json()["status"] == "signed"
 
     @pytest.mark.asyncio
-    async def test_update_nda_dates_serialization_bug(
+    async def test_update_nda_dates(
         self,
         client: AsyncClient,
         auth_headers: dict,
         nda: TeamingNDA,
     ) -> None:
-        """Known bug: NDARead expects str for dates but the route stores date objects.
-        The ASGI test transport propagates the exception rather than returning 500."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="signed_date"):
-            await client.patch(
-                f"{BASE}/ndas/{nda.id}",
-                headers=auth_headers,
-                json={
-                    "signed_date": "2025-06-01",
-                    "expiry_date": "2026-06-01",
-                },
-            )
+        """Update NDA dates successfully."""
+        resp = await client.patch(
+            f"{BASE}/ndas/{nda.id}",
+            headers=auth_headers,
+            json={
+                "signed_date": "2025-06-01",
+                "expiry_date": "2026-06-01",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["signed_date"] == "2025-06-01"
+        assert data["expiry_date"] == "2026-06-01"
 
     @pytest.mark.asyncio
     async def test_update_nda_notes_and_path(

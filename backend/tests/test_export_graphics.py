@@ -1,6 +1,6 @@
 """Unit tests for graphics-aware export rendering helpers."""
 
-from app.api.routes.export import _render_html_to_docx
+from app.api.routes.export.helpers import render_html_to_docx
 
 
 class _FakeRunFont:
@@ -33,14 +33,14 @@ class _FakeDocument:
         self.headings.append((text, level))
 
 
-def test_render_html_to_docx_includes_mermaid_code_block():
+def testrender_html_to_docx_includes_mermaid_code_block():
     doc = _FakeDocument()
     html = """
     <h4>Graphic: Timeline</h4>
     <pre><code class=\"language-mermaid\">flowchart TD\nA-->B\nB-->C</code></pre>
     """
 
-    _render_html_to_docx(doc, html)
+    render_html_to_docx(doc, html)
 
     assert ("Graphic: Timeline", 4) in doc.headings
     assert any("flowchart TD" in paragraph.text for paragraph in doc.paragraphs)

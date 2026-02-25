@@ -36,9 +36,9 @@ class TestSemanticSearch:
             {
                 "entity_type": "rfp",
                 "entity_id": 1,
-                "title": "Cybersecurity RFP",
-                "snippet": "DoD cybersecurity services contract",
+                "chunk_text": "DoD cybersecurity services contract",
                 "score": 0.92,
+                "chunk_index": 0,
             }
         ]
         response = await client.post(
@@ -86,9 +86,9 @@ class TestSemanticSearch:
             {
                 "entity_type": "proposal",
                 "entity_id": 5,
-                "title": "My Proposal",
-                "snippet": "Proposal content",
+                "chunk_text": "Proposal content",
                 "score": 0.85,
+                "chunk_index": 0,
             }
         ]
         response = await client.post(
@@ -186,9 +186,9 @@ class TestSemanticSearch:
             {
                 "entity_type": "document",
                 "entity_id": 10,
-                "title": "Capability Statement",
-                "snippet": "Our core capabilities include...",
+                "chunk_text": "Our core capabilities include...",
                 "score": 0.77,
+                "chunk_index": 2,
             }
         ]
         response = await client.post(
@@ -200,8 +200,8 @@ class TestSemanticSearch:
         result = response.json()["results"][0]
         assert "entity_type" in result
         assert "entity_id" in result
-        assert "title" in result
-        assert "snippet" in result
+        assert "chunk_text" in result
+        assert "chunk_index" in result
         assert "score" in result
 
     @pytest.mark.asyncio

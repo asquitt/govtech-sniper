@@ -10,6 +10,8 @@ Integration tests for analyze.py:
   - POST /api/v1/analyze/{rfp_id}/filter     (trigger killer filter)
 """
 
+from unittest.mock import patch
+
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -94,36 +96,53 @@ class TestTriggerAnalysis:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_trigger_idor(self, client: AsyncClient, other_user_headers: dict, test_rfp: RFP):
+    @patch("app.api.routes.analyze.settings")
+    async def test_trigger_idor(
+        self, mock_settings, client: AsyncClient, other_user_headers: dict, test_rfp: RFP
+    ):
         """Another user's RFP returns 404."""
+        mock_settings.gemini_api_key = "fake-key"
+        mock_settings.mock_ai = False
         resp = await client.post(f"/api/v1/analyze/{test_rfp.id}", headers=other_user_headers)
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_trigger_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
+    @patch("app.api.routes.analyze.settings")
+    async def test_trigger_rfp_not_found(
+        self, mock_settings, client: AsyncClient, auth_headers: dict
+    ):
         """Non-existent RFP returns 404."""
+        mock_settings.gemini_api_key = "fake-key"
+        mock_settings.mock_ai = False
         resp = await client.post("/api/v1/analyze/999999", headers=auth_headers)
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
+    @patch("app.api.routes.analyze.settings")
     async def test_trigger_rfp_no_content_returns_400(
-        self, client: AsyncClient, auth_headers: dict, test_rfp: RFP
+        self, mock_settings, client: AsyncClient, auth_headers: dict, test_rfp: RFP
     ):
         """RFP with no full_text or description returns 400."""
+        mock_settings.gemini_api_key = "fake-key"
+        mock_settings.mock_ai = False
         # test_rfp has no full_text and no description by default
         resp = await client.post(f"/api/v1/analyze/{test_rfp.id}", headers=auth_headers)
         assert resp.status_code == 400
         assert "no text content" in resp.json()["detail"].lower()
 
     @pytest.mark.asyncio
+    @patch("app.api.routes.analyze.settings")
     async def test_trigger_already_analyzed(
         self,
+        mock_settings,
         client: AsyncClient,
         auth_headers: dict,
         test_rfp: RFP,
         db_session: AsyncSession,
     ):
         """Already-analyzed RFP returns status already_completed."""
+        mock_settings.gemini_api_key = "fake-key"
+        mock_settings.mock_ai = False
         test_rfp.status = RFPStatus.ANALYZED
         test_rfp.full_text = "Some content"
         db_session.add(test_rfp)
@@ -618,7 +637,11 @@ class TestTriggerKillerFilter:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_filter_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
+    @patch("app.api.routes.analyze.settings")
+    async def test_filter_rfp_not_found(
+        self, mock_settings, client: AsyncClient, auth_headers: dict
+    ):
         """Non-existent RFP returns 404."""
+        mock_settings.gemini_api_key = "fake-key"
         resp = await client.post("/api/v1/analyze/999999/filter", headers=auth_headers)
         assert resp.status_code == 404

@@ -10,7 +10,8 @@ class TestTriggerSamIngest:
     """Tests for POST /api/v1/ingest/sam."""
 
     @pytest.mark.asyncio
-    async def test_ingest_unauthenticated(self, client: AsyncClient):
+    async def test_ingest_without_auth_returns_401(self, client: AsyncClient):
+        """Without auth headers, the route returns 401."""
         response = await client.post(
             "/api/v1/ingest/sam",
             json={"keywords": "IT services"},

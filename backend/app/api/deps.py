@@ -58,7 +58,7 @@ async def get_current_user_optional(
         email=user.email,
         full_name=user.full_name,
         company_name=user.company_name,
-        tier=user.tier.value,
+        tier=user.tier.value if hasattr(user.tier, "value") else user.tier,
         is_active=user.is_active,
     )
 
@@ -102,7 +102,7 @@ async def get_current_user(
         email=user.email,
         full_name=user.full_name,
         company_name=user.company_name,
-        tier=user.tier.value,
+        tier=user.tier.value if hasattr(user.tier, "value") else user.tier,
         is_active=user.is_active,
     )
 

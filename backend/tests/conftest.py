@@ -24,7 +24,7 @@ from app.main import app
 from app.models.knowledge_base import KnowledgeBaseDocument
 from app.models.proposal import Proposal
 from app.models.rfp import RFP
-from app.models.user import User
+from app.models.user import User, UserTier
 from app.services.auth_service import create_token_pair, hash_password
 from app.services.cache_service import cache_clear
 
@@ -91,6 +91,23 @@ async def reset_cache() -> AsyncGenerator[None, None]:
     await cache_clear()
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def reset_rate_limits() -> AsyncGenerator[None, None]:
+    """Flush rate limit keys from Redis so tests don't hit stale limits."""
+    from app.api.deps import rate_limiter
+
+    try:
+        r = await rate_limiter._get_redis()
+        keys = []
+        async for key in r.scan_iter("rate:*"):
+            keys.append(key)
+        if keys:
+            await r.delete(*keys)
+    except Exception:
+        pass  # Redis unavailable — rate limiter will fail open
+    yield
+
+
 @pytest_asyncio.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Create test client with database session override."""
@@ -117,7 +134,7 @@ async def test_user(db_session: AsyncSession) -> User:
         hashed_password=hash_password("TestPassword123!"),
         full_name="Test User",
         company_name="Test Company",
-        tier="professional",
+        tier=UserTier.PROFESSIONAL,
         is_active=True,
         is_verified=True,
     )

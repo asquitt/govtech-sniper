@@ -152,6 +152,10 @@ class TestSharePointRoutes:
             "app.api.routes.export.create_docx_proposal",
             lambda _proposal, _sections, _rfp: b"docx-bytes",
         )
+        monkeypatch.setattr(
+            "app.api.routes.export.documents.create_docx_proposal",
+            lambda _proposal, _sections, _rfp: b"docx-bytes",
+        )
 
         await _create_sharepoint_integration(client, auth_headers)
 

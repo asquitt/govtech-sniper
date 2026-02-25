@@ -280,21 +280,25 @@ class TestSeedTemplates:
     """Tests for seeding system templates."""
 
     @pytest.mark.asyncio
-    async def test_seed_system_templates(self, client: AsyncClient):
+    async def test_seed_system_templates(self, client: AsyncClient, auth_headers: dict):
         """Test seeding system templates."""
-        response = await client.post("/api/v1/templates/seed-system-templates")
+        response = await client.post(
+            "/api/v1/templates/seed-system-templates", headers=auth_headers
+        )
         assert response.status_code == 200
         data = response.json()
         assert "created" in data["message"].lower() or data["total_system_templates"] > 0
 
     @pytest.mark.asyncio
-    async def test_seed_templates_idempotent(self, client: AsyncClient):
+    async def test_seed_templates_idempotent(self, client: AsyncClient, auth_headers: dict):
         """Test that seeding is idempotent."""
         # Seed once
-        await client.post("/api/v1/templates/seed-system-templates")
+        await client.post("/api/v1/templates/seed-system-templates", headers=auth_headers)
 
         # Seed again
-        response = await client.post("/api/v1/templates/seed-system-templates")
+        response = await client.post(
+            "/api/v1/templates/seed-system-templates", headers=auth_headers
+        )
         assert response.status_code == 200
         # Second seed should create 0 new templates
         data = response.json()

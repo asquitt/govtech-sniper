@@ -105,9 +105,9 @@ class TestRFPDetail:
     """Tests for RFP detail retrieval."""
 
     @pytest.mark.asyncio
-    async def test_get_rfp_success(self, client: AsyncClient, test_rfp: RFP):
+    async def test_get_rfp_success(self, client: AsyncClient, test_rfp: RFP, auth_headers: dict):
         """Test getting RFP details."""
-        response = await client.get(f"/api/v1/rfps/{test_rfp.id}")
+        response = await client.get(f"/api/v1/rfps/{test_rfp.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == test_rfp.id
@@ -115,9 +115,9 @@ class TestRFPDetail:
         assert data["solicitation_number"] == test_rfp.solicitation_number
 
     @pytest.mark.asyncio
-    async def test_get_rfp_not_found(self, client: AsyncClient):
+    async def test_get_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test getting non-existent RFP."""
-        response = await client.get("/api/v1/rfps/99999")
+        response = await client.get("/api/v1/rfps/99999", headers=auth_headers)
         assert response.status_code == 404
 
 
@@ -208,7 +208,7 @@ class TestRFPUpdate:
     """Tests for RFP updates."""
 
     @pytest.mark.asyncio
-    async def test_update_rfp_success(self, client: AsyncClient, test_rfp: RFP):
+    async def test_update_rfp_success(self, client: AsyncClient, test_rfp: RFP, auth_headers: dict):
         """Test updating RFP fields."""
         response = await client.patch(
             f"/api/v1/rfps/{test_rfp.id}",
@@ -217,6 +217,7 @@ class TestRFPUpdate:
                 "is_qualified": True,
                 "classification": "cui",
             },
+            headers=auth_headers,
         )
         assert response.status_code == 200
         data = response.json()
@@ -225,11 +226,12 @@ class TestRFPUpdate:
         assert data["classification"] == "cui"
 
     @pytest.mark.asyncio
-    async def test_update_rfp_not_found(self, client: AsyncClient):
+    async def test_update_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test updating non-existent RFP."""
         response = await client.patch(
             "/api/v1/rfps/99999",
             json={"status": "analyzing"},
+            headers=auth_headers,
         )
         assert response.status_code == 404
 
@@ -238,20 +240,20 @@ class TestRFPDelete:
     """Tests for RFP deletion."""
 
     @pytest.mark.asyncio
-    async def test_delete_rfp_success(self, client: AsyncClient, test_rfp: RFP):
+    async def test_delete_rfp_success(self, client: AsyncClient, test_rfp: RFP, auth_headers: dict):
         """Test deleting an RFP."""
-        response = await client.delete(f"/api/v1/rfps/{test_rfp.id}")
+        response = await client.delete(f"/api/v1/rfps/{test_rfp.id}", headers=auth_headers)
         assert response.status_code == 200
         assert "deleted" in response.json()["message"]
 
         # Verify deletion
-        response = await client.get(f"/api/v1/rfps/{test_rfp.id}")
+        response = await client.get(f"/api/v1/rfps/{test_rfp.id}", headers=auth_headers)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_rfp_not_found(self, client: AsyncClient):
+    async def test_delete_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
         """Test deleting non-existent RFP."""
-        response = await client.delete("/api/v1/rfps/99999")
+        response = await client.delete("/api/v1/rfps/99999", headers=auth_headers)
         assert response.status_code == 404
 
 

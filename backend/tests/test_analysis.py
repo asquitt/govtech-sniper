@@ -17,6 +17,7 @@ async def test_compliance_matrix_editing(
     db_session,
     test_user: User,
     test_rfp: RFP,
+    auth_headers: dict,
 ):
     # Seed compliance matrix
     matrix = ComplianceMatrix(
@@ -59,6 +60,7 @@ async def test_compliance_matrix_editing(
             "assigned_to": "Proposal Lead",
             "tags": ["past-performance"],
         },
+        headers=auth_headers,
     )
     assert response.status_code == 200
     data = response.json()
@@ -77,6 +79,7 @@ async def test_compliance_matrix_editing(
             "assigned_to": "SME Team",
             "tags": ["reviewed"],
         },
+        headers=auth_headers,
     )
     assert response.status_code == 200
     updated = response.json()
@@ -86,7 +89,7 @@ async def test_compliance_matrix_editing(
     assert updated_req["assigned_to"] == "SME Team"
     assert "reviewed" in updated_req["tags"]
 
-    response = await client.get(f"/api/v1/analyze/{test_rfp.id}/gaps")
+    response = await client.get(f"/api/v1/analyze/{test_rfp.id}/gaps", headers=auth_headers)
     assert response.status_code == 200
     gaps = response.json()
     assert gaps["rfp_id"] == test_rfp.id
@@ -94,7 +97,9 @@ async def test_compliance_matrix_editing(
     db_session.expunge_all()
 
     # Delete requirement
-    response = await client.delete(f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001")
+    response = await client.delete(
+        f"/api/v1/analyze/{test_rfp.id}/matrix/REQ-001", headers=auth_headers
+    )
     assert response.status_code == 200
 
 
@@ -102,6 +107,7 @@ async def test_compliance_matrix_editing(
 async def test_add_requirement_creates_matrix_when_missing(
     client: AsyncClient,
     test_rfp: RFP,
+    auth_headers: dict,
 ):
     response = await client.post(
         f"/api/v1/analyze/{test_rfp.id}/matrix",
@@ -112,6 +118,7 @@ async def test_add_requirement_creates_matrix_when_missing(
             "category": "Technical",
             "keywords": ["cloud", "modernization"],
         },
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -126,8 +133,9 @@ async def test_add_requirement_creates_matrix_when_missing(
 async def test_get_matrix_returns_empty_shape_when_missing(
     client: AsyncClient,
     test_rfp: RFP,
+    auth_headers: dict,
 ):
-    response = await client.get(f"/api/v1/analyze/{test_rfp.id}/matrix")
+    response = await client.get(f"/api/v1/analyze/{test_rfp.id}/matrix", headers=auth_headers)
     assert response.status_code == 200
     payload = response.json()
     assert payload["rfp_id"] == test_rfp.id
