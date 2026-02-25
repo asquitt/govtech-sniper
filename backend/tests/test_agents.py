@@ -13,6 +13,63 @@ from app.models.contact import OpportunityContact
 from app.models.proposal import Proposal, ProposalSection
 from app.models.rfp import RFP
 
+# ---- Auth guards ----
+
+
+class TestAgentAuth:
+    @pytest.mark.asyncio
+    async def test_catalog_requires_auth(self, client: AsyncClient):
+        resp = await client.get("/api/v1/agents/catalog")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_research_requires_auth(self, client: AsyncClient):
+        resp = await client.post("/api/v1/agents/research/1")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_capture_planning_requires_auth(self, client: AsyncClient):
+        resp = await client.post("/api/v1/agents/capture-planning/1")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_proposal_prep_requires_auth(self, client: AsyncClient):
+        resp = await client.post("/api/v1/agents/proposal-prep/1")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_competitive_intel_requires_auth(self, client: AsyncClient):
+        resp = await client.post("/api/v1/agents/competitive-intel/1")
+        assert resp.status_code == 401
+
+
+# ---- Not-found cases ----
+
+
+class TestAgentNotFound:
+    @pytest.mark.asyncio
+    async def test_research_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.post("/api/v1/agents/research/99999", headers=auth_headers)
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_capture_planning_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.post("/api/v1/agents/capture-planning/99999", headers=auth_headers)
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_proposal_prep_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.post("/api/v1/agents/proposal-prep/99999", headers=auth_headers)
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_competitive_intel_rfp_not_found(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.post("/api/v1/agents/competitive-intel/99999", headers=auth_headers)
+        assert resp.status_code == 404
+
+
+# ---- Agent flow tests ----
+
 
 class TestAutonomousAgents:
     @pytest.mark.asyncio
