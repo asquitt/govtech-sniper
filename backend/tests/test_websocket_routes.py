@@ -129,7 +129,7 @@ class TestTaskStatusHTTP:
         assert response.status_code == 401
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.websocket.AsyncResult")
+    @patch("app.api.routes.websocket.endpoints.AsyncResult")
     async def test_task_status_pending(
         self, mock_result_cls: MagicMock, client: AsyncClient, auth_headers: dict
     ):
@@ -145,7 +145,7 @@ class TestTaskStatusHTTP:
         assert data["status"] == "pending"
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.websocket.AsyncResult")
+    @patch("app.api.routes.websocket.endpoints.AsyncResult")
     async def test_task_status_completed(
         self, mock_result_cls: MagicMock, client: AsyncClient, auth_headers: dict
     ):
@@ -162,7 +162,7 @@ class TestTaskStatusHTTP:
         assert data["result"] == {"result": "done"}
 
     @pytest.mark.asyncio
-    @patch("app.api.routes.websocket.AsyncResult")
+    @patch("app.api.routes.websocket.endpoints.AsyncResult")
     async def test_task_status_failed(
         self, mock_result_cls: MagicMock, client: AsyncClient, auth_headers: dict
     ):
